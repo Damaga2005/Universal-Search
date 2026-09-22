@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS documents (
     created_at TEXT,
     modified_at TEXT,
     content_hash TEXT,
+    mtime_ns INTEGER,
+    last_seen_run INTEGER NOT NULL DEFAULT 0,
     indexed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -24,6 +26,12 @@ CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
     tokenize = 'unicode61'
 );
 """
+
+# Columns added after the first release; applied to existing databases.
+MIGRATIONS = (
+    "ALTER TABLE documents ADD COLUMN mtime_ns INTEGER",
+    "ALTER TABLE documents ADD COLUMN last_seen_run INTEGER NOT NULL DEFAULT 0",
+)
 
 
 class SearchDatabase:
@@ -37,4 +45,15 @@ class SearchDatabase:
         connection.execute("PRAGMA journal_mode=WAL")
         connection.execute("PRAGMA foreign_keys=ON")
         connection.executescript(SCHEMA)
+        self._migrate(connection)
         return connection
+
+    @staticmethod
+    def _migrate(connection: sqlite3.Connection) -> None:
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(documents)")}
+        for statement in MIGRATIONS:
+            column = statement.split()[5]
+            if column not in columns:
+                connection.execute(statement)
+                columns.add(column)
+                connection.commit()

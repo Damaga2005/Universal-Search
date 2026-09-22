@@ -5,7 +5,6 @@ from pathlib import Path
 from universal_search.index.database import SearchDatabase
 from universal_search.index.indexer import Indexer
 from universal_search.index.search import SearchEngine
-from universal_search.providers.local import discover_local
 
 
 def main() -> None:
@@ -24,12 +23,9 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "index":
         db = SearchDatabase(args.database)
-        indexer = Indexer(db)
-        count = 0
-        for document in discover_local(args.root):
-            indexer.upsert(document)
-            count += 1
-        print(f"Indexed {count} files.")
+        stats = Indexer(db).index_root(args.root)
+        print(f"Indexed {stats.scanned} files.")
+        print(stats.summary())
     else:
         for result in SearchEngine(SearchDatabase(args.database)).search(args.query, args.limit):
             print(f"[{result.source}] {result.name}\n  {result.path}\n  {result.snippet or ''}\n")
