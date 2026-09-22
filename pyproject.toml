@@ -10,10 +10,13 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
 authors = [{name = "Damaga2005"}]
-dependencies = []
+dependencies = ["pypdf>=6.0"]
 
 [project.scripts]
 universal-search = "universal_search.cli:main"
+
+[project.optional-dependencies]
+build = ["pyinstaller>=6.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -6,31 +6,14 @@ from pathlib import Path
 
 from universal_search.domain.document import Document, SourceKind, document_id_for
 from universal_search.domain.extraction import ExtractionResult
+from universal_search.extractors import extract
 from universal_search.providers.base import FileEntry, IgnoredPath, ScanError
 from universal_search.providers.ignore import IgnoreRules
 
 
-TEXT_EXTENSIONS = {".txt", ".md", ".csv", ".json", ".xml", ".py", ".js", ".ts", ".tsx", ".jsx", ".java", ".c", ".h", ".cpp", ".hpp", ".cs", ".go", ".rs", ".sql", ".yaml", ".yml", ".toml", ".ini", ".log"}
-
-# Upper bound for extracted text, in characters, so a single file can never
-# cause uncontrolled memory growth in the indexer or the search engine.
-MAX_CONTENT_CHARS = 2_000_000
-
-
-def is_text_extension(extension: str) -> bool:
-    return extension.lower() in TEXT_EXTENSIONS
-
-
 def read_local_content(path: Path) -> ExtractionResult:
-    """Read a plain-text file with a bounded size, or report why it failed."""
-    if not is_text_extension(path.suffix):
-        return ExtractionResult()
-    try:
-        with path.open("r", encoding="utf-8-sig", errors="replace") as handle:
-            text = handle.read(MAX_CONTENT_CHARS)
-    except OSError as exc:
-        return ExtractionResult(error=f"{type(exc).__name__}: {exc}")
-    return ExtractionResult(text=text.replace("\x00", ""))
+    """Extract a file's content through the extractor registry."""
+    return extract(path)
 
 
 def scan_local(
