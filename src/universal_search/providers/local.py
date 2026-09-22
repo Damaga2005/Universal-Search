@@ -13,7 +13,7 @@ def _read_text(path: Path) -> str | None:
     if path.suffix.lower() not in TEXT_EXTENSIONS:
         return None
     try:
-        return path.read_text(encoding="utf-8", errors="replace")
+        return path.read_text(encoding="utf-8-sig", errors="replace")
     except OSError:
         return None
 
@@ -39,5 +39,5 @@ def discover_local(root: Path) -> Iterable[Document]:
             created_at=datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc),
             modified_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
             content=content,
-            content_hash=None,
+            content_hash=hashlib.sha256(content.encode("utf-8")).hexdigest() if content is not None else None,
         )

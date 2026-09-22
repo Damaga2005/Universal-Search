@@ -26,3 +26,24 @@ Universal Search indexes local files and cloud-backed locations such as OneDrive
 ## Status
 
 Early architecture phase — v0.1.
+
+## Usage
+
+```bash
+pip install -e .
+universal-search index C:\Users\me\Documents
+universal-search search "meeting notes"
+```
+
+The index is stored in `universal-search.db` by default; change it with `--database <path>`.
+Search results show the source, path, file name and a content snippet.
+
+## Development
+
+```bash
+python -m venv .venv
+.venv\Scripts\python -m pip install -e . pytest
+.venv\Scripts\python -m pytest
+```
+
+Development prompts live in `docs/development/`.

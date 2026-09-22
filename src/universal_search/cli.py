@@ -1,4 +1,5 @@
 import argparse
+import sys
 from pathlib import Path
 
 from universal_search.index.database import SearchDatabase
@@ -8,6 +9,9 @@ from universal_search.providers.local import discover_local
 
 
 def main() -> None:
+    # Windows consoles default to a legacy code page; never crash while printing results.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="replace")
     parser = argparse.ArgumentParser(prog="universal-search")
     sub = parser.add_subparsers(dest="command", required=True)
     index = sub.add_parser("index")
