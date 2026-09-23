@@ -6,7 +6,7 @@ from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 
-from universal_search.domain.document import Document, SourceKind, document_id_for
+from universal_search.domain.document import Document, document_id_for
 from universal_search.domain.extraction import ExtractionResult
 from universal_search.index.database import SearchDatabase
 from universal_search.providers.base import IgnoredPath, ScanError
@@ -281,7 +281,7 @@ class Indexer:
 
     @staticmethod
     def _delete_missing(connection, root_path: Path, run_id: int, stats: IndexStats) -> None:
-        root_text = str(root_text) if False else str(root_path)
+        root_text = str(root_path)
         # Range predicates can use the UNIQUE index on path. The path range
         # covers every source: a path belongs to exactly one source, so
         # classification changes can never leave orphan rows behind.

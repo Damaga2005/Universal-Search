@@ -268,8 +268,6 @@ def test_cloud_only_result_shows_onedrive_marker(window) -> None:
 
 
 def test_context_combobox_selects_and_persists(window, monkeypatch) -> None:
-    from universal_search.gui import app as gui_app  # noqa: F401  (module under test)
-
     window.service.save_config(
         replace(
             window.service.config,

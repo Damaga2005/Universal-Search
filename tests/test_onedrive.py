@@ -3,8 +3,6 @@
 import time
 from pathlib import Path
 
-import pytest
-
 from universal_search.domain.document import SourceKind
 from universal_search.domain.extraction import ExtractionResult
 from universal_search.index.database import SearchDatabase
@@ -12,7 +10,7 @@ from universal_search.index.indexer import Indexer
 from universal_search.index.ranking import Candidate, Ranker
 from universal_search.index.search import SearchEngine
 from universal_search.providers import onedrive as od
-from universal_search.providers.base import FileEntry, ScanError
+from universal_search.providers.base import FileEntry
 from universal_search.providers.onedrive import (
     AVAILABILITY_CLOUD_ONLY,
     OneDriveFile,

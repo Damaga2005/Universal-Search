@@ -1,6 +1,5 @@
 import argparse
 import sys
-from dataclasses import replace
 from pathlib import Path
 
 from universal_search import __version__

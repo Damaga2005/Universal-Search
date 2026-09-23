@@ -170,8 +170,6 @@ def test_cli_usage_learning_commands(tmp_path: Path, monkeypatch, capsys) -> Non
 
 
 def test_cli_search_with_context_and_explain(tmp_path: Path, monkeypatch, capsys) -> None:
-    from universal_search.appconfig import AppConfig, AppPaths
-
     monkeypatch.setenv("UNIVERSAL_SEARCH_HOME", str(tmp_path / "home"))
     files = tmp_path / "uni"
     files.mkdir()

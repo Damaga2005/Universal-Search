@@ -36,8 +36,6 @@ from collections import Counter
 from dataclasses import dataclass, fields
 from datetime import datetime, timezone
 
-from universal_search.index.database import SearchDatabase  # noqa: F401  (re-export guard)
-
 
 WORD_RE = re.compile(r"\w+", re.UNICODE)
 

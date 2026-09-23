@@ -3,7 +3,6 @@ import struct
 import subprocess
 from pathlib import Path
 
-import universal_search.appconfig as appconfig
 from universal_search.appconfig import AppConfig, AppPaths, default_home, setup_logging
 from universal_search.gui import services
 from universal_search.gui.services import SearchService

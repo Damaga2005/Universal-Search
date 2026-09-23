@@ -4,7 +4,6 @@ Each factory returns real, structurally valid file bytes so tests exercise
 the actual extractors rather than mocks.
 """
 
-import re
 import zipfile
 from xml.sax.saxutils import escape
 

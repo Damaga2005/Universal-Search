@@ -21,6 +21,25 @@ from universal_search.hotkey import (
 from universal_search.index.database import SearchDatabase
 from universal_search.index.search import SearchEngine, SearchResult
 
+# Public API: everything the window (and tests) may reach through this
+# module. The hotkey pid/show helpers are re-exports on purpose — the UI
+# talks only to the service layer.
+__all__ = [
+    "SearchService",
+    "consume_show_request",
+    "indexer_status",
+    "indexer_summary",
+    "open_path",
+    "pause_indexer",
+    "register_gui_pid",
+    "reveal_in_explorer",
+    "resume_indexer",
+    "set_autostart",
+    "start_indexer",
+    "stop_indexer",
+    "unregister_gui_pid",
+]
+
 log = logging.getLogger("universal_search.services")
 
 

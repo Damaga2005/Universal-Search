@@ -13,7 +13,6 @@ from universal_search.appconfig import AppConfig, AppPaths
 from universal_search.index.database import SearchDatabase
 from universal_search.index.indexer import Indexer
 from universal_search.index.search import SearchEngine
-from universal_search.providers.local import discover_local
 
 
 def wait_until(predicate, timeout: float = 10.0) -> bool:

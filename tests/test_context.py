@@ -12,7 +12,6 @@ from universal_search.context import (
     configured_roots,
     context_boost_for,
     context_from_dict,
-    context_to_dict,
     expansion_terms,
     get_context,
     load_contexts,
