@@ -307,8 +307,13 @@ class SearchWindow(tk.Tk):
         result = self.results[index]
         kind = TYPE_LABELS.get(result.path.suffix.lower(), result.path.suffix or "?")
         snippet = (result.snippet or "").replace("[", "").replace("]", "")
+        cloud = (
+            "  ·  ☁ solo en OneDrive (sin descargar)"
+            if result.availability == "cloud_only"
+            else ""
+        )
         self.preview.configure(
-            text=f"{result.name}  —  {kind}  —  {result.source}\n{result.path}\n{snippet}"
+            text=f"{result.name}  —  {kind}  —  {result.source}{cloud}\n{result.path}\n{snippet}"
         )
 
     # -- actions ----------------------------------------------------------------

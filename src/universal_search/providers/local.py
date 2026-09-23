@@ -64,6 +64,7 @@ def scan_local(
                 mtime_ns=stat.st_mtime_ns,
                 created_at=datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc),
                 modified_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
+                attributes=getattr(stat, "st_file_attributes", None),
             )
 
 

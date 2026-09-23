@@ -16,11 +16,23 @@ def main() -> None:
     index = sub.add_parser("index")
     index.add_argument("root", type=Path)
     index.add_argument("--database", type=Path, default=Path("universal-search.db"))
+    index.add_argument(
+        "--onedrive-download-mb",
+        type=float,
+        default=0.0,
+        help="explicitly download cloud-only OneDrive files up to this size (0 = never)",
+    )
     search = sub.add_parser("search")
     search.add_argument("query")
     search.add_argument("--database", type=Path, default=Path("universal-search.db"))
     search.add_argument("--limit", type=int, default=20)
     sub.add_parser("gui", help="launch the desktop search window")
+    onedrive = sub.add_parser(
+        "onedrive", help="show detected OneDrive roots and file availability"
+    )
+    onedrive.add_argument(
+        "--root", type=Path, default=None, help="scan only this root"
+    )
     indexer = sub.add_parser("indexer", help="background indexer lifecycle")
     indexer_sub = indexer.add_subparsers(dest="indexer_command", required=True)
     indexer_sub.add_parser("run", help="run the worker in this process")
@@ -34,9 +46,36 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "index":
         db = SearchDatabase(args.database)
-        stats = Indexer(db).index_root(args.root)
+        stats = Indexer(db).index_root(
+            args.root, onedrive_download_mb=args.onedrive_download_mb
+        )
         print(f"Indexed {stats.scanned} files.")
         print(stats.summary())
+    elif args.command == "onedrive":
+        from universal_search.providers.base import ScanError
+        from universal_search.providers.onedrive import (
+            AVAILABILITY_CLOUD_ONLY,
+            OneDriveFile,
+            OneDriveProvider,
+            onedrive_roots,
+        )
+
+        roots = (args.root,) if args.root else onedrive_roots()
+        if not roots:
+            print("No OneDrive folders detected on this machine.")
+        for root in roots:
+            total = cloud = unreadable = 0
+            for item in OneDriveProvider().discover(root):
+                if isinstance(item, ScanError):
+                    unreadable += 1
+                elif isinstance(item, OneDriveFile):
+                    total += 1
+                    if item.availability == AVAILABILITY_CLOUD_ONLY:
+                        cloud += 1
+            print(
+                f"{root}: {total} file(s), {cloud} cloud-only, "
+                f"{unreadable} unreadable"
+            )
     elif args.command == "gui":
         from universal_search.gui.app import run
 

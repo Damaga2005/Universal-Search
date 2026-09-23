@@ -243,6 +243,29 @@ def test_indexer_action_errors_stay_friendly(window, monkeypatch) -> None:
     assert "Traceback" not in window.status_var.get()
 
 
+def test_cloud_only_result_shows_onedrive_marker(window) -> None:
+    from universal_search.index.search import SearchResult
+
+    result = SearchResult(
+        path=Path(r"C:\Users\me\OneDrive\nube.md"),
+        name="nube.md",
+        source="onedrive",
+        snippet=None,
+        rank=-1.0,
+        score=0.5,
+        availability="cloud_only",
+    )
+    window._clear_results()
+    window.results = [result]
+    window.listbox.insert(0, "nube.md  ·  Markdown  ·  onedrive")
+    window.listbox.selection_set(0)
+    window._update_preview()
+
+    text = window.preview.cget("text")
+    assert "onedrive" in text
+    assert "☁" in text
+
+
 def test_closing_window_does_not_touch_the_indexer(window, monkeypatch) -> None:
     """Closing the GUI must never stop the background worker (spec)."""
     from universal_search.gui import app as gui_app

@@ -9,6 +9,7 @@ from universal_search.index.ranking import Candidate, Ranker, query_terms
 
 RESULTS_SQL = """
     SELECT d.path, d.name, d.source, d.extension, d.modified_at,
+           d.availability, d.id AS document_id,
            documents_fts.content AS content,
            snippet(documents_fts, 3, '[', ']', '…', 18) AS snippet,
            bm25(documents_fts) AS rank
@@ -30,6 +31,8 @@ class SearchResult:
     snippet: str | None
     rank: float
     score: float = 0.0
+    availability: str = "available"
+    document_id: str = ""
 
 
 def sanitize_query(query: str) -> str:
@@ -118,6 +121,8 @@ class SearchEngine:
                     snippet=snippet,
                     rank=candidate.bm25_rank,
                     score=score,
+                    availability=row["availability"],
+                    document_id=row["document_id"],
                 )
             )
         return results

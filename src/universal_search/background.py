@@ -502,7 +502,12 @@ class BackgroundIndexer:
                 break
             try:
                 totals.merge(
-                    self.indexer.index_root(root, rules=rules, delay=self.file_delay)
+                    self.indexer.index_root(
+                        root,
+                        rules=rules,
+                        delay=self.file_delay,
+                        onedrive_download_mb=config.onedrive_download_max_mb,
+                    )
                 )
             except Exception as exc:
                 log.exception("reconciliation failed for %s", root)

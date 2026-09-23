@@ -12,6 +12,12 @@ from universal_search.index.database import SearchDatabase
 from universal_search.providers.base import IgnoredPath, ScanError
 from universal_search.providers.ignore import IgnoreRules
 from universal_search.providers.local import read_local_content, scan_local
+from universal_search.providers.onedrive import (
+    AVAILABILITY_AVAILABLE,
+    allow_content_read,
+    availability_from_attributes,
+    source_for_path,
+)
 
 
 ContentReader = Callable[[Path], ExtractionResult]
@@ -28,6 +34,7 @@ class IndexStats:
     ignored: int = 0
     errors: int = 0
     extraction_errors: int = 0
+    cloud_only: int = 0
 
     @property
     def scanned(self) -> int:
@@ -41,7 +48,7 @@ class IndexStats:
     def merge(self, other: "IndexStats") -> None:
         for name in (
             "created", "updated", "unchanged", "deleted",
-            "ignored", "errors", "extraction_errors",
+            "ignored", "errors", "extraction_errors", "cloud_only",
         ):
             setattr(self, name, getattr(self, name) + getattr(other, name))
 
@@ -54,6 +61,7 @@ class IndexStats:
             "ignored": self.ignored,
             "errors": self.errors,
             "extraction_errors": self.extraction_errors,
+            "cloud_only": self.cloud_only,
         }
 
     def summary(self) -> str:
@@ -61,7 +69,8 @@ class IndexStats:
             f"created={self.created} updated={self.updated} "
             f"unchanged={self.unchanged} deleted={self.deleted} "
             f"ignored={self.ignored} errors={self.errors} "
-            f"extraction_errors={self.extraction_errors}"
+            f"extraction_errors={self.extraction_errors} "
+            f"cloud_only={self.cloud_only}"
         )
 
 
@@ -82,6 +91,7 @@ class Indexer:
         document: Document,
         mtime_ns: int | None = None,
         run_id: int | None = None,
+        availability: str = AVAILABILITY_AVAILABLE,
     ) -> None:
         previous = connection.execute(
             "SELECT id FROM documents WHERE path = ?", (str(document.path),)
@@ -99,14 +109,16 @@ class Indexer:
             )
         connection.execute("""
             INSERT INTO documents (id, source, path, name, extension, size,
-                                   created_at, modified_at, content_hash, mtime_ns, last_seen_run)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   created_at, modified_at, content_hash, mtime_ns,
+                                   last_seen_run, availability)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(path) DO UPDATE SET
                 id=excluded.id, source=excluded.source, name=excluded.name,
                 extension=excluded.extension, size=excluded.size,
                 created_at=excluded.created_at, modified_at=excluded.modified_at,
                 content_hash=excluded.content_hash, mtime_ns=excluded.mtime_ns,
                 last_seen_run=excluded.last_seen_run,
+                availability=excluded.availability,
                 indexed_at=CURRENT_TIMESTAMP
         """, (
             document.id, document.source.value, str(document.path), document.name,
@@ -116,6 +128,7 @@ class Indexer:
             document.content_hash,
             mtime_ns,
             run_id if run_id is not None else int(time.time_ns()),
+            availability,
         ))
         connection.execute(
             "INSERT INTO documents_fts(document_id,name,path,content) VALUES (?,?,?,?)",
@@ -136,14 +149,21 @@ class Indexer:
         rules: IgnoreRules | None = None,
         read_content: ContentReader | None = None,
         delay: float = 0.0,
+        onedrive_download_mb: float = 0.0,
     ) -> IndexStats:
         """Reconcile everything indexed under ``root`` with the filesystem.
 
-        Unchanged files (same size and mtime) are skipped without reading
-        their content. Changed files are re-extracted and replace their
-        previous representation. Files that vanished from disk are removed
-        from both the metadata table and the full-text index. The index
-        database itself is never indexed.
+        Unchanged files (same size, mtime, source and availability) are
+        skipped without reading their content. Changed files are
+        re-extracted and replace their previous representation. Files that
+        vanished from disk are removed from both the metadata table and the
+        full-text index, whatever their source. The index database itself is
+        never indexed.
+
+        Cloud-only OneDrive placeholders are indexed as metadata without
+        reading them (reading would trigger a download); content for them is
+        only fetched when ``onedrive_download_mb > 0`` explicitly allows it
+        and the file fits the limit.
 
         ``delay`` sleeps that many seconds after writing each changed file —
         a cooperative CPU/disk resource limit used by the background worker.
@@ -165,14 +185,20 @@ class Indexer:
                 if str(item.path) in own_files:
                     stats.ignored += 1
                     continue
+
+                source = source_for_path(item.path)
+                availability = availability_from_attributes(item.attributes)
                 stored = connection.execute(
-                    "SELECT id, size, mtime_ns, content_hash FROM documents WHERE path = ?",
+                    "SELECT id, size, mtime_ns, content_hash, source, availability "
+                    "FROM documents WHERE path = ?",
                     (str(item.path),),
                 ).fetchone()
                 if (
                     stored is not None
                     and stored["size"] == item.size
                     and stored["mtime_ns"] == item.mtime_ns
+                    and stored["source"] == source.value
+                    and stored["availability"] == availability
                 ):
                     stats.unchanged += 1
                     connection.execute(
@@ -182,17 +208,25 @@ class Indexer:
                     connection.commit()
                     continue
 
-                try:
-                    outcome = read_content(item.path)
-                except Exception as exc:  # a broken reader must not stop the run
-                    outcome = ExtractionResult(error=f"{type(exc).__name__}: {exc}")
-                if outcome.error is not None:
-                    stats.extraction_errors += 1
+                content: str | None = None
+                if allow_content_read(availability, item.size, onedrive_download_mb):
+                    try:
+                        outcome = read_content(item.path)
+                    except Exception as exc:  # a broken reader must not stop the run
+                        outcome = ExtractionResult(error=f"{type(exc).__name__}: {exc}")
+                    if outcome.error is not None:
+                        stats.extraction_errors += 1
+                    content = outcome.text
+                    if availability != AVAILABILITY_AVAILABLE and outcome.error is None:
+                        availability = AVAILABILITY_AVAILABLE  # explicit download
+                else:
+                    # Cloud-only placeholder: metadata only. Reading it here
+                    # would silently download the file (phase 007 rule).
+                    stats.cloud_only += 1
 
-                content = outcome.text
                 document = Document(
-                    id=document_id_for(SourceKind.LOCAL, item.path),
-                    source=SourceKind.LOCAL,
+                    id=document_id_for(source, item.path),
+                    source=source,
                     path=item.path,
                     name=item.path.name,
                     extension=item.path.suffix.lower(),
@@ -205,27 +239,37 @@ class Indexer:
                     else None,
                 )
                 if stored is None:
-                    self._upsert(connection, document, mtime_ns=item.mtime_ns, run_id=run_id)
+                    self._upsert(
+                        connection, document,
+                        mtime_ns=item.mtime_ns, run_id=run_id,
+                        availability=availability,
+                    )
                     stats.created += 1
                 elif (
                     content is not None
                     and stored["content_hash"] is not None
                     and document.content_hash == stored["content_hash"]
+                    and stored["source"] == source.value
                 ):
                     # Content is identical: refresh metadata without touching FTS.
                     connection.execute(
                         """UPDATE documents SET size = ?, mtime_ns = ?, modified_at = ?,
-                                  last_seen_run = ?, indexed_at = CURRENT_TIMESTAMP
+                                  last_seen_run = ?, availability = ?,
+                                  indexed_at = CURRENT_TIMESTAMP
                            WHERE id = ?""",
                         (
                             item.size, item.mtime_ns,
                             item.modified_at.isoformat() if item.modified_at else None,
-                            run_id, stored["id"],
+                            run_id, availability, stored["id"],
                         ),
                     )
                     stats.unchanged += 1
                 else:
-                    self._upsert(connection, document, mtime_ns=item.mtime_ns, run_id=run_id)
+                    self._upsert(
+                        connection, document,
+                        mtime_ns=item.mtime_ns, run_id=run_id,
+                        availability=availability,
+                    )
                     stats.updated += 1
                 connection.commit()
                 if delay:
@@ -237,12 +281,14 @@ class Indexer:
 
     @staticmethod
     def _delete_missing(connection, root_path: Path, run_id: int, stats: IndexStats) -> None:
-        root_text = str(root_path)
-        # Range predicates can use the UNIQUE index on path.
+        root_text = str(root_text) if False else str(root_path)
+        # Range predicates can use the UNIQUE index on path. The path range
+        # covers every source: a path belongs to exactly one source, so
+        # classification changes can never leave orphan rows behind.
         stale = connection.execute(
             """SELECT id FROM documents
-               WHERE source = ? AND path > ? AND path < ? AND last_seen_run < ?""",
-            (SourceKind.LOCAL.value, root_text + os.sep, root_text + "\uffff", run_id),
+               WHERE path > ? AND path < ? AND last_seen_run < ?""",
+            (root_text + os.sep, root_text + "\uffff", run_id),
         ).fetchall()
         for row in stale:
             Indexer._delete(connection, row["id"])

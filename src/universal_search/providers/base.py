@@ -22,6 +22,9 @@ class FileEntry:
     mtime_ns: int
     created_at: datetime | None
     modified_at: datetime | None
+    # Raw Windows st_file_attributes (None on other platforms); used to
+    # detect cloud-only placeholders without reading (and downloading) them.
+    attributes: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

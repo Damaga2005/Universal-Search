@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS documents (
     content_hash TEXT,
     mtime_ns INTEGER,
     last_seen_run INTEGER NOT NULL DEFAULT 0,
+    availability TEXT NOT NULL DEFAULT 'available',
     indexed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -31,6 +32,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
 MIGRATIONS = (
     "ALTER TABLE documents ADD COLUMN mtime_ns INTEGER",
     "ALTER TABLE documents ADD COLUMN last_seen_run INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE documents ADD COLUMN availability TEXT NOT NULL DEFAULT 'available'",
 )
 
 

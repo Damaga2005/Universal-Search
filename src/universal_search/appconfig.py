@@ -76,6 +76,7 @@ class AppConfig:
     start_with_windows: bool = False
     indexer_interval_seconds: int = 300
     indexer_file_delay: float = 0.0
+    onedrive_download_max_mb: float = 0.0
     window_geometry: str = ""
 
     def ignore_rules(self) -> IgnoreRules:
@@ -107,6 +108,10 @@ class AppConfig:
             ),
             indexer_file_delay=_float(
                 raw.get("indexer_file_delay"), defaults.indexer_file_delay
+            ),
+            onedrive_download_max_mb=_float(
+                raw.get("onedrive_download_max_mb"),
+                defaults.onedrive_download_max_mb,
             ),
             window_geometry=_str(raw.get("window_geometry"), defaults.window_geometry),
         )
