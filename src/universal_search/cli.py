@@ -224,6 +224,7 @@ def main() -> None:
         # search
         from universal_search.appconfig import AppConfig
         from universal_search.context import get_context
+        from universal_search.query import QueryError
 
         config = AppConfig.load(AppPaths.discover())
         if args.context:
@@ -236,15 +237,20 @@ def main() -> None:
         else:
             context = None
         engine = SearchEngine(SearchDatabase(args.database))
-        results = engine.search(
-            args.query,
-            args.limit,
-            context=context,
-            usage=config.usage_tracking,
-            explain=args.explain,
-            source=args.source,
-            doc_type=args.doc_type,
-        )
+        try:
+            results = engine.search(
+                args.query,
+                args.limit,
+                context=context,
+                usage=config.usage_tracking,
+                explain=args.explain,
+                source=args.source,
+                doc_type=args.doc_type,
+            )
+        except QueryError as exc:
+            # A malformed query is feedback, never a traceback (spec 012).
+            print(f"error: {exc}", file=sys.stderr)
+            raise SystemExit(1) from None
         for result in results:
             print(
                 f"[{result.source}] {result.name}\n"

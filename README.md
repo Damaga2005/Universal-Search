@@ -29,10 +29,14 @@ Phases 001–010 delivered: foundation, incremental indexing, document
 extractors (PDF/DOCX/XLSX/PPTX), ranking engine, Windows desktop GUI,
 background indexer, OneDrive providers, personal context + local usage
 learning, global search (hotkey, filters, recent queries) and the
-Windows release **v1.0.0** (installer + uninstaller) — **208 passing
-tests**. A profiled audit & optimization pass then cut indexing 16×
-(2000 docs: 45.3s → 2.8s) and mean query latency 48.6 → 34.4 ms
-(`docs/development/optimization-report.md`).
+Windows release **v1.0.0** (installer + uninstaller). A profiled audit &
+optimization pass cut indexing 16× (2000 docs: 45.3s → 2.8s) and mean
+query latency 48.6 → 34.4 ms (`docs/development/optimization-report.md`);
+phase 011 added the reproducible benchmark suite, local metrics and
+bounded ranking caches; phase 012 added the advanced query language
+(phrases, `AND`/`OR`, negation and `name:`/`path:`/`type:`/`source:`/
+`after:`/`before:`/`size:` filters) shared by the CLI and the GUI —
+**316 passing tests**.
 
 | Fase | Entrega | Estado |
 |------|---------|--------|
@@ -46,6 +50,8 @@ tests**. A profiled audit & optimization pass then cut indexing 16×
 | 008 | Personal context | ✅ |
 | 009 | Global search (hotkey, filters, recents) | ✅ |
 | 010 | Release (v1.0.0) | ✅ |
+| 011 | Performance & scalability (benchmarks, métricas) | ✅ |
+| 012 | Advanced search (lenguaje de consultas) | ✅ |
 
 Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
 by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).
@@ -59,6 +65,9 @@ universal-search index C:\Users\me\Documents
 universal-search search "meeting notes" --limit 20
 universal-search search "notes" --source onedrive --type pdf   # filters (009)
 universal-search search "notes" --context engineering --explain # context + scoring breakdown (008)
+universal-search search "bjt type:txt after:2026-01-01"        # query language (012)
+universal-search search "bjt -cmos size:>10KB"                # negation + size filter (012)
+universal-search search '"ebers moll" OR "gunn effect"'      # phrase + OR (012)
 universal-search gui               # desktop window (alias: universal-search-gui)
 
 # personal layer (all local): contexts, usage learning, hotkey, recents

@@ -18,7 +18,7 @@ El roadmap por versiones (v0.1–v0.6+) vive en [ROADMAP.md](ROADMAP.md).
 | 009 | Búsqueda global (hotkey, filtros, recientes) | ✅ Completada | [009-global-search.md](development/009-global-search.md) | [informe](development/009-global-search-report.md) |
 | 010 | Release (v1.0.0, instalador) | ✅ Completada | [010-release.md](development/010-release.md) | [informe](development/010-release-report.md) |
 | 011 | Performance & escalabilidad: benchmarks, métricas locales, cachés acotadas | ✅ Completada | [011-performance-scalability.md](development/011-performance-scalability.md) | [informe](development/011-performance-scalability-report.md) |
-| 012 | Advanced search: lenguaje de consultas (parser/AST) | ⬜ Pendiente | [012-advanced-search.md](development/012-advanced-search.md) | — |
+| 012 | Advanced search: lenguaje de consultas (parser/AST) | ✅ Completada | [012-advanced-search.md](development/012-advanced-search.md) | [informe](development/012-advanced-search-report.md) |
 | 013 | Ranking v2: evaluación y explicabilidad | ⬜ Pendiente | [013-ranking-v2.md](development/013-ranking-v2.md) | — |
 | 014 | Inteligencia documental local | ⬜ Pendiente | [014-document-intelligence.md](development/014-document-intelligence.md) | — |
 | 015 | Diagnóstico e índice mantenible | ⬜ Pendiente | [015-index-diagnostics.md](development/015-index-diagnostics.md) | — |

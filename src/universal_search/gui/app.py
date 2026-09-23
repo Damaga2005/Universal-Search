@@ -312,6 +312,12 @@ class SearchWindow(tk.Tk):
             self._set_status("Error al buscar — consulta el registro de errores")
             return
         self._render(results)
+        if self.service.last_query_error:
+            # Query-language feedback (spec 012): explain why nothing was
+            # shown, instead of a bare "0 resultado(s)".
+            self._set_status(
+                f"Consulta no válida: {self.service.last_query_error}"
+            )
 
     # -- personal context -------------------------------------------------------
 

@@ -21,6 +21,7 @@ from universal_search.hotkey import (
 from universal_search.index.database import SearchDatabase
 from universal_search.index.search import SearchEngine, SearchResult
 from universal_search.metrics import set_sink
+from universal_search.query import QueryError
 
 # Public API: everything the window (and tests) may reach through this
 # module. The hotkey pid/show helpers are re-exports on purpose — the UI
@@ -62,6 +63,9 @@ class SearchService:
         )
         self.engine = SearchEngine(self.database)
         self.config = AppConfig.load(self.paths)
+        # Last query-language error (spec 012): the window reads this to show
+        # understandable feedback instead of a traceback.
+        self.last_query_error: str | None = None
 
     def search(
         self,
@@ -78,18 +82,27 @@ class SearchService:
         live in the core; this method only supplies configuration.
         ``source``/``doc_type`` are index-level filters (spec 009): queries
         never scan the filesystem.
+
+        A malformed query is feedback, not a crash (spec 012): ``QueryError``
+        is captured in ``last_query_error`` and resolves to no results.
         """
         name = context if context is not None else self.config.active_context
         resolved = get_context(self.config, name) if name else None
-        return self.engine.search(
-            query,
-            limit,
-            context=resolved,
-            usage=self.config.usage_tracking,
-            explain=explain,
-            source=source,
-            doc_type=doc_type,
-        )
+        try:
+            results = self.engine.search(
+                query,
+                limit,
+                context=resolved,
+                usage=self.config.usage_tracking,
+                explain=explain,
+                source=source,
+                doc_type=doc_type,
+            )
+        except QueryError as exc:
+            self.last_query_error = str(exc)
+            return []
+        self.last_query_error = None
+        return results
 
     def record_open(self, document_id: str, query: str) -> None:
         """Record a "result opened" signal when local learning is enabled.

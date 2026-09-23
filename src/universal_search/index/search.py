@@ -1,4 +1,3 @@
-import re
 import sqlite3
 import time
 from dataclasses import dataclass, replace
@@ -17,8 +16,8 @@ from universal_search.index.ranking import (
     ACTIVATED_USAGE_WEIGHT,
     Candidate,
     Ranker,
-    query_terms,
 )
+from universal_search.query import parse_query, translate
 
 
 # Candidate pool first (FTS match + bm25 order + LIMIT), THEN join the
@@ -63,43 +62,41 @@ USAGE_ROWS_SQL = """
 SNIPPET_RADIUS = 80
 
 
-def _filtered_sql(
-    source: str | None, doc_type: str | None
-) -> tuple[str, list[str]]:
-    """Optional SQL-level filters for the results query.
+def _pool_sql(clauses: list[str]) -> str:
+    """Results SQL with optional filters joined INSIDE the pool subquery.
 
-    Both are parameter comparisons against already-indexed columns; no
-    filesystem access happens while evaluating them (spec 009).
-    ``doc_type`` accepts ``pdf`` or ``.pdf`` — stored extensions carry the
-    dot.
+    Filters sit between the match and the LIMIT, so a filtered search ranks
+    the whole filtered set instead of whatever the unfiltered pool happened
+    to pick first (spec 009). Placeholder order stays match, filters,
+    limit. Clause templates are static strings built by the query
+    translator or by the ``source``/``doc_type`` keyword arguments — never
+    user text; every value is bound by the caller.
     """
-    clauses: list[str] = []
-    params: list[str] = []
-    if source:
-        clauses.append("d.source = ?")
-        params.append(source)
-    if doc_type:
-        clauses.append("d.extension = ?")
-        params.append(
-            doc_type if str(doc_type).startswith(".") else f".{doc_type}"
-        )
     if not clauses:
-        return RESULTS_SQL, []
-    # The filter joins `documents` INSIDE the pool subquery, between the
-    # match and the limit, so placeholder order (match, filters, limit)
-    # and semantics stay exactly as before a filtered search ranks the
-    # whole filtered set, not just whatever the unfiltered pool picked.
-    return (
-        RESULTS_SQL.replace(
-            "FROM documents_fts\n        WHERE documents_fts MATCH ?",
-            "FROM documents_fts\n"
-            "        JOIN documents AS d ON d.id = documents_fts.document_id\n"
-            "        WHERE documents_fts MATCH ? AND "
-            + " AND ".join(clauses),
-            1,
-        ),
-        params,
+        return RESULTS_SQL
+    return RESULTS_SQL.replace(
+        "FROM documents_fts\n        WHERE documents_fts MATCH ?",
+        "FROM documents_fts\n"
+        "        JOIN documents AS d ON d.id = documents_fts.document_id\n"
+        "        WHERE documents_fts MATCH ? AND "
+        + " AND ".join(clauses),
+        1,
     )
+
+
+# Filter-only queries (`type:pdf`, `size:>10MB`): there is no text to rank,
+# so rows are read straight from SQL — newest first, score 0.0 (spec 012).
+# `{where}` only ever receives the static clause templates above; every
+# value stays a bound parameter.
+FILTER_ONLY_SQL = """
+    SELECT d.path, d.name, d.source, d.extension, d.modified_at,
+           d.availability, d.id AS document_id,
+           NULL AS content, NULL AS snippet, 0.0 AS rank
+    FROM documents AS d
+    WHERE {where}
+    ORDER BY d.modified_at DESC, d.path
+    LIMIT ?
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,15 +113,36 @@ class SearchResult:
     explain_notes: tuple[str, ...] = ()
 
 
-def sanitize_query(query: str) -> str:
-    """Translate free text into a safe FTS5 query of quoted terms.
+def filters_only_results(
+    database: SearchDatabase,
+    clauses: list[str],
+    params: list[object],
+    limit: int,
+) -> list[SearchResult]:
+    """Resolve a query made only of SQL filters, with no text part (012).
 
-    Returns an empty string when the query contains no searchable terms.
+    There is nothing to match and nothing to rank, so the recency order of
+    the filtered rows is the result: every ``SearchResult`` carries score
+    0.0 and no snippet.
     """
-    terms = re.findall(r"\w+", query)
-    if not terms:
-        return ""
-    return " AND ".join(f'"{term}"' for term in terms)
+    if not clauses:
+        return []
+    sql = FILTER_ONLY_SQL.replace("{where}", " AND ".join(clauses), 1)
+    with database.connect() as connection:
+        rows = connection.execute(sql, [*params, limit]).fetchall()
+    return [
+        SearchResult(
+            path=Path(row["path"]),
+            name=row["name"],
+            source=row["source"],
+            snippet=None,
+            rank=0.0,
+            score=0.0,
+            availability=row["availability"],
+            document_id=row["document_id"],
+        )
+        for row in rows
+    ]
 
 
 def build_snippet(content: str | None, terms: tuple[str, ...]) -> str | None:
@@ -209,33 +227,66 @@ class SearchEngine:
         breakdown so any personalization can be inspected. ``source`` and
         ``doc_type`` are SQL-level filters — still pure index queries, the
         filesystem is never touched during a search.
+
+        ``query`` goes through the query language of spec 012 (lexer, parser,
+        validation, translation). A malformed query raises
+        :class:`~universal_search.query.QueryError` before any I/O, so it
+        never reaches the database nor the metrics recorder. Query
+        language filters and the ``source``/``doc_type`` keyword arguments
+        are combined; a query made only of filters is resolved from SQL in
+        recency order with score 0.0, and a query whose text part is empty
+        or negative-only returns no results, because FTS5 has no unary NOT
+        to anchor exclusions on.
         """
-        terms = query_terms(query)
+        plan = translate(parse_query(query))
+        terms = plan.terms
+
+        clauses: list[str] = list(plan.sql)
+        params: list[object] = list(plan.sql_params)
+        if source:
+            clauses.append("d.source = ?")
+            params.append(source)
+        if doc_type:
+            clauses.append("d.extension = ?")
+            params.append(
+                doc_type if str(doc_type).startswith(".") else f".{doc_type}"
+            )
+
         if not terms:
+            if plan.sql and not plan.negations:
+                return filters_only_results(
+                    self.database, clauses, params, limit
+                )
+            # Empty, or exclusions with no positive term to anchor them to:
+            # an empty query means "no filter", not "everything".
             return []
         pool = self.candidate_pool or max(limit * 5, 50)
 
         expansions = expansion_terms(terms, context)
-        match = query
+        base = plan.fts
         if expansions:
             # Recall widening only: the extra terms retrieve more candidates
             # but never enter scoring (exact matches keep all their signals).
             quoted = " OR ".join(f'"{term}"' for term in expansions)
-            match = f"({sanitize_query(query)}) OR ({quoted})"
+            base = f"({base}) OR ({quoted})"
+        match = f"({base}) NOT {plan.negations}" if plan.negations else base
 
+        sql = _pool_sql(clauses)
         with self.database.connect() as connection:
-            sql, filter_params = _filtered_sql(source, doc_type)
             try:
                 rows = connection.execute(
-                    sql, [match, *filter_params, pool]
+                    sql, [match, *params, pool]
                 ).fetchall()
             except sqlite3.OperationalError:
-                # The query used FTS5 operators incorrectly; retry as plain text.
-                fallback = sanitize_query(query)
-                if not fallback:
-                    return []
+                # Translation only emits quoted word runs, whitelisted columns
+                # and known operators, so this retry should be unreachable;
+                # it exists to survive a tokenizer disagreement without
+                # dropping the user's exclusions.
+                fallback = " AND ".join(f'"{term}"' for term in terms)
+                if plan.negations:
+                    fallback = f"({fallback}) NOT {plan.negations}"
                 rows = connection.execute(
-                    sql, [fallback, *filter_params, pool]
+                    sql, [fallback, *params, pool]
                 ).fetchall()
             usage_counts = (
                 self._usage_counts(connection, rows) if usage and rows else {}

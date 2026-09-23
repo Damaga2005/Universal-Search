@@ -37,7 +37,7 @@
 ## v0.7+ (phases 011–020)
 
 - [x] Performance & scalability (011)
-- [ ] Advanced search language (012)
+- [x] Advanced search language (012)
 - [ ] Ranking v2: evaluation & explainability (013)
 - [ ] Local document intelligence (014)
 - [ ] Index diagnostics & maintenance (015)

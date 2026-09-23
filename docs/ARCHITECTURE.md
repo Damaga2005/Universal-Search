@@ -1,6 +1,6 @@
 # Architecture
 
-    Provider → Extractor → Document → Indexer → Database/FTS5 → Ranking → SearchEngine → CLI / GUI / Background indexer
+    Provider → Extractor → Document → Indexer → Database/FTS5 → Query language → Ranking → SearchEngine → CLI / GUI / Background indexer
 
 The same core serves all three frontends; no indexing, search or ranking
 logic lives in the UI.
@@ -28,16 +28,27 @@ logic lives in the UI.
   - `database.py` — SQLite metadata + FTS5 (`unicode61`); per-connection
     pragmas (WAL, `synchronous=NORMAL`, 16 MB page cache, 256 MB mmap) and
     a schema-present gate so reconnects skip DDL (migrations still run).
+  - `query/` — the search query language in four stages (spec 012):
+    `lexer.py` (tokens), `parser.py` (immutable AST), `validate.py` (value
+    normalization + structural policy) and `translate.py` (`QueryPlan`:
+    MATCH string, hoisted negations, ranking terms and bound SQL clauses).
+    The MATCH string is assembled only from quoted word runs and
+    whitelisted columns, so user text can never inject FTS5 syntax, and
+    every SQL value stays a bound parameter.
   - `ranking.py` — composite score normalized to [0,1] (filename exact/
     tokens, phrase, BM25, term frequency, proximity, path, doc type, source,
     recency, plus the bounded usage/context boosts of phase 008) — see
     `docs/RANKING.md`. The hot path fuses phrase/counts/positions into one
     pass and caches content/name/path tokens per distinct value, because
     the same candidates are re-scored on every keystroke.
-  - `search.py` — candidate pool (`max(limit×5, 50)`) computed first
+  - `search.py` — queries are translated by `query/` before any I/O, so a
+    malformed query never opens the database nor reaches the metrics
+    recorder. Candidate pool (`max(limit×5, 50)`) computed first
     (`MATCH` + bm25 + `LIMIT`), then `documents` joined only over the
     pool; source/type filters join inside the pool subquery so a filtered
-    search still ranks the whole filtered set before the limit. Scoring,
+    search still ranks the whole filtered set before the limit. A query
+    made only of filters (`type:pdf`, `size:>10MB`) skips MATCH/bm25 and
+    returns those rows newest first with score 0.0. Scoring,
     context/usage/explain (phase 008), snippets with FTS highlight markers
     stripped for display.
 - **Presentation**:
@@ -45,6 +56,8 @@ logic lives in the UI.
     | recent | indexer …` (diagnostics and control) plus `--version`.
   - `gui/` — Tk window (`app.py`, view only) + service layer (`services.py`,
     testable without Tk). `appconfig.py` provides paths/config/logging.
+    The service turns a `QueryError` into `last_query_error` so the window
+    shows the reason instead of a bare empty list.
   - `hotkey.py` — global shortcut server (phase 009), hosted by the worker.
   - `background.py` — background-indexer lifecycle (below).
 
