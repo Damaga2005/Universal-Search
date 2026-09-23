@@ -8,20 +8,20 @@
 - [x] Initial test
 
 ## v0.2
-- [ ] Incremental indexing
-- [ ] Ignore rules
-- [ ] Deleted-file reconciliation
-- [ ] Background indexer
+- [x] Incremental indexing
+- [x] Ignore rules
+- [x] Deleted-file reconciliation
+- [x] Background indexer
 
 ## v0.3
-- [ ] PDF / DOCX / XLSX extraction
-- [ ] Better snippets
-- [ ] Ranking engine
+- [x] PDF / DOCX / XLSX extraction
+- [x] Better snippets
+- [x] Ranking engine
 
 ## v0.4
-- [ ] Windows desktop GUI
+- [x] Windows desktop GUI
 - [ ] Global hotkey
-- [ ] Windows Start/Search integration
+- [x] Windows Start/Search integration
 - [ ] Tray indexer
 
 ## v0.5
@@ -33,3 +33,10 @@
 - [ ] Local usage-based ranking
 - [ ] Related-document graph
 - [ ] Installable Windows application
+
+---
+
+Phases 001–006 are implemented and documented (per-phase reports in
+`docs/development/`), with 129 passing tests. Global hotkey, tray indexer,
+OneDrive providers, personal context/usage learning and the installer
+remain for later phases.

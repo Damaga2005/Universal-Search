@@ -25,7 +25,10 @@ Universal Search indexes local files and cloud-backed locations such as OneDrive
 
 ## Status
 
-Early architecture phase — v0.1.
+Phases 001–006 delivered: foundation, incremental indexing, document
+extractors (PDF/DOCX/XLSX/PPTX), ranking engine, Windows desktop GUI and
+background indexer — 129 passing tests. See `docs/ROADMAP.md` for what
+remains (OneDrive, personal context, usage learning, tray, installer).
 
 ## Usage
 
@@ -33,10 +36,31 @@ Early architecture phase — v0.1.
 pip install -e .
 universal-search index C:\Users\me\Documents
 universal-search search "meeting notes"
+universal-search gui               # desktop window (alias: universal-search-gui)
+
+# background indexer — runs independently; closing the GUI does not stop it
+universal-search indexer start     # detached worker (single instance)
+universal-search indexer status    # idle / indexing / paused / error
+universal-search indexer pause     # universal-search indexer resume
+universal-search indexer stop
+universal-search indexer autostart on
 ```
 
-The index is stored in `universal-search.db` by default; change it with `--database <path>`.
-Search results show the source, path, file name and a content snippet.
+The CLI database defaults to `universal-search.db` (`--database <path>` to
+change). The GUI and background indexer use the per-user application home
+(`%LOCALAPPDATA%\Universal Search\index.db`, logs and status), overridable
+with `UNIVERSAL_SEARCH_HOME`. Search results show source, path, file name
+and a content snippet; ranking is documented in `docs/RANKING.md`.
+
+### Build the Windows executables
+
+```bash
+pip install ".[build]"                       # pyinstaller
+python -m PyInstaller packaging/universal-search.spec
+# dist/UniversalSearch/UniversalSearch.exe   windowed GUI
+# dist/UniversalSearch/universal-search.exe  console CLI + background indexer
+powershell -File packaging/make-shortcut.ps1 -TargetExe "dist\UniversalSearch\UniversalSearch.exe"
+```
 
 ## Development
 
@@ -46,4 +70,6 @@ python -m venv .venv
 .venv\Scripts\python -m pytest
 ```
 
-Development prompts live in `docs/development/`.
+Development prompts live in `docs/development/`, with a per-phase report for
+each completed phase. Architecture: `docs/ARCHITECTURE.md`. Roadmap:
+`docs/ROADMAP.md`.

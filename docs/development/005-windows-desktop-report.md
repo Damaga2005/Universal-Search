@@ -118,6 +118,7 @@ universal-search gui                # or: universal-search-gui
 # build the .exe (verified steps, see final report)
 .venv\Scripts\python -m pip install ".[build]"
 .venv\Scripts\python -m PyInstaller packaging/universal-search.spec
-# → dist/UniversalSearch/UniversalSearch.exe
+# → dist/UniversalSearch/UniversalSearch.exe   (windowed GUI)
+# → dist/UniversalSearch/universal-search.exe  (console CLI + indexer)
 .\\packaging\\make-shortcut.ps1 -TargetExe "dist\\UniversalSearch\\UniversalSearch.exe"
 ```
