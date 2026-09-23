@@ -14,6 +14,7 @@ dependencies = ["pypdf>=6.0"]
 
 [project.scripts]
 universal-search = "universal_search.cli:main"
+universal-search-gui = "universal_search.gui.app:run"
 
 [project.optional-dependencies]
 build = ["pyinstaller>=6.0"]

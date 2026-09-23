@@ -20,12 +20,17 @@ def main() -> None:
     search.add_argument("query")
     search.add_argument("--database", type=Path, default=Path("universal-search.db"))
     search.add_argument("--limit", type=int, default=20)
+    sub.add_parser("gui", help="launch the desktop search window")
     args = parser.parse_args()
     if args.command == "index":
         db = SearchDatabase(args.database)
         stats = Indexer(db).index_root(args.root)
         print(f"Indexed {stats.scanned} files.")
         print(stats.summary())
+    elif args.command == "gui":
+        from universal_search.gui.app import run
+
+        raise SystemExit(run())
     else:
         for result in SearchEngine(SearchDatabase(args.database)).search(args.query, args.limit):
             print(f"[{result.source}] {result.name}\n  {result.path}\n  {result.snippet or ''}\n")
