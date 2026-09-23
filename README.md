@@ -49,7 +49,10 @@ added loading / empty / error states, a central light-dark theme, scalable
 type and focused results rows; phase 018 documented the threat model and
 data inventory, added `privacy forget`, and fixed a real availability bug:
 FTS5's `snippet()` walked every phrase instance, so one document repeating
-a term 10 000 times took 1.9 s per search — **489 passing tests**.
+a term 10 000 times took 1.9 s per search; phase 019 formalised provider
+and extractor contracts with capability-based registration, and documented
+why there is deliberately no runtime third-party plugin loading —
+**502 passing tests**.
 
 | Fase | Entrega | Estado |
 |------|---------|--------|
@@ -71,6 +74,7 @@ a term 10 000 times took 1.9 s per search — **489 passing tests**.
 | 016 | Integración con Windows (adaptador, shell) | ✅ |
 | 017 | UX y accesibilidad (hilo, tema, estados) | ✅ |
 | 018 | Privacidad y seguridad (inventario, forget) | ✅ |
+| 019 | Arquitectura de proveedores y extensiones | ✅ |
 
 Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
 by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).
@@ -109,6 +113,9 @@ universal-search diagnose repair all --root C:\Users\me\Docs --yes
 # privacy: what is stored, and how to make it go away
 universal-search privacy show
 universal-search privacy forget C:\Users\me\Docs\informe.pdf
+
+# what this build can read and from where
+universal-search extensions
 
 # background indexer — runs independently; closing the GUI does not stop it
 universal-search indexer start     # detached worker (single instance)

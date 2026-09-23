@@ -33,7 +33,16 @@ from pathlib import Path
 
 from universal_search.domain.document import SourceKind
 from universal_search.domain.extraction import ExtractionResult
-from universal_search.providers.base import FileEntry, IgnoredPath, ScanError
+from universal_search.providers.base import (
+    AVAILABILITY,
+    CHANGE_DETECTION,
+    ENUMERATE,
+    IDENTITY,
+    METADATA,
+    FileEntry,
+    IgnoredPath,
+    ScanError,
+)
 from universal_search.providers.ignore import IgnoreRules
 from universal_search.providers.local import read_local_content, scan_local
 
@@ -173,7 +182,24 @@ class OneDriveProvider:
 
     It satisfies :class:`universal_search.providers.base.DocumentProvider`
     and exposes metadata plus availability without touching content.
+
+    Declared capabilities (spec 019): enumeration, metadata, availability
+    and identity come from the filesystem attributes; **content is
+    optional** and only read when the caller explicitly allows a
+    download, so a cloud-only placeholder is never fetched by surprise.
     """
+
+    key = "onedrive"
+    version = "1.0"
+    capabilities = frozenset(
+        {
+            ENUMERATE,
+            METADATA,
+            AVAILABILITY,
+            IDENTITY,
+            CHANGE_DETECTION,
+        }
+    )
 
     def __init__(
         self,
@@ -182,6 +208,10 @@ class OneDriveProvider:
     ) -> None:
         self.rules = rules
         self.download_max_mb = download_max_mb
+
+    def available(self) -> bool:
+        """True when at least one OneDrive root is configured on this PC."""
+        return bool(onedrive_roots())
 
     def discover(
         self, root: Path

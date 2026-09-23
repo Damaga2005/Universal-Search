@@ -280,10 +280,15 @@ def _worker_command() -> list[str]:
     return [sys.executable, "-m", "universal_search.cli", "indexer", "run"]
 
 
-def start(paths: AppPaths | None = None, *, wait: float = 5.0) -> tuple[str, str]:
+def start(paths: AppPaths | None = None, *, wait: float = 10.0) -> tuple[str, str]:
     """Spawn a detached worker. Returns (state, message).
 
     States: ``started``, ``already-running``, ``failed``.
+
+    ``wait`` bounds the handshake (spawn + first lock/status write).
+    Five seconds was enough on an idle machine and too tight on a loaded
+    one, where a correct worker was reported as failed; ten seconds is
+    still imperceptible to the person who pressed the button.
     """
     paths = paths or AppPaths.discover()
     pid = read_lock_pid(paths)

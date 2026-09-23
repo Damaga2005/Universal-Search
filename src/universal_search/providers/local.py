@@ -7,8 +7,43 @@ from pathlib import Path
 from universal_search.domain.document import Document, SourceKind, document_id_for
 from universal_search.domain.extraction import ExtractionResult
 from universal_search.extractors import extract
-from universal_search.providers.base import FileEntry, IgnoredPath, ScanError
+from universal_search.providers.base import (
+    AVAILABILITY,
+    CHANGE_DETECTION,
+    CONTENT,
+    ENUMERATE,
+    IDENTITY,
+    METADATA,
+    FileEntry,
+    IgnoredPath,
+    ScanError,
+)
 from universal_search.providers.ignore import IgnoreRules
+
+
+class LocalProvider:
+    """The filesystem provider, declared so it can be registered (019).
+
+    The scanner itself is the module-level :func:`scan_local` (the indexer
+    uses it directly and has for every phase); this class is the formal
+    face of the same implementation, so the registry can describe it
+    without the rest of the application having to know which is which.
+    """
+
+    key = "local"
+    version = "1.0"
+    capabilities = frozenset(
+        {ENUMERATE, METADATA, CONTENT, CHANGE_DETECTION, AVAILABILITY, IDENTITY}
+    )
+
+    def __init__(self, rules: IgnoreRules | None = None) -> None:
+        self.rules = rules
+
+    def available(self) -> bool:
+        return True
+
+    def discover(self, root: Path) -> Iterable[Document]:
+        return discover_local(root, self.rules)
 
 
 def read_local_content(path: Path) -> ExtractionResult:

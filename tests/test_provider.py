@@ -62,8 +62,17 @@ def test_custom_provider_documents_are_searchable(tmp_path: Path) -> None:
     """Providers only produce domain documents; the search engine never sees them."""
 
     class MemoryProvider:
+        # The full provider contract of spec 019: a key, a version, the
+        # capabilities it offers and an availability answer.
+        key = "memory"
+        version = "1.0"
+        capabilities = frozenset({"enumerate", "metadata", "content", "identity"})
+
         def __init__(self, documents: list[Document]) -> None:
             self._documents = documents
+
+        def available(self) -> bool:
+            return True
 
         def discover(self, root: Path) -> list[Document]:
             return list(self._documents)

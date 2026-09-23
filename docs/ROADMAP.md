@@ -44,7 +44,7 @@
 - [x] Windows integration (016)
 - [x] UX & accessibility (017)
 - [x] Privacy & security hardening (018)
-- [ ] Provider & extension architecture (019)
+- [x] Provider & extension architecture (019)
 - [ ] Production release & reliability (020)
 
 ---

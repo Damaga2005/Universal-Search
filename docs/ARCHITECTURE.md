@@ -12,12 +12,19 @@ logic lives in the UI.
   `ignore.py`) plus `onedrive.py` (phase 007): synced OneDrive folders run
   through the same pipeline labelled `onedrive`, and `OneDriveProvider`
   enumerates cloud-only placeholders with availability state — no network
-  I/O, content reads gated by `onedrive_download_max_mb`.
+  I/O, content reads gated by `onedrive_download_max_mb`. Both declare their
+  capabilities and register in `registry.py` (spec 019), which is the only
+  place a new source has to appear: `SearchEngine`, `ranking.py` and the
+  GUI never learn which provider produced a document. OneDrive is a *layer*
+  over the local scanner (Windows attributes), not a second scanner.
+  `universal-search extensions` prints the registry; the full contract and
+  the deliberate absence of runtime plugins are in `docs/EXTENDING.md`.
 - **Extractors** (`universal_search/extractors/`): extension-keyed registry
-  (`extract()`, never raises). Text-like files are read bounded (2 M chars)
-  with `utf-8-sig`; PDF via `pypdf`; DOCX/XLSX/PPTX via stdlib zip +
-  ElementTree; unsupported binaries are never opened (no text, no error);
-  failures come back as `ExtractionResult(text, error)`.
+  (`extract()`, never raises, `infos()` for inspection). Text-like files
+  are read bounded (2 M chars) with `utf-8-sig`; PDF via `pypdf`;
+  DOCX/XLSX/PPTX via stdlib zip + ElementTree; unsupported binaries are
+  never opened (no text, no error); failures come back as
+  `ExtractionResult(text, error)`.
 - **Domain** (`universal_search/domain/`): `Document` and the stable
   identity `document_id_for(source, path)`.
 - **Index** (`universal_search/index/`):
@@ -77,7 +84,8 @@ logic lives in the UI.
 - **Privacy** (`universal_search/privacy.py`, spec 018): the data inventory
   as data — what is stored, why, how long, and how to delete it — plus
   `forget()`, which removes a document and everything derived from it while
-  leaving the file alone. See `docs/PRIVACY.md`.
+  leaving the file alone. See `docs/PRIVACY.md` and `docs/EXTENDING.md`
+  (adding providers and extractors).
 - **Presentation**:
   - `cli.py` — `index | search | gui | onedrive | context | usage | hotkey
     | recent | indexer | intelligence | diagnose | privacy …`

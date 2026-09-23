@@ -59,6 +59,9 @@ def main() -> None:
         help="only results of this type, e.g. pdf",
     )
     sub.add_parser("gui", help="launch the desktop search window")
+    extensions = sub.add_parser(
+        "extensions", help="registered providers and extractors (inspectable)"
+    )
     onedrive = sub.add_parser(
         "onedrive", help="show detected OneDrive roots and file availability"
     )
@@ -306,6 +309,30 @@ def main() -> None:
         code = _intelligence_command(args)
         if code:
             raise SystemExit(code)
+    elif args.command == "extensions":
+        from universal_search import extractors
+        from universal_search.providers.registry import infos as provider_infos
+
+        print("providers:")
+        for info in provider_infos():
+            state = "available" if info.available else "unavailable"
+            print(
+                f"  {info.key} ({info.kind}) v{info.version}"
+                f" [interface {info.interface_version}] - {state}"
+            )
+            print(f"      capabilities: {', '.join(info.capabilities)}")
+            print(f"      {info.detail}")
+        print("extractors:")
+        for info in extractors.infos():
+            extensions = " ".join(info.extensions)
+            print(
+                f"  {info.key}: {extensions}"
+                f"  (max {info.max_chars} chars, {info.note})"
+            )
+        print(
+            "Third-party runtime plugins are deliberately not supported;"
+            " see docs/EXTENDING.md."
+        )
     elif args.command == "onedrive":
         from universal_search.providers.base import ScanError
         from universal_search.providers.onedrive import (
