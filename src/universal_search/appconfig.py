@@ -60,6 +60,10 @@ class AppPaths:
     def lock_file(self) -> Path:
         return self.home / "indexer.lock"
 
+    @property
+    def stop_file(self) -> Path:
+        return self.home / "indexer-stop.flag"
+
     def ensure(self) -> None:
         self.home.mkdir(parents=True, exist_ok=True)
 
@@ -116,11 +120,22 @@ class AppConfig:
 
 
 def setup_logging(paths: AppPaths | None = None) -> logging.Logger:
-    """Attach a rotating file handler to the package logger (idempotent)."""
+    """Attach a rotating file handler to the package logger.
+
+    Idempotent for the same file; re-binds when the application home changes
+    (tests and the ``UNIVERSAL_SEARCH_HOME`` override).
+    """
     paths = paths or AppPaths.discover()
     paths.ensure()
     logger = logging.getLogger("universal_search")
     logger.setLevel(logging.INFO)
+    target = paths.log_file.resolve()
+    for handler in list(logger.handlers):
+        if isinstance(handler, RotatingFileHandler) and Path(
+            handler.baseFilename
+        ) != target:
+            logger.removeHandler(handler)
+            handler.close()
     if not any(isinstance(handler, RotatingFileHandler) for handler in logger.handlers):
         handler = RotatingFileHandler(
             paths.log_file, maxBytes=1_000_000, backupCount=3, encoding="utf-8"

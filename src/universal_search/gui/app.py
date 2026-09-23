@@ -10,6 +10,7 @@ import tkinter as tk
 from dataclasses import replace
 from tkinter import filedialog, ttk
 
+from universal_search.gui import services
 from universal_search.gui.services import (
     SearchService,
     open_path,
@@ -73,6 +74,30 @@ class SearchWindow(tk.Tk):
         file_menu.add_separator()
         file_menu.add_command(label="Salir", command=self._on_close)
         menu.add_cascade(label="Archivo", menu=file_menu)
+
+        self.indexer_menu = tk.Menu(menu, tearoff=0)
+        self.indexer_menu.add_command(
+            label="Iniciar indexador", command=lambda: self._indexer_action("start")
+        )
+        self.indexer_menu.add_command(
+            label="Detener indexador", command=lambda: self._indexer_action("stop")
+        )
+        self.indexer_menu.add_command(
+            label="Pausar indexación", command=lambda: self._indexer_action("pause")
+        )
+        self.indexer_menu.add_command(
+            label="Reanudar indexación", command=lambda: self._indexer_action("resume")
+        )
+        self.indexer_menu.add_separator()
+        self.autostart_var = tk.BooleanVar(
+            value=self.service.config.start_with_windows
+        )
+        self.indexer_menu.add_checkbutton(
+            label="Iniciar con Windows",
+            variable=self.autostart_var,
+            command=self._toggle_autostart,
+        )
+        menu.add_cascade(label="Indexador", menu=self.indexer_menu)
         self.config(menu=menu)
 
         middle = ttk.Frame(self, padding=(12, 0, 12, 0))
@@ -97,6 +122,10 @@ class SearchWindow(tk.Tk):
         ttk.Label(statusbar, textvariable=self.status_var, foreground="#666").pack(
             side="left"
         )
+        self.indexer_var = tk.StringVar(value="indexador: …")
+        ttk.Label(
+            statusbar, textvariable=self.indexer_var, foreground="#666"
+        ).pack(side="right")
 
         self.preview = ttk.Label(
             self, text="", padding=(12, 8), justify="left",
@@ -118,6 +147,60 @@ class SearchWindow(tk.Tk):
         self.listbox.bind("<Double-Button-1>", self._on_open)
         self.listbox.bind("<<ListboxSelect>>", self._update_preview)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+        self._poll_indexer()
+
+    # -- background indexer hooks ------------------------------------------------
+
+    def _poll_indexer(self) -> None:
+        """Refresh the indexer state in the status bar every two seconds."""
+        if self.closed:
+            return
+        try:
+            summary = services.indexer_summary(self.service.paths)
+        except Exception:
+            log.exception("could not read indexer status")
+            summary = "indexador: ?"
+        self.indexer_var.set(summary)
+        self.after(2000, self._poll_indexer)
+
+    def _indexer_action(self, action: str) -> None:
+        handlers = {
+            "start": services.start_indexer,
+            "stop": services.stop_indexer,
+            "pause": services.pause_indexer,
+            "resume": services.resume_indexer,
+        }
+        try:
+            message = handlers[action](self.service.paths)
+        except Exception:
+            log.exception("indexer control failed: %s", action)
+            self._set_status("Error en el indexador — consulta el registro")
+            return
+        self._set_status(message)
+        self._poll_indexer_now()
+
+    def _poll_indexer_now(self) -> None:
+        try:
+            self.indexer_var.set(services.indexer_summary(self.service.paths))
+        except Exception:
+            log.exception("could not read indexer status")
+
+    def _toggle_autostart(self) -> None:
+        enabled = bool(self.autostart_var.get())
+        try:
+            message = services.set_autostart(enabled)
+        except Exception:
+            log.exception("could not update autostart")
+            self.autostart_var.set(not enabled)  # revert the checkbox
+            self._set_status("No se pudo configurar el inicio — consulta el registro")
+            return
+        try:
+            self.service.save_config(
+                replace(self.service.config, start_with_windows=enabled)
+            )
+        except Exception:
+            log.exception("could not persist autostart flag")
+        self._set_status(message)
 
     # -- searching ------------------------------------------------------------
 
@@ -273,6 +356,9 @@ class SearchWindow(tk.Tk):
         self._set_status(f"Carpeta añadida: {chosen}")
 
     def _on_close(self, _event=None) -> None:
+        # Closing the window never touches the indexer: it is a separate
+        # process coordinated only through files (spec: GUI and indexer are
+        # independent).
         try:
             self.service.save_config(
                 replace(self.service.config, window_geometry=self.geometry())

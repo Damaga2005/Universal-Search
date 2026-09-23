@@ -64,3 +64,72 @@ def reveal_in_explorer(path: Path | str) -> None:
         subprocess.Popen(["explorer", "/select,", target])
         return
     raise RuntimeError(f"explorer reveal is only supported on Windows: {target}")
+
+
+# -- background indexer control (thin wrappers over the background module) -------
+
+def indexer_status(paths: AppPaths | None = None) -> dict | None:
+    from universal_search import background
+
+    return background.read_status(paths or AppPaths.discover())
+
+
+def indexer_summary(paths: AppPaths | None = None) -> str:
+    """Short human-readable indexer state for the status bar."""
+    from universal_search import background
+
+    paths = paths or AppPaths.discover()
+    pid = background.read_lock_pid(paths)
+    running = pid is not None and background.process_alive(pid)
+    status = background.read_status(paths)
+    if not running and status is None:
+        return "indexador: detenido"
+    state = (status or {}).get("state", "starting")
+    labels = {
+        "idle": "en reposo",
+        "indexing": "indexando",
+        "paused": "en pausa",
+        "error": "error",
+    }
+    label = labels.get(state, state)
+    if background.is_paused(paths) and state != "paused":
+        label = "en pausa"
+    suffix = f" · pid {pid}" if running else ""
+    return f"indexador: {label}{suffix}"
+
+
+def start_indexer(paths: AppPaths | None = None) -> str:
+    from universal_search import background
+
+    _state, message = background.start(paths)
+    return message
+
+
+def stop_indexer(paths: AppPaths | None = None) -> str:
+    from universal_search import background
+
+    _state, message = background.stop(paths)
+    return message
+
+
+def pause_indexer(paths: AppPaths | None = None) -> str:
+    from universal_search import background
+
+    background.pause(paths or AppPaths.discover())
+    return "indexación pausada"
+
+
+def resume_indexer(paths: AppPaths | None = None) -> str:
+    from universal_search import background
+
+    background.resume(paths or AppPaths.discover())
+    return "indexación reanudada"
+
+
+def set_autostart(enabled: bool) -> str:
+    from universal_search import background
+
+    background.set_autostart(enabled)
+    return (
+        "se iniciará con Windows" if enabled else "ya no se inicia con Windows"
+    )

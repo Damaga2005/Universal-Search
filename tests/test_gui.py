@@ -187,3 +187,75 @@ def test_empty_query_shows_ready_state(window) -> None:
     assert window.listbox.size() == 0
     assert window.results == []
     assert "Listo" in window.status_var.get()
+
+
+# -- background indexer hooks (phase 006) -------------------------------------------
+
+def _menu_labels(menu) -> list[str]:
+    return [
+        menu.entrycget(index, "label")
+        for index in range(menu.index("end") + 1)
+        if menu.type(index) == "command"
+    ]
+
+
+def test_indexer_menu_and_status_bar(window, monkeypatch) -> None:
+    from universal_search.gui import app as gui_app
+
+    labels = _menu_labels(window.indexer_menu)
+    for expected in (
+        "Iniciar indexador",
+        "Detener indexador",
+        "Pausar indexación",
+        "Reanudar indexación",
+    ):
+        assert expected in labels
+
+    monkeypatch.setattr(
+        gui_app.services,
+        "indexer_summary",
+        lambda paths=None: "indexador: en reposo",
+    )
+    window._poll_indexer_now()
+    assert "en reposo" in window.indexer_var.get()
+
+    monkeypatch.setattr(
+        gui_app.services,
+        "start_indexer",
+        lambda paths=None: "indexador iniciado (pid 123)",
+    )
+    window._indexer_action("start")
+
+    assert "indexador iniciado" in window.status_var.get()
+    assert "en reposo" in window.indexer_var.get()  # refreshed after the action
+
+
+def test_indexer_action_errors_stay_friendly(window, monkeypatch) -> None:
+    from universal_search.gui import app as gui_app
+
+    def boom(paths=None):
+        raise RuntimeError("control failed")
+
+    monkeypatch.setattr(gui_app.services, "stop_indexer", boom)
+    window._indexer_action("stop")
+
+    assert "Error" in window.status_var.get()
+    assert "Traceback" not in window.status_var.get()
+
+
+def test_closing_window_does_not_touch_the_indexer(window, monkeypatch) -> None:
+    """Closing the GUI must never stop the background worker (spec)."""
+    from universal_search.gui import app as gui_app
+
+    stop_calls: list[bool] = []
+    monkeypatch.setattr(
+        gui_app.services,
+        "stop_indexer",
+        lambda paths=None: stop_calls.append(True) or "detenido",
+    )
+    monkeypatch.setattr(window, "destroy", lambda *args, **kwargs: None)
+
+    window._on_close()
+
+    assert stop_calls == []  # the close path never stops the indexer
+    assert window.closed

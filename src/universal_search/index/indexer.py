@@ -135,6 +135,7 @@ class Indexer:
         *,
         rules: IgnoreRules | None = None,
         read_content: ContentReader | None = None,
+        delay: float = 0.0,
     ) -> IndexStats:
         """Reconcile everything indexed under ``root`` with the filesystem.
 
@@ -143,6 +144,9 @@ class Indexer:
         previous representation. Files that vanished from disk are removed
         from both the metadata table and the full-text index. The index
         database itself is never indexed.
+
+        ``delay`` sleeps that many seconds after writing each changed file —
+        a cooperative CPU/disk resource limit used by the background worker.
         """
         rules = rules or IgnoreRules.defaults()
         read_content = read_content or read_local_content
@@ -224,6 +228,8 @@ class Indexer:
                     self._upsert(connection, document, mtime_ns=item.mtime_ns, run_id=run_id)
                     stats.updated += 1
                 connection.commit()
+                if delay:
+                    time.sleep(delay)
 
             self._delete_missing(connection, root_path, run_id, stats)
             connection.commit()

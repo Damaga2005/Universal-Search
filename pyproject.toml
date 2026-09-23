@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
 authors = [{name = "Damaga2005"}]
-dependencies = ["pypdf>=6.0"]
+dependencies = ["pypdf>=6.0", "watchdog>=4.0"]
 
 [project.scripts]
 universal-search = "universal_search.cli:main"
