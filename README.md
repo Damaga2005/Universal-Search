@@ -44,7 +44,9 @@ rebuildable on demand); phase 015 added index diagnostics, twelve health
 checks and five repair operations with confirmation enforced in code;
 phase 016 isolated every Windows touchpoint behind a `platforms` adapter,
 enforced single-instance window behaviour and added per-user Start Menu
-and Explorer integration scripts — **447 passing tests**.
+and Explorer integration scripts; phase 017 moved search off the UI thread,
+added loading / empty / error states, a central light-dark theme, scalable
+type and focused results rows — **465 passing tests**.
 
 | Fase | Entrega | Estado |
 |------|---------|--------|
@@ -64,6 +66,7 @@ and Explorer integration scripts — **447 passing tests**.
 | 014 | Inteligencia documental local (reconstruible) | ✅ |
 | 015 | Diagnóstico y mantenimiento del índice | ✅ |
 | 016 | Integración con Windows (adaptador, shell) | ✅ |
+| 017 | UX y accesibilidad (hilo, tema, estados) | ✅ |
 
 Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
 by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).

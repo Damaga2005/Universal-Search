@@ -81,7 +81,11 @@ logic lives in the UI.
   - `gui/` — Tk window (`app.py`, view only) + service layer (`services.py`,
     testable without Tk). `appconfig.py` provides paths/config/logging.
     The service turns a `QueryError` into `last_query_error` so the window
-    shows the reason instead of a bare empty list.
+    shows the reason instead of a bare empty list. Searches run on a
+    worker thread and are delivered through a queue that the Tk main loop
+    drains, with a generation number so a stale answer can never replace a
+    newer one. `theme.py` owns every colour and font size, `rows.py` the
+    result-line format (both pure, both testable without a display).
   - `hotkey.py` — global shortcut server (phase 009), hosted by the worker.
     A hotkey that cannot be registered is reported in the worker status
     file, so a dead shortcut is visible instead of silent. The window is

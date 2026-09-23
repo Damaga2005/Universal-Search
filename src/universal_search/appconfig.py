@@ -99,6 +99,10 @@ class AppConfig:
     recent_queries_enabled: bool = True
     hotkey: str = "ctrl+alt+s"
     hotkey_enabled: bool = True
+    # Appearance (spec 017): "system" follows the Windows preference.
+    theme: str = "system"
+    # User scale on top of the system DPI: 1.0 is the system default.
+    ui_scale: float = 1.0
     window_geometry: str = ""
 
     def ignore_rules(self) -> IgnoreRules:
@@ -149,6 +153,8 @@ class AppConfig:
                 raw.get("hotkey_enabled"), defaults.hotkey_enabled
             ),
             window_geometry=_str(raw.get("window_geometry"), defaults.window_geometry),
+            theme=_str(raw.get("theme"), defaults.theme),
+            ui_scale=_float(raw.get("ui_scale"), defaults.ui_scale),
         )
 
     def save(self, paths: AppPaths) -> None:

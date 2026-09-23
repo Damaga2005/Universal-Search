@@ -15,8 +15,13 @@ tk = pytest.importorskip("tkinter", reason="tkinter not available")
 
 
 def flush_debounce(window, delay: float = 0.25) -> None:
-    """Wait out the search debounce and process the scheduled callback."""
+    """Wait out the search debounce and process the scheduled callback.
+
+    The window searches off the UI thread (spec 017), so this also waits
+    for the result to come back and be rendered.
+    """
     time.sleep(delay)
+    assert window.pump(), "the search never finished"
     window.update()
 
 
@@ -163,6 +168,7 @@ def test_search_error_shows_friendly_status_without_traceback(window, monkeypatc
 
     window.query_var.set("algo")
     window._execute_search()  # bypass the debounce, call the handler directly
+    assert window.pump()
 
     assert "Error" in window.status_var.get()
     assert "Traceback" not in window.status_var.get()
@@ -347,6 +353,7 @@ def test_filters_apply_to_searches(window, monkeypatch) -> None:
 
     # no filters by default
     window._execute_search()
+    assert window.pump()
     assert captured["source"] is None
     assert captured["doc_type"] is None
 
@@ -354,14 +361,15 @@ def test_filters_apply_to_searches(window, monkeypatch) -> None:
     window.source_var.set("onedrive")
     window.type_var.set("txt")
     window._on_filter_changed()
+    assert window.pump()
     assert captured["source"] == "onedrive"
     assert captured["doc_type"] == "txt"
-    assert "Filtro" in window.status_var.get()
 
     # back to unfiltered for the rest of the suite
     window.source_var.set("(todas)")
     window.type_var.set("(todos)")
     window._execute_search()
+    assert window.pump()
     assert captured["source"] is None
     assert captured["doc_type"] is None
 

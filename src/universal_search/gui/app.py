@@ -7,23 +7,30 @@ of the GUI and the window can be exercised in tests.
 
 import logging
 import os
+import queue
+import threading
+import time
 import tkinter as tk
 from dataclasses import replace
 from tkinter import filedialog, messagebox, ttk
 
 from universal_search import __version__
 from universal_search.context import load_contexts
-from universal_search.gui import services
+from universal_search.gui import rows, services, theme as theme_module
 from universal_search.gui.services import (
     SearchService,
     open_path,
     reveal_in_explorer,
 )
 from universal_search.index.search import SearchResult
+from universal_search.query import QueryError
 
 log = logging.getLogger("universal_search.gui")
 
 DEBOUNCE_MS = 150
+# How often the main loop collects finished searches. Short enough to feel
+# instant, long enough that an idle window does no work.
+RESULT_POLL_MS = 40
 DEFAULT_LIMIT = 50
 SHOW_POLL_MS = 250
 SOURCE_FILTER_VALUES = ("(todas)", "local", "onedrive")
@@ -45,10 +52,25 @@ class SearchWindow(tk.Tk):
         self.service = service or SearchService()
         self.results: list[SearchResult] = []
         self._search_job: str | None = None
+        self._result_poll: str | None = None
+        self._results_queue: queue.Queue = queue.Queue()
+        self._generation = 0
+        self._inflight = 0
         self.closed = False
 
+        # Theme and scaling resolved once, from configuration (spec 017).
+        config = self.service.config
+        self.theme = theme_module.resolve(
+            getattr(config, "theme", "system")
+        )
+        self.ui_scale = theme_module.clamp_scale(
+            getattr(config, "ui_scale", 1.0)
+        )
+        self.fonts = theme_module.fonts(self.ui_scale)
+        self.configure(background=self.theme.background)
+
         self.title(f"Universal Search {__version__}")
-        self.geometry(self.service.config.window_geometry or "940x580")
+        self.geometry(config.window_geometry or "940x580")
         self.minsize(680, 400)
 
         self._build_ui()
@@ -71,7 +93,12 @@ class SearchWindow(tk.Tk):
         top = ttk.Frame(self, padding=(12, 12, 12, 6))
         top.pack(fill="x")
         self.query_var = tk.StringVar()
-        self.entry = ttk.Entry(top, textvariable=self.query_var, font=("Segoe UI", 14))
+        self.entry = ttk.Entry(
+            top,
+            textvariable=self.query_var,
+            font=self.fonts["entry"],
+            takefocus=True,  # explicit: never rely on a style default
+        )
         self.entry.pack(fill="x")
 
         context_bar = ttk.Frame(top, padding=(0, 6, 0, 0))
@@ -171,12 +198,18 @@ class SearchWindow(tk.Tk):
         middle.pack(fill="both", expand=True)
         self.listbox = tk.Listbox(
             middle,
-            font=("Segoe UI", 11),
+            font=self.fonts["body"],
             activestyle="none",
             exportselection=False,
             relief="flat",
+            takefocus=True,  # reachable with Tab, visible with the focus ring
             highlightthickness=1,
-            highlightcolor="#0078d4",
+            highlightcolor=self.theme.accent,
+            highlightbackground=self.theme.background,
+            background=self.theme.background,
+            foreground=self.theme.foreground,
+            selectbackground=self.theme.selection_background,
+            selectforeground=self.theme.selection_foreground,
         )
         scrollbar = ttk.Scrollbar(middle, orient="vertical", command=self.listbox.yview)
         self.listbox.configure(yscrollcommand=scrollbar.set)
@@ -186,17 +219,17 @@ class SearchWindow(tk.Tk):
         statusbar = ttk.Frame(self, padding=(12, 4))
         statusbar.pack(fill="x", side="bottom")
         self.status_var = tk.StringVar()
-        ttk.Label(statusbar, textvariable=self.status_var, foreground="#666").pack(
-            side="left"
-        )
+        ttk.Label(
+            statusbar, textvariable=self.status_var, foreground=self.theme.muted
+        ).pack(side="left")
         self.indexer_var = tk.StringVar(value="indexador: …")
         ttk.Label(
-            statusbar, textvariable=self.indexer_var, foreground="#666"
+            statusbar, textvariable=self.indexer_var, foreground=self.theme.muted
         ).pack(side="right")
 
         self.preview = ttk.Label(
             self, text="", padding=(12, 8), justify="left",
-            font=("Segoe UI", 10), foreground="#444",
+            font=self.fonts["body"], foreground=self.theme.muted,
         )
         self.preview.pack(fill="x", side="bottom")
 
@@ -309,27 +342,92 @@ class SearchWindow(tk.Tk):
         self._execute_search()
 
     def _execute_search(self) -> None:
+        """Start a search *without* blocking the UI thread (spec 017).
+
+        Typing must never freeze the window: the query runs on a worker
+        thread and hands the results back through a queue that the main
+        loop drains. Every search carries a generation number, so results
+        from a superseded keystroke are dropped instead of replacing the
+        newer answer.
+        """
         query = self.query_var.get()
         self.context_combo.configure(values=self._context_values())  # keep list fresh
         self._refresh_recent_menu()
-        try:
-            results = self.service.search(
-                query,
-                limit=DEFAULT_LIMIT,
-                source=self._active_source_filter(),
-                doc_type=self._active_type_filter(),
+        self._generation += 1
+        generation = self._generation
+        self._inflight += 1
+        source = self._active_source_filter()
+        doc_type = self._active_type_filter()
+        self._set_busy(query)
+
+        def work() -> None:
+            try:
+                results = self.service.search(
+                    query, limit=DEFAULT_LIMIT, source=source, doc_type=doc_type
+                )
+                self._results_queue.put((generation, results, None, None))
+            except QueryError as exc:
+                self._results_queue.put((generation, [], str(exc), None))
+            except Exception as exc:  # pragma: no cover - defensive
+                log.exception("search failed for %r", query)
+                self._results_queue.put((generation, [], None, f"{type(exc).__name__}: {exc}"))
+
+        threading.Thread(target=work, name="search", daemon=True).start()
+        self._poll_results()
+
+    def _poll_results(self) -> None:
+        """Drain finished searches on the main thread (Tk is not thread-safe)."""
+        if self.closed:
+            return
+        while True:
+            try:
+                generation, results, query_error, failure = self._results_queue.get_nowait()
+            except queue.Empty:
+                break
+            self._inflight = max(0, self._inflight - 1)
+            if generation != self._generation:
+                continue  # a newer keystroke already superseded this answer
+            self._apply_search(results, query_error, failure)
+        self._result_poll = self.after(RESULT_POLL_MS, self._poll_results)
+
+    def pump(self, timeout: float = 2.0) -> bool:
+        """Process events until no search is in flight; True when idle.
+
+        The UI never calls this — it exists so tests and scripts can wait
+        for the same asynchronous contract the user experiences, instead
+        of reaching into private state.
+        """
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            self.update()
+            idle = (
+                self._inflight == 0
+                and self._search_job is None
+                and self._results_queue.empty()
             )
-        except Exception:
-            log.exception("search failed for %r", query)
+            if idle:
+                # One more cycle so a result queued by a worker that just
+                # finished is applied before the caller looks.
+                self.update()
+                if self._inflight == 0 and self._results_queue.empty():
+                    return True
+            time.sleep(0.005)
+        return False
+
+    def _apply_search(
+        self,
+        results: list[SearchResult],
+        query_error: str | None,
+        failure: str | None,
+    ) -> None:
+        if query_error is not None:
+            self._render([])
+            self._set_status(f"Consulta no válida: {query_error}")
+            return
+        if failure is not None:
             self._set_status("Error al buscar — consulta el registro de errores")
             return
         self._render(results)
-        if self.service.last_query_error:
-            # Query-language feedback (spec 012): explain why nothing was
-            # shown, instead of a bare "0 resultado(s)".
-            self._set_status(
-                f"Consulta no válida: {self.service.last_query_error}"
-            )
 
     # -- personal context -------------------------------------------------------
 
@@ -406,20 +504,36 @@ class SearchWindow(tk.Tk):
             self.listbox.selection_set(0)
             self.listbox.activate(0)
             self.listbox.see(0)
-        self._set_status(f"{len(results)} resultado(s)")
+            self._set_status(f"{len(results)} resultado(s)")
+        elif self.query_var.get().strip():
+            # A named, empty result list is a state of its own (spec 017):
+            # say what happened and what to try, not just "0".
+            self._set_status(
+                f"Sin resultados para «{self.query_var.get().strip()}»"
+            )
+        else:
+            self._set_status("Listo — escribe para buscar")
         self._update_preview()
 
     @staticmethod
     def _row_text(result: SearchResult) -> str:
-        plain = " ".join(
-            (result.snippet or "").replace("[", "").replace("]", "").split()
+        return rows.format_result_row(
+            result.name, result.path, result.snippet, result.source
         )
-        source = f"[{result.source}] "
-        if plain:
-            return f"{source}{result.name}    {plain[:100]}"
-        return f"{source}{result.name}"
+
+    def _set_busy(self, query: str) -> None:
+        """Loading state: the previous results stay visible while searching.
+
+        Nothing is cleared and nothing is disabled: a search box that
+        blanks on every keystroke makes it impossible to compare two
+        queries. ``_apply_search`` replaces the status when results land.
+        """
+        self._set_status(f"Buscando «{query.strip()}»…")
 
     def _clear_results(self) -> None:
+        # Bumping the generation makes any search still in flight stale,
+        # so late results cannot repopulate a box the user just cleared.
+        self._generation += 1
         self.results = []
         self.listbox.delete(0, "end")
         self.preview.configure(text="")
