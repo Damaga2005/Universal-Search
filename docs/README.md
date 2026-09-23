@@ -26,7 +26,7 @@ El roadmap por versiones (v0.1–v0.6+) vive en [ROADMAP.md](ROADMAP.md).
 | 017 | UX y accesibilidad | ✅ Completada | [017-ux-accessibility.md](development/017-ux-accessibility.md) | [informe](development/017-ux-accessibility-report.md) |
 | 018 | Privacidad y seguridad | ✅ Completada | [018-privacy-security.md](development/018-privacy-security.md) | [informe](development/018-privacy-security-report.md) |
 | 019 | Arquitectura de proveedores y extensión | ✅ Completada | [019-provider-plugin-architecture.md](development/019-provider-plugin-architecture.md) | [informe](development/019-provider-plugin-architecture-report.md) |
-| 020 | Release de producción y fiabilidad | ⬜ Pendiente | [020-production-release.md](development/020-production-release.md) | — |
+| 020 | Release de producción y fiabilidad | ✅ Completada | [020-production-release.md](development/020-production-release.md) | [informe](development/020-production-release-report.md) |
 
 Verificado en la fase 010: **208 tests en verde**
 (`.venv\Scripts\python -m pytest`), E2E completo de indexador, CLI, GUI e

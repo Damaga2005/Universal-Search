@@ -51,8 +51,10 @@ data inventory, added `privacy forget`, and fixed a real availability bug:
 FTS5's `snippet()` walked every phrase instance, so one document repeating
 a term 10 000 times took 1.9 s per search; phase 019 formalised provider
 and extractor contracts with capability-based registration, and documented
-why there is deliberately no runtime third-party plugin loading —
-**502 passing tests**.
+why there is deliberately no runtime third-party plugin loading; phase 020
+added downgrade refusal, a migration ledger, consistent backups before
+destructive repairs, Windows CI with a packaged smoke test, and a
+reproducible release procedure — **515 passing tests, 1 skipped**.
 
 | Fase | Entrega | Estado |
 |------|---------|--------|
@@ -75,6 +77,7 @@ why there is deliberately no runtime third-party plugin loading —
 | 017 | UX y accesibilidad (hilo, tema, estados) | ✅ |
 | 018 | Privacidad y seguridad (inventario, forget) | ✅ |
 | 019 | Arquitectura de proveedores y extensiones | ✅ |
+| 020 | Release de producción y fiabilidad (CI, migraciones, copias) | ✅ |
 
 Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
 by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).
@@ -155,6 +158,9 @@ python -m evaluation --flip recency diagrama   # headroom of one ranking weight
 ```
 
 Development prompts live in `docs/development/`, with a per-phase report for
-each completed phase. Documentation hub with the roadmap status:
+each completed phase, and `CHANGELOG.md` summarises the releases.
+Documentation hub with the roadmap status:
 [`docs/README.md`](docs/README.md). Architecture: `docs/ARCHITECTURE.md`.
-Ranking: `docs/RANKING.md`. Privacy: `docs/PRIVACY.md`. Roadmap: `docs/ROADMAP.md`.
+Ranking: `docs/RANKING.md`. Privacy: `docs/PRIVACY.md`. Extending:
+`docs/EXTENDING.md`. Release procedure: `docs/RELEASE.md`.
+Roadmap: `docs/ROADMAP.md`.

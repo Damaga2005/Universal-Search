@@ -1,0 +1,129 @@
+name: CI
+
+# Phase 020: the gates that must pass before anything is released.
+# Windows is the supported platform and gates the build. Ubuntu runs the
+# suite as a *probe* of the platform-independent core (phase 016): it is
+# allowed to fail without blocking a release, because the GUI, the
+# registry, the hotkey and the installer scripts are Windows-only by
+# design, and a red X on a job nobody can fix is worse than an honest
+# non-gating signal.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: tests, lint and migrations (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . pytest pyflakes
+
+      - name: Static analysis (pyflakes)
+        run: python -m pyflakes src tests benchmarks evaluation
+
+      - name: Full test suite
+        run: python -m pytest tests -q
+
+      - name: Schema version is consistent
+        run: |
+          python -c "from universal_search.index.database import SCHEMA_VERSION; print(SCHEMA_VERSION)"
+          python -c "import universal_search; print(universal_search.__version__)"
+
+      - name: Migrations and reliability regressions
+        run: python -m pytest tests/test_release.py tests/test_reliability.py -q
+
+      - name: Search-quality regression (phase 013 baseline)
+        run: python -m pytest tests/test_evaluation.py tests/test_ranking.py -q
+
+      - name: Security regressions (phase 018)
+        run: python -m pytest tests/test_privacy.py -q
+
+  core-portability:
+    name: platform-independent core (probe, non-gating)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: python -m pip install -e . pytest
+
+      - name: Core suite without Windows-only assumptions
+        run: |
+          python -m pytest tests \
+            -q \
+            --ignore=tests/test_gui.py \
+            --ignore=tests/test_gui_ux.py \
+            --ignore=tests/test_hotkey.py \
+            --ignore=tests/test_release.py
+
+  package:
+    name: Windows build and smoke test
+    runs-on: windows-latest
+    needs: quality
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install with the build extra
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[build]" pytest
+
+      - name: Build the executables
+        run: python -m PyInstaller packaging/universal-search.spec --noconfirm
+
+      - name: Smoke test the packaged CLI
+        shell: pwsh
+        run: |
+          $exe = "dist\UniversalSearch\universal-search.exe"
+          if (-not (Test-Path $exe)) { throw "CLI executable missing" }
+          & $exe --version
+          $tmp = Join-Path $env:RUNNER_TEMP "smoke"
+          New-Item -ItemType Directory -Force -Path "$tmp\docs" | Out-Null
+          "transistor bjt polarizacion" | Out-File -Encoding utf8 "$tmp\docs\nota.md"
+          & $exe index "$tmp\docs" --database "$tmp\index.db"
+          & $exe search "bjt" --database "$tmp\index.db"
+          & $exe diagnose health --database "$tmp\index.db"
+          & $exe privacy show --database "$tmp\index.db"
+          & $exe extensions
+
+      - name: Record artifact hashes
+        shell: pwsh
+        run: |
+          Get-FileHash dist\UniversalSearch\*.exe -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash)  $($_.Path)" } |
+            Out-File -Encoding ascii artifacts.sha256
+          Get-Content artifacts.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: universal-search-windows
+          path: |
+            dist/UniversalSearch/*.exe
+            artifacts.sha256
+          retention-days: 30

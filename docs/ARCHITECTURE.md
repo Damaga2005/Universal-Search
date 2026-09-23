@@ -35,6 +35,10 @@ logic lives in the UI.
   - `database.py` — SQLite metadata + FTS5 (`unicode61`); per-connection
     pragmas (WAL, `synchronous=NORMAL`, 16 MB page cache, 256 MB mmap) and
     a schema-present gate so reconnects skip DDL (migrations still run).
+    Schema version 5: additive migrations, a `schema_migrations` ledger,
+    consistent `backup()` and **downgrade refusal** — an index written by
+    a newer build raises `UnsupportedSchemaVersion` instead of being
+    silently re-stamped (spec 020).
   - `query/` — the search query language in four stages (spec 012):
     `lexer.py` (tokens), `parser.py` (immutable AST), `validate.py` (value
     normalization + structural policy) and `translate.py` (`QueryPlan`:
@@ -143,6 +147,21 @@ wheel and never run at runtime:
 
 Both are deterministic (no RNG, no clock in the data) and the test suite
 imports them, so `pythonpath = ["."]` is set in the pytest configuration.
+
+## Continuous integration and release
+
+`.github/workflows/ci.yml` gates Windows on quality (pyflakes, the full
+suite, migrations and reliability, search-quality baseline, security
+regressions), then builds the package with PyInstaller, runs a smoke test
+against the frozen executables and publishes their SHA-256 hashes. A
+**non-gating** Ubuntu job runs the platform-independent core as a probe of
+the seam described above.
+
+`docs/RELEASE.md` is the reproducible release procedure: single-sourced
+versioning, the migration and downgrade rules, the build, the installer,
+the manual update strategy (no auto-updater, by decision), the release
+checklist, the final quality gate with recorded results, and the known
+issues. `CHANGELOG.md` records what changed in phases 011–020.
 
 ## Data, dependencies, non-goals
 

@@ -1,11 +1,12 @@
 import argparse
 import sqlite3
 import sys
+from contextlib import closing
 from pathlib import Path
 
 from universal_search import __version__, metrics
 from universal_search.appconfig import AppPaths
-from universal_search.index.database import SearchDatabase
+from universal_search.index.database import SearchDatabase, UnsupportedSchemaVersion
 from universal_search.index.indexer import Indexer
 from universal_search.index.search import SearchEngine
 
@@ -273,6 +274,10 @@ def main() -> None:
         "all", help="delete the whole index and reindex (destructive)"
     )
     repair_all.add_argument("--root", type=Path, action="append", default=[])
+    repair_all.add_argument(
+        "--backup", action="store_true",
+        help="copy the database before dropping it (recommended)",
+    )
     for command in (repair_fts, repair_extract, repair_intel, repair_all):
         command.add_argument(
             "--database", type=Path, default=default_database,
@@ -286,7 +291,7 @@ def main() -> None:
 
     args = parser.parse_args()
     if args.command == "index":
-        db = SearchDatabase(args.database)
+        db = _open_or_explain(args.database)
         stats = Indexer(db).index_root(
             args.root, onedrive_download_mb=args.onedrive_download_mb
         )
@@ -396,7 +401,7 @@ def main() -> None:
             context = get_context(config, config.active_context)
         else:
             context = None
-        engine = SearchEngine(SearchDatabase(args.database))
+        engine = SearchEngine(_open_or_explain(args.database))
         try:
             results = engine.search(
                 args.query,
@@ -521,7 +526,12 @@ def _diagnose_command(args) -> int:
                         file=sys.stderr,
                     )
                     return 1
-                result = rebuild_all(database, list(args.root), confirm=args.yes)
+                backup = (
+                    Path(str(args.database) + ".backup") if args.backup else None
+                )
+                result = rebuild_all(
+                    database, list(args.root), confirm=args.yes, backup=backup
+                )
             else:  # pragma: no cover - argparse rejects unknown actions
                 return 2
         except ConfirmationRequired as exc:
@@ -559,6 +569,11 @@ def _diagnose_command(args) -> int:
             f"schema:     {statistics.schema_version}"
             f" (app {statistics.app_version})"
         )
+        if statistics.migration_history:
+            trail = ", ".join(str(version) for version, _ in statistics.migration_history)
+            print(f"migrations: {trail}")
+        else:
+            print("migrations: (no ledger yet — stamped before phase 020)")
         print(f"derived:    {statistics.intelligence_rows} analysed")
         if statistics.last_index_pass:
             last = statistics.last_index_pass
@@ -593,6 +608,27 @@ def _diagnose_command(args) -> int:
     if report.status == "fatal":
         return 2
     return 0 if report.ok else 1
+
+
+def _open_or_explain(database_path: Path) -> SearchDatabase:
+    """Open the index, turning a newer-schema refusal into one clear line.
+
+    Only an *existing* file is probed: a search against a missing index must
+    not create it (phase 012 proved a malformed query never touches the
+    disk, and that guarantee still holds). These are the two commands a
+    person types every day, and a traceback for "install the newer
+    release" would be the wrong answer (spec 020).
+    """
+    database = SearchDatabase(database_path)
+    if not database_path.exists():
+        return database
+    try:
+        with closing(database.connect()):
+            pass
+    except UnsupportedSchemaVersion as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise SystemExit(1) from None
+    return database
 
 
 def _intelligence_command(args) -> int:

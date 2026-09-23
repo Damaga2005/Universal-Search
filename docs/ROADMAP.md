@@ -45,7 +45,7 @@
 - [x] UX & accessibility (017)
 - [x] Privacy & security hardening (018)
 - [x] Provider & extension architecture (019)
-- [ ] Production release & reliability (020)
+- [x] Production release & reliability (020)
 
 ---
 

@@ -177,17 +177,28 @@ def rebuild_intelligence(
 
 
 def rebuild_all(
-    database: SearchDatabase, roots: list[Path], *, confirm: bool = False
+    database: SearchDatabase,
+    roots: list[Path],
+    *,
+    confirm: bool = False,
+    backup: Path | None = None,
 ) -> RepairResult:
     """Delete the whole index and index ``roots`` from scratch.
 
     The most destructive operation there is: every document, every search
     row and every derived row is dropped. It requires ``confirm=True`` and
     exists for the case where the index is beyond incremental repair.
+
+    ``backup`` writes a consistent copy of the database (via SQLite's own
+    backup API, so it is safe while the worker writes) before anything is
+    dropped, and refuses to overwrite an existing file. This is the one
+    operation where a backup is worth taking: everything it removes is
+    derived, but the time to rebuild is not free.
     """
     if not confirm:
         raise ConfirmationRequired(CONFIRMATION_REQUIRED)
     path = Path(database.path)
+    backup_path = database.backup(backup) if backup is not None else None
     # Explicit close: sqlite3's `with connection` commits but does not
     # close, and Windows refuses to delete a file that is still open.
     connection = database.connect()
@@ -239,5 +250,10 @@ def rebuild_all(
         detail=(
             f"dropped {dropped} document(s), {counts['fts']} search row(s),"
             f" {counts['intelligence']} derived row(s); reindexed {created}"
+            + (
+                f"; backup at {backup_path}"
+                if backup_path is not None
+                else " (no backup taken)"
+            )
         ),
     )

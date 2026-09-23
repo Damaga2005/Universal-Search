@@ -303,12 +303,18 @@ def start(paths: AppPaths | None = None, *, wait: float = 10.0) -> tuple[str, st
     if not AppConfig.load(paths).roots:
         note = " — sin carpetas configuradas"
     try:
+        # The child must resolve the *same* home this call was given, not
+        # the default one: passing only `cwd` made a worker started with a
+        # custom AppPaths write its lock and status into the real user home
+        # (found by the phase-020 recovery test).
+        environment = {**os.environ, "UNIVERSAL_SEARCH_HOME": str(paths.home)}
         process = subprocess.Popen(
             command,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             cwd=str(paths.home if paths.home.exists() else Path.cwd()),
+            env=environment,
             creationflags=creationflags,
         )
     except OSError as exc:

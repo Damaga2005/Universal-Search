@@ -12,7 +12,11 @@ from pathlib import Path
 
 from universal_search import __version__, metrics
 from universal_search.appconfig import AppPaths
-from universal_search.index.database import SCHEMA_VERSION, SearchDatabase
+from universal_search.index.database import (
+    SCHEMA_VERSION,
+    SearchDatabase,
+    UnsupportedSchemaVersion,
+)
 
 # How many stale-document paths a report may name. A diagnostic that
 # prints 400 000 paths is a denial of service against the reader.
@@ -36,6 +40,7 @@ class IndexStatistics:
     shm_bytes: int = 0
     intelligence_rows: int = 0
     usage_events: int = 0
+    migration_history: tuple[tuple[int, str], ...] = ()
     last_index_pass: dict | None = None
     worker_state: str | None = None
     worker_updated_at: str | None = None
@@ -69,6 +74,10 @@ class IndexStatistics:
             },
             "intelligence_rows": self.intelligence_rows,
             "usage_events": self.usage_events,
+            "migration_history": [
+                {"version": version, "applied_at": applied_at}
+                for version, applied_at in self.migration_history
+            ],
             "last_index_pass": self.last_index_pass,
             "worker": {
                 "state": self.worker_state,
@@ -168,7 +177,18 @@ def collect(
                         "SELECT COUNT(*) FROM usage_events"
                     ).fetchone()[0]
                 ),
+                migration_history=tuple(
+                    (int(row["version"]), str(row["applied_at"]))
+                    for row in connection.execute(
+                        "SELECT version, applied_at FROM schema_migrations"
+                        " ORDER BY version"
+                    )
+                ),
             )
+    except UnsupportedSchemaVersion as exc:
+        # A newer build owns this index; report the fact, never a count
+        # computed against a schema this build does not understand.
+        return replace(snapshot, error=str(exc))
     except Exception as exc:
         # A corrupt database must still be reportable, not raise: the whole
         # point of a diagnostic is to describe the damaged state.

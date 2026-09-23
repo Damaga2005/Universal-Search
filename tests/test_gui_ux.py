@@ -110,7 +110,7 @@ def test_path_hint_is_bounded():
 # -- the live window -----------------------------------------------------------
 
 @pytest.fixture(scope="module")
-def window(tmp_path_factory):
+def window(tmp_path_factory, tk_guard):
     root = tmp_path_factory.mktemp("ux")
     files = root / "files" / "electronica"
     files.mkdir(parents=True)

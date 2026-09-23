@@ -1,5 +1,15 @@
 import sqlite3
+from contextlib import closing
 from pathlib import Path
+
+
+class UnsupportedSchemaVersion(RuntimeError):
+    """The database was written by a newer build (spec 020).
+
+    A distinct type so the CLI, the GUI service and the diagnostics can
+    explain the refusal instead of reporting a generic database error: the
+    remedy is to install the newer release, not to repair the file.
+    """
 
 
 SCHEMA = """
@@ -58,6 +68,15 @@ CREATE TABLE IF NOT EXISTS document_intelligence (
 
 CREATE INDEX IF NOT EXISTS document_intelligence_language
     ON document_intelligence(language);
+
+-- Forward-only migration ledger (spec 020). One row per schema version
+-- this database has actually been stamped with; append-only, so it is an
+-- audit trail rather than state. A database newer than this build refuses
+-- to open instead of being silently downgraded.
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 # Columns added after the first release; applied to existing databases.
@@ -80,7 +99,7 @@ MIGRATIONS = (
 # (tests/test_release.py enforces the stamp on fresh and legacy databases).
 # Adding an object to SCHEMA also upgrades existing databases: the
 # schema-present gate sees a missing object and re-runs the idempotent DDL.
-SCHEMA_VERSION = 4  # + document_intelligence (disposable derived data, 014)
+SCHEMA_VERSION = 5  # + schema_migrations ledger and downgrade refusal (020)
 
 # Every object SCHEMA creates. When all of them already exist the idempotent
 # DDL is skipped: one indexed sqlite_master lookup replaces re-parsing the
@@ -92,6 +111,7 @@ SCHEMA_OBJECTS = (
     "documents_fts",
     "document_intelligence",
     "document_intelligence_language",
+    "schema_migrations",
 )
 
 # Applied to every connection. WAL is the persistent journal mode; the rest
@@ -138,6 +158,19 @@ class SearchDatabase:
 
     @staticmethod
     def _migrate(connection: sqlite3.Connection) -> None:
+        stored = connection.execute("PRAGMA user_version").fetchone()[0]
+        if stored > SCHEMA_VERSION:
+            # Downgrade refusal (spec 020): an older build must not touch a
+            # database written by a newer one. Rewriting the stamp to the
+            # older value would make both builds believe they own the
+            # schema, and the older one can silently misread columns and
+            # tables it does not know about. Refusing is the only safe
+            # option; the user reinstalls the newer build.
+            raise UnsupportedSchemaVersion(
+                f"this index was written by a newer version of Universal "
+                f"Search (schema {stored}, this build supports {SCHEMA_VERSION}). "
+                f"Install the newer release, or restore a backup."
+            )
         columns = {row["name"] for row in connection.execute("PRAGMA table_info(documents)")}
         for statement in MIGRATIONS:
             column = statement.split()[5]
@@ -145,10 +178,34 @@ class SearchDatabase:
                 connection.execute(statement)
                 columns.add(column)
                 connection.commit()
-        version = connection.execute("PRAGMA user_version").fetchone()[0]
-        if version != SCHEMA_VERSION:
+        if stored != SCHEMA_VERSION:
             connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             connection.commit()
+            # Migration history (spec 020). Only versions this build has
+            # actually stamped are recorded: inventing rows for versions we
+            # did not apply would be fiction, and `diagnose` prints this
+            # table, so it has to be true.
+            connection.execute(
+                "INSERT INTO schema_migrations(version, applied_at)"
+                " VALUES (?, CURRENT_TIMESTAMP)",
+                (SCHEMA_VERSION,),
+            )
+            connection.commit()
+
+    def migration_history(self) -> tuple[tuple[int, str], ...]:
+        """Schema versions this database has been stamped with, oldest first.
+
+        Forward-only and append-only: upgrading the same database twice
+        records one row per distinct version.
+        """
+        with closing(self.connect()) as connection:
+            return tuple(
+                (int(row["version"]), str(row["applied_at"]))
+                for row in connection.execute(
+                    "SELECT version, applied_at FROM schema_migrations"
+                    " ORDER BY version"
+                )
+            )
 
     def sizes(self) -> dict[str, int]:
         """Byte sizes of the database files (growth monitoring, spec 011)."""
@@ -157,6 +214,28 @@ class SearchDatabase:
         shm = _file_size(Path(str(self.path) + "-shm"))
         return {"database": database, "wal": wal, "shm": shm,
                 "total": database + wal + shm}
+
+    def backup(self, destination: Path | None = None) -> Path:
+        """Copy the whole database (with WAL and SHM) to a backup file.
+
+        Used before destructive repairs (spec 020). The copy is taken with
+        SQLite's own backup API, so it is consistent even while the worker
+        is writing: a plain file copy of a live WAL database is not.
+        """
+        target = Path(destination or Path(str(self.path) + ".backup"))
+        if target.exists():
+            raise FileExistsError(f"backup already exists: {target}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        source_connection = self.connect()
+        try:
+            backup_connection = sqlite3.connect(target)
+            try:
+                source_connection.backup(backup_connection)
+            finally:
+                backup_connection.close()
+        finally:
+            source_connection.close()
+        return target
 
     def maintenance(self, *, vacuum: bool = False) -> dict:
         """Full WAL checkpoint (optionally VACUUM) plus file/page sizes.

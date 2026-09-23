@@ -22,7 +22,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from universal_search.appconfig import AppPaths
-from universal_search.index.database import SCHEMA_OBJECTS, SCHEMA_VERSION, SearchDatabase
+from universal_search.index.database import (
+    SCHEMA_OBJECTS,
+    SCHEMA_VERSION,
+    SearchDatabase,
+    UnsupportedSchemaVersion,
+)
 
 OK = "ok"
 WARNING = "warning"
@@ -109,6 +114,10 @@ def _database_check(database: SearchDatabase) -> HealthCheck:
     try:
         with closing(database.connect()) as connection:
             connection.execute("SELECT 1 FROM documents LIMIT 1").fetchall()
+    except UnsupportedSchemaVersion as exc:
+        # Not a corrupt file: an index from a newer build. The remedy is
+        # different, so the message says so (spec 020).
+        return HealthCheck("database", FATAL, str(exc))
     except Exception as exc:
         return HealthCheck(
             "database", FATAL,

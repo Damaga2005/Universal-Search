@@ -26,12 +26,14 @@ def flush_debounce(window, delay: float = 0.25) -> None:
 
 
 @pytest.fixture(scope="module")
-def shared_window(tmp_path_factory):
+def shared_window(tmp_path_factory, tk_guard):
     """One real Tk root for the whole module.
 
     Creating and destroying several ``Tk()`` instances in one process trips a
     known Tkinter bug (intermittent ``invalid command name "tcl_findLibrary"``),
     so the window lives for the module and each test resets its own state.
+    ``tk_guard`` skips the module when the machine's Tk runtime cannot start
+    at all (see conftest).
     """
     from universal_search.gui import app as gui_app
 
