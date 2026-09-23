@@ -27,8 +27,23 @@ Universal Search indexes local files and cloud-backed locations such as OneDrive
 
 Phases 001–006 delivered: foundation, incremental indexing, document
 extractors (PDF/DOCX/XLSX/PPTX), ranking engine, Windows desktop GUI and
-background indexer — 129 passing tests. See `docs/ROADMAP.md` for what
-remains (OneDrive, personal context, usage learning, tray, installer).
+background indexer — 129 passing tests.
+
+| Fase | Entrega | Estado |
+|------|---------|--------|
+| 001 | Foundation (SQLite + FTS5, CLI) | ✅ |
+| 002 | Incremental indexing + ignore rules | ✅ |
+| 003 | Extractors (PDF/DOCX/XLSX/PPTX) | ✅ |
+| 004 | Ranking engine | ✅ |
+| 005 | Windows desktop GUI | ✅ |
+| 006 | Background indexer | ✅ |
+| 007 | OneDrive providers | ⬜ |
+| 008 | Personal context | ⬜ |
+| 009 | Global search | ⬜ |
+| 010 | Release | ⬜ |
+
+Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
+by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Usage
 
@@ -71,5 +86,6 @@ python -m venv .venv
 ```
 
 Development prompts live in `docs/development/`, with a per-phase report for
-each completed phase. Architecture: `docs/ARCHITECTURE.md`. Roadmap:
-`docs/ROADMAP.md`.
+each completed phase. Documentation hub with the roadmap status:
+[`docs/README.md`](docs/README.md). Architecture: `docs/ARCHITECTURE.md`.
+Roadmap: `docs/ROADMAP.md`.
