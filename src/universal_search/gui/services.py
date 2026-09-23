@@ -6,9 +6,6 @@ and every behaviour is testable without Tk.
 """
 
 import logging
-import os
-import subprocess
-import sys
 from pathlib import Path
 
 from universal_search.appconfig import AppConfig, AppPaths, remember_query
@@ -185,23 +182,32 @@ class SearchService:
 
 
 def open_path(path: Path | str) -> None:
-    """Open a file with the default Windows application."""
+    """Open a file with the default application, through the platform.
+
+    All Windows behaviour lives in the adapter (spec 016): this function
+    only decides *what* to open, never *how*.
+    """
     target = str(path)
     log.info("opening %s", target)
-    if hasattr(os, "startfile"):
-        os.startfile(target)  # noqa: S606 — deliberate shell open on Windows
-        return
-    raise RuntimeError(f"no handler to open {target} on this platform")
+    from universal_search.platforms import get_platform
+
+    get_platform().open_path(target)
 
 
 def reveal_in_explorer(path: Path | str) -> None:
-    """Reveal the file in Windows Explorer (does not wait for the window)."""
+    """Reveal the file in the platform's file manager."""
     target = str(path)
     log.info("revealing %s", target)
-    if sys.platform == "win32":
-        subprocess.Popen(["explorer", "/select,", target])
-        return
-    raise RuntimeError(f"explorer reveal is only supported on Windows: {target}")
+    from universal_search.platforms import get_platform
+
+    get_platform().reveal(target)
+
+
+def notify(title: str, message: str, *, critical: bool = False) -> bool:
+    """Show a native message, only for messages worth interrupting for."""
+    from universal_search.platforms import get_platform
+
+    return get_platform().notify(title, message, critical=critical)
 
 
 # -- background indexer control (thin wrappers over the background module) -------

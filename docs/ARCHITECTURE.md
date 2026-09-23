@@ -68,6 +68,12 @@ logic lives in the UI.
   `ConfirmationRequired` unless `confirm=True`). Reports read metadata
   only, never document content, and every connection is closed
   deterministically because Windows will not delete a locked database.
+- **Platform** (`universal_search/platforms/`, spec 016): the seam between
+  the platform-independent core and Windows. `Platform` declares the
+  operations (open, reveal, autostart, notify); `WindowsPlatform` implements
+  them with every OS touchpoint injectable (`startfile`, `popen`, `winreg`,
+  `user32`); `NullPlatform` answers honestly elsewhere. The core imports
+  none of it directly, so the suite runs — and passes — on any OS.
 - **Presentation**:
   - `cli.py` — `index | search | gui | onedrive | context | usage | hotkey
     | recent | indexer | intelligence | diagnose …` (diagnostics and
@@ -77,6 +83,9 @@ logic lives in the UI.
     The service turns a `QueryError` into `last_query_error` so the window
     shows the reason instead of a bare empty list.
   - `hotkey.py` — global shortcut server (phase 009), hosted by the worker.
+    A hotkey that cannot be registered is reported in the worker status
+    file, so a dead shortcut is visible instead of silent. The window is
+    single-instance: a second launch presents the first one.
   - `background.py` — background-indexer lifecycle (below).
 
 ## Process model (GUI + background indexer)

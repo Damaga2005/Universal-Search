@@ -41,8 +41,10 @@ measured the headroom of every ranking weight instead of asserting it;
 phase 014 added deterministic local document intelligence (language,
 headings, bounded keyword vectors, co-occurrence and related documents,
 rebuildable on demand); phase 015 added index diagnostics, twelve health
-checks and five repair operations with confirmation enforced in code —
-**424 passing tests**.
+checks and five repair operations with confirmation enforced in code;
+phase 016 isolated every Windows touchpoint behind a `platforms` adapter,
+enforced single-instance window behaviour and added per-user Start Menu
+and Explorer integration scripts — **447 passing tests**.
 
 | Fase | Entrega | Estado |
 |------|---------|--------|
@@ -61,6 +63,7 @@ checks and five repair operations with confirmation enforced in code —
 | 013 | Ranking v2 (corpus etiquetado, P@K/R@K/MRR) | ✅ |
 | 014 | Inteligencia documental local (reconstruible) | ✅ |
 | 015 | Diagnóstico y mantenimiento del índice | ✅ |
+| 016 | Integración con Windows (adaptador, shell) | ✅ |
 
 Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
 by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).

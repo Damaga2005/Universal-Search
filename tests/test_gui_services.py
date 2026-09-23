@@ -3,10 +3,12 @@ import struct
 import subprocess
 from pathlib import Path
 
+from universal_search import platforms
 from universal_search.appconfig import AppConfig, AppPaths, default_home, setup_logging
 from universal_search.gui import services
 from universal_search.gui.services import SearchService
 from universal_search.index.indexer import Indexer
+from universal_search.platforms.null import NullPlatform
 from universal_search.providers.local import discover_local
 
 
@@ -67,26 +69,43 @@ def test_service_finds_indexed_documents(tmp_path: Path) -> None:
 
 # -- open and reveal -------------------------------------------------------------
 
-def test_open_path_uses_windows_shell(tmp_path: Path, monkeypatch) -> None:
-    called: dict[str, str] = {}
-    monkeypatch.setattr(
-        services.os, "startfile", lambda target: called.setdefault("target", target)
-    )
+def test_open_path_uses_the_platform(tmp_path: Path, monkeypatch) -> None:
+    opened: dict[str, str] = {}
+
+    class FakePlatform(NullPlatform):
+        def open_path(self, path) -> None:
+            opened["target"] = str(path)
+
+    monkeypatch.setattr(platforms, "get_platform", lambda: FakePlatform())
 
     services.open_path(tmp_path / "doc.md")
 
-    assert called["target"] == str(tmp_path / "doc.md")
+    assert opened["target"] == str(tmp_path / "doc.md")
 
 
-def test_reveal_invokes_explorer_with_select(monkeypatch) -> None:
-    calls: list[list[str]] = []
-    monkeypatch.setattr(
-        services.subprocess, "Popen", lambda args, **kwargs: calls.append(args)
-    )
+def test_reveal_uses_the_platform(tmp_path: Path, monkeypatch) -> None:
+    calls: list[str] = []
+    target = tmp_path / "informe.pdf"
+    target.write_bytes(b"%PDF-1.7 ")
 
-    services.reveal_in_explorer(r"C:\docs\informe.pdf")
+    class FakePlatform(NullPlatform):
+        def reveal(self, path) -> None:
+            calls.append(str(path))
 
-    assert calls == [["explorer", "/select,", r"C:\docs\informe.pdf"]]
+    monkeypatch.setattr(platforms, "get_platform", lambda: FakePlatform())
+
+    services.reveal_in_explorer(target)
+
+    assert calls == [str(target)]
+
+
+def test_notify_is_optional_and_never_raises(monkeypatch) -> None:
+    class QuietPlatform(NullPlatform):
+        def notify(self, title, message, *, critical=False) -> bool:
+            return False
+
+    monkeypatch.setattr(platforms, "get_platform", lambda: QuietPlatform())
+    assert services.notify("t", "m") is False
 
 
 # -- persistent configuration -----------------------------------------------------

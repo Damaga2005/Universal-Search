@@ -37,8 +37,7 @@ from universal_search.metrics import set_sink
 
 log = logging.getLogger("universal_search.indexer")
 
-AUTOSTART_NAME = "Universal Search"
-RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+
 
 STATE_IDLE = "idle"
 STATE_INDEXING = "indexing"
@@ -151,6 +150,7 @@ def write_status(
     error: str | None = None,
     stats: dict | None = None,
     roots: int | None = None,
+    hotkey: str | None = None,
 ) -> None:
     paths.ensure()
     payload: dict = {
@@ -160,6 +160,8 @@ def write_status(
     }
     if error is not None:
         payload["error"] = error
+    if hotkey is not None:
+        payload["hotkey"] = hotkey
     if stats is not None:
         payload["stats"] = stats
     if roots is not None:
@@ -240,38 +242,16 @@ def _registry():
 
 
 def set_autostart(enabled: bool, registry=None) -> None:
-    registry = registry or _registry()
-    key = registry.OpenKey(
-        registry.HKEY_CURRENT_USER,
-        RUN_KEY,
-        0,
-        registry.KEY_SET_VALUE | registry.KEY_QUERY_VALUE,
-    )
-    try:
-        if enabled:
-            registry.SetValueEx(key, AUTOSTART_NAME, 0, registry.REG_SZ, autostart_command())
-        else:
-            try:
-                registry.DeleteValue(key, AUTOSTART_NAME)
-            except FileNotFoundError:
-                pass
-    finally:
-        registry.CloseKey(key)
+    """Register/unregister the Run-key entry through the platform adapter."""
+    from universal_search.platforms.windows import set_autostart as platform_set
+
+    platform_set(enabled, registry=registry)
 
 
 def get_autostart(registry=None) -> bool:
-    registry = registry or _registry()
-    try:
-        key = registry.OpenKey(registry.HKEY_CURRENT_USER, RUN_KEY, 0, registry.KEY_QUERY_VALUE)
-    except FileNotFoundError:
-        return False
-    try:
-        registry.QueryValueEx(key, AUTOSTART_NAME)
-        return True
-    except FileNotFoundError:
-        return False
-    finally:
-        registry.CloseKey(key)
+    from universal_search.platforms.windows import autostart_enabled
+
+    return autostart_enabled(registry=registry)
 
 
 # -- external control ------------------------------------------------------------
@@ -512,6 +492,18 @@ class BackgroundIndexer:
             return
         launch_gui()
 
+    def _hotkey_problem(self) -> str | None:
+        """Surface a hotkey that could not be registered (spec 016).
+
+        A silent hotkey is the worst outcome: the user presses the key and
+        nothing happens. The worker records the reason in its status file
+        so the CLI, the GUI and `diagnose health` can all show it.
+        """
+        server = self.hotkey_server
+        if server is None or server.registered or not server.error:
+            return None
+        return str(server.error)
+
     # -- status -------------------------------------------------------------------
 
     def _set_state(self, state: str, **extra) -> None:
@@ -519,7 +511,10 @@ class BackgroundIndexer:
             return
         self._last_state = state
         try:
-            write_status(self.paths, state, **extra)
+            # A hotkey that could not be registered is reported here so it
+            # is visible in `indexer status`, the GUI and diagnostics,
+            # instead of being a key that silently does nothing (spec 016).
+            write_status(self.paths, state, hotkey=self._hotkey_problem(), **extra)
         except OSError:
             log.exception("could not write status")
 

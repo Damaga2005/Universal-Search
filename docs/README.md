@@ -22,7 +22,7 @@ El roadmap por versiones (v0.1–v0.6+) vive en [ROADMAP.md](ROADMAP.md).
 | 013 | Ranking v2: evaluación y explicabilidad | ✅ Completada | [013-ranking-v2.md](development/013-ranking-v2.md) | [informe](development/013-ranking-v2-report.md) |
 | 014 | Inteligencia documental local | ✅ Completada | [014-document-intelligence.md](development/014-document-intelligence.md) | [informe](development/014-document-intelligence-report.md) |
 | 015 | Diagnóstico e índice mantenible | ✅ Completada | [015-index-diagnostics.md](development/015-index-diagnostics.md) | [informe](development/015-index-diagnostics-report.md) |
-| 016 | Integración con Windows | ⬜ Pendiente | [016-windows-integration.md](development/016-windows-integration.md) | — |
+| 016 | Integración con Windows | ✅ Completada | [016-windows-integration.md](development/016-windows-integration.md) | [informe](development/016-windows-integration-report.md) |
 | 017 | UX y accesibilidad | ⬜ Pendiente | [017-ux-accessibility.md](development/017-ux-accessibility.md) | — |
 | 018 | Privacidad y seguridad | ⬜ Pendiente | [018-privacy-security.md](development/018-privacy-security.md) | — |
 | 019 | Arquitectura de proveedores y extensión | ⬜ Pendiente | [019-provider-plugin-architecture.md](development/019-provider-plugin-architecture.md) | — |

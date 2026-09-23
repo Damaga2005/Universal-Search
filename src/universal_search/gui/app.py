@@ -6,6 +6,7 @@ of the GUI and the window can be exercised in tests.
 """
 
 import logging
+import os
 import tkinter as tk
 from dataclasses import replace
 from tkinter import filedialog, messagebox, ttk
@@ -597,11 +598,28 @@ class SearchWindow(tk.Tk):
 
 
 def run() -> int:
-    """Entry point for the desktop application; never shows a traceback."""
-    from universal_search.appconfig import setup_logging
+    """Entry point for the desktop application; never shows a traceback.
+
+    Single instance (spec 016): when a window is already alive, this
+    launch only asks that window to present itself and exits, so a second
+    shortcut press or a double launch never produces two windows.
+    """
+    from universal_search.appconfig import AppPaths, setup_logging
+    from universal_search.background import process_alive
+    from universal_search.hotkey import (
+        clear_gui_pid,
+        read_gui_pid,
+        request_show,
+    )
 
     setup_logging()
     log.info("Universal Search GUI starting")
+    paths = AppPaths.discover()
+    existing = read_gui_pid(paths)
+    if existing is not None and existing != os.getpid():
+        if process_alive(existing) and request_show(paths):
+            log.info("another window is already running (pid %s)", existing)
+            return 0
     try:
         window = SearchWindow()
     except Exception:
@@ -612,5 +630,10 @@ def run() -> int:
     except Exception:
         log.exception("window failed")
         return 1
+    finally:
+        # Only clear the file if it is still ours: a newer window may have
+        # taken over while this one was closing.
+        if read_gui_pid(paths) == os.getpid():
+            clear_gui_pid(paths)
     log.info("Universal Search GUI stopped")
     return 0
