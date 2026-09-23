@@ -20,23 +20,24 @@
 
 ## v0.4
 - [x] Windows desktop GUI
-- [ ] Global hotkey
+- [x] Global hotkey
 - [x] Windows Start/Search integration
 - [ ] Tray indexer
 
 ## v0.5
-- [ ] OneDrive synced-folder provider
-- [ ] Cloud-only OneDrive provider
+- [x] OneDrive synced-folder provider
+- [x] Cloud-only OneDrive provider
 
 ## v0.6+
-- [ ] University workspace/profile
-- [ ] Local usage-based ranking
+- [x] University workspace/profile
+- [x] Local usage-based ranking
 - [ ] Related-document graph
-- [ ] Installable Windows application
+- [x] Installable Windows application
 
 ---
 
-Phases 001–006 are implemented and documented (per-phase reports in
-`docs/development/`), with 129 passing tests. Global hotkey, tray indexer,
-OneDrive providers, personal context/usage learning and the installer
-remain for later phases.
+Phases 001–010 are implemented and documented (per-phase reports in
+`docs/development/`), with 208 passing tests, plus a profiled audit &
+optimization pass (`docs/development/optimization-report.md`): indexing
+16× faster (2000 docs 45.3s → 2.8s), mean query 48.6 → 34.4 ms.
+Still open: the tray indexer and the related-document graph.

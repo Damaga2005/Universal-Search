@@ -25,9 +25,14 @@ Universal Search indexes local files and cloud-backed locations such as OneDrive
 
 ## Status
 
-Phases 001–006 delivered: foundation, incremental indexing, document
-extractors (PDF/DOCX/XLSX/PPTX), ranking engine, Windows desktop GUI and
-background indexer — 129 passing tests.
+Phases 001–010 delivered: foundation, incremental indexing, document
+extractors (PDF/DOCX/XLSX/PPTX), ranking engine, Windows desktop GUI,
+background indexer, OneDrive providers, personal context + local usage
+learning, global search (hotkey, filters, recent queries) and the
+Windows release **v1.0.0** (installer + uninstaller) — **208 passing
+tests**. A profiled audit & optimization pass then cut indexing 16×
+(2000 docs: 45.3s → 2.8s) and mean query latency 48.6 → 34.4 ms
+(`docs/development/optimization-report.md`).
 
 | Fase | Entrega | Estado |
 |------|---------|--------|
@@ -37,10 +42,10 @@ background indexer — 129 passing tests.
 | 004 | Ranking engine | ✅ |
 | 005 | Windows desktop GUI | ✅ |
 | 006 | Background indexer | ✅ |
-| 007 | OneDrive providers | ⬜ |
-| 008 | Personal context | ⬜ |
-| 009 | Global search | ⬜ |
-| 010 | Release | ⬜ |
+| 007 | OneDrive providers | ✅ |
+| 008 | Personal context | ✅ |
+| 009 | Global search (hotkey, filters, recents) | ✅ |
+| 010 | Release (v1.0.0) | ✅ |
 
 Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
 by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).
@@ -49,9 +54,18 @@ by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ```bash
 pip install -e .
+universal-search --version         # universal-search 1.0.0
 universal-search index C:\Users\me\Documents
-universal-search search "meeting notes"
+universal-search search "meeting notes" --limit 20
+universal-search search "notes" --source onedrive --type pdf   # filters (009)
+universal-search search "notes" --context engineering --explain # context + scoring breakdown (008)
 universal-search gui               # desktop window (alias: universal-search-gui)
+
+# personal layer (all local): contexts, usage learning, hotkey, recents
+universal-search context list      # context add|remove|use|relate …
+universal-search usage on          # usage show | clear
+universal-search hotkey show       # hotkey set ctrl+alt+s | on | off
+universal-search recent show       # recent on | off | clear
 
 # background indexer — runs independently; closing the GUI does not stop it
 universal-search indexer start     # detached worker (single instance)
