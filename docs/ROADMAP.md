@@ -40,7 +40,7 @@
 - [x] Advanced search language (012)
 - [x] Ranking v2: evaluation & explainability (013)
 - [x] Local document intelligence (014)
-- [ ] Index diagnostics & maintenance (015)
+- [x] Index diagnostics & maintenance (015)
 - [ ] Windows integration (016)
 - [ ] UX & accessibility (017)
 - [ ] Privacy & security hardening (018)

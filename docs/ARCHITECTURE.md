@@ -61,10 +61,17 @@ logic lives in the UI.
   `rebuild`, `related` by cosine over term vectors). Derived data only:
   **search never reads it**, deleting it costs nothing, and document
   similarity is computed without the ranking formula.
+- **Diagnostics** (`universal_search/diagnostics/`, spec 015): read-only by
+  default — `stats.py` (`collect`: counts, sizes, schema, worker state),
+  `health.py` (`check`: twelve checks, `ok`/`warning`/`fatal`) and
+  `repair.py` (five operations; the destructive ones raise
+  `ConfirmationRequired` unless `confirm=True`). Reports read metadata
+  only, never document content, and every connection is closed
+  deterministically because Windows will not delete a locked database.
 - **Presentation**:
   - `cli.py` — `index | search | gui | onedrive | context | usage | hotkey
-    | recent | indexer | intelligence …` (diagnostics and control) plus
-    `--version`.
+    | recent | indexer | intelligence | diagnose …` (diagnostics and
+    control) plus `--version`.
   - `gui/` — Tk window (`app.py`, view only) + service layer (`services.py`,
     testable without Tk). `appconfig.py` provides paths/config/logging.
     The service turns a `QueryError` into `last_query_error` so the window

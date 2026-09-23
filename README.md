@@ -40,7 +40,9 @@ bounded ranking caches; phase 012 added the advanced query language
 measured the headroom of every ranking weight instead of asserting it;
 phase 014 added deterministic local document intelligence (language,
 headings, bounded keyword vectors, co-occurrence and related documents,
-rebuildable on demand) — **401 passing tests**.
+rebuildable on demand); phase 015 added index diagnostics, twelve health
+checks and five repair operations with confirmation enforced in code —
+**424 passing tests**.
 
 | Fase | Entrega | Estado |
 |------|---------|--------|
@@ -58,6 +60,7 @@ rebuildable on demand) — **401 passing tests**.
 | 012 | Advanced search (lenguaje de consultas) | ✅ |
 | 013 | Ranking v2 (corpus etiquetado, P@K/R@K/MRR) | ✅ |
 | 014 | Inteligencia documental local (reconstruible) | ✅ |
+| 015 | Diagnóstico y mantenimiento del índice | ✅ |
 
 Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
 by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).
@@ -86,6 +89,12 @@ universal-search recent show       # recent on | off | clear
 universal-search intelligence rebuild        # language, headings, keywords
 universal-search intelligence show informe.pdf
 universal-search intelligence related informe.pdf --limit 5
+
+# index health and repair (destructive repairs need --yes)
+universal-search diagnose summary
+universal-search diagnose health             # exit 0 ok / 1 warnings / 2 fatal
+universal-search diagnose repair reconcile C:\Users\me\Docs
+universal-search diagnose repair all --root C:\Users\me\Docs --yes
 
 # background indexer — runs independently; closing the GUI does not stop it
 universal-search indexer start     # detached worker (single instance)

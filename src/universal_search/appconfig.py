@@ -183,11 +183,42 @@ def remember_query(config: AppConfig, query: str) -> AppConfig:
     return replace(config, recent_queries=updated)
 
 
+# Longest log message written to disk. A diagnostic that pastes a parser
+# error, a SQL fragment or (by accident) a line of a document must not turn
+# the log into a copy of the user's files (spec 015).
+MAX_LOG_MESSAGE = 500
+
+
+class _BoundedMessage(logging.Filter):
+    """Truncate an oversized record before any handler sees it.
+
+    Logging is the one place where a stray ``log.debug(text)`` would leak
+    document content to disk. Truncating at the filter — not at the call
+    site — means the guarantee holds for code that does not know it is
+    logging, including third-party libraries on the same logger.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            rendered = record.getMessage()
+        except Exception:  # pragma: no cover - broken format string
+            rendered = str(record.msg)
+        if len(rendered) > MAX_LOG_MESSAGE:
+            record.msg = (
+                f"{rendered[:MAX_LOG_MESSAGE]}... "
+                f"[truncated, {len(rendered)} chars]"
+            )
+            record.args = ()
+        return True
+
+
 def setup_logging(paths: AppPaths | None = None) -> logging.Logger:
     """Attach a rotating file handler to the package logger.
 
     Idempotent for the same file; re-binds when the application home changes
-    (tests and the ``UNIVERSAL_SEARCH_HOME`` override).
+    (tests and the ``UNIVERSAL_SEARCH_HOME`` override). Local, rotated at
+    1 MB with 3 backups, timestamped and severity-tagged, with every message
+    bounded by :class:`_BoundedMessage`.
     """
     paths = paths or AppPaths.discover()
     paths.ensure()
@@ -207,6 +238,7 @@ def setup_logging(paths: AppPaths | None = None) -> logging.Logger:
         handler.setFormatter(
             logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
         )
+        handler.addFilter(_BoundedMessage())
         logger.addHandler(handler)
     return logger
 

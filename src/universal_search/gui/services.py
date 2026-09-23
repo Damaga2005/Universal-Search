@@ -104,6 +104,50 @@ class SearchService:
         self.last_query_error = None
         return results
 
+    def diagnostics(self) -> dict:
+        """Index statistics and health, assembled without Tk (spec 015).
+
+        Read-only: this is the data behind the window's diagnostics view,
+        and it is testable precisely because no widget is involved.
+        """
+        from universal_search.diagnostics import check, collect
+
+        database = self.engine.database
+        statistics = collect(database, self.paths)
+        report = check(database, self.paths)
+        return {"summary": statistics.as_dict(), "health": report.as_dict()}
+
+    def diagnostics_report(self) -> str:
+        """The same information as plain text, for the window or a log."""
+        from universal_search.diagnostics import check, collect
+
+        database = self.engine.database
+        statistics = collect(database, self.paths)
+        report = check(database, self.paths)
+        return "\n".join([
+            f"documents: {statistics.documents}"
+            f" ({statistics.with_content} with text)",
+            f"size:      {statistics.total_bytes} bytes",
+            f"schema:    {statistics.schema_version}"
+            f" (app {statistics.app_version})",
+            f"derived:   {statistics.intelligence_rows} analysed",
+            f"worker:    {statistics.worker_state or 'not running'}",
+            "",
+            report.render(),
+        ])
+
+    def rebuild_index(self, *, confirm: bool = False):
+        """Delete and reindex everything from the configured roots (015).
+
+        Destructive: requires ``confirm=True``, and the window asks the
+        user before passing it.
+        """
+        from universal_search.diagnostics import rebuild_all
+
+        return rebuild_all(
+            self.engine.database, list(self.config.roots), confirm=confirm
+        )
+
     def record_open(self, document_id: str, query: str) -> None:
         """Record a "result opened" signal when local learning is enabled.
 

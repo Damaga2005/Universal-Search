@@ -8,7 +8,7 @@ of the GUI and the window can be exercised in tests.
 import logging
 import tkinter as tk
 from dataclasses import replace
-from tkinter import filedialog, ttk
+from tkinter import filedialog, messagebox, ttk
 
 from universal_search import __version__
 from universal_search.context import load_contexts
@@ -153,6 +153,17 @@ class SearchWindow(tk.Tk):
             command=self._toggle_autostart,
         )
         menu.add_cascade(label="Indexador", menu=self.indexer_menu)
+
+        diagnose_menu = tk.Menu(menu, tearoff=0)
+        diagnose_menu.add_command(
+            label="Estado del índice", command=self._show_diagnostics
+        )
+        diagnose_menu.add_separator()
+        diagnose_menu.add_command(
+            label="Reconstruir índice completo…",
+            command=self._rebuild_index,
+        )
+        menu.add_cascade(label="Diagnóstico", menu=diagnose_menu)
         self.config(menu=menu)
 
         middle = ttk.Frame(self, padding=(12, 0, 12, 0))
@@ -414,6 +425,42 @@ class SearchWindow(tk.Tk):
 
     def _set_status(self, text: str) -> None:
         self.status_var.set(text)
+
+    # -- diagnostics (spec 015) -------------------------------------------------
+
+    def _show_diagnostics(self) -> None:
+        """Read-only health report in a window of its own."""
+        try:
+            report = self.service.diagnostics_report()
+        except Exception:
+            log.exception("could not build the diagnostics report")
+            self._set_status("No se pudo generar el diagnóstico")
+            return
+        window = tk.Toplevel(self)
+        window.title("Diagnóstico del índice")
+        window.geometry("640x420")
+        text = tk.Text(window, wrap="word")
+        text.insert("1.0", report)
+        text.configure(state="disabled")
+        text.pack(side="top", fill="both", expand=True, padx=8, pady=8)
+
+    def _rebuild_index(self) -> None:
+        """Full rebuild, behind an explicit confirmation (never implied)."""
+        if not messagebox.askyesno(
+            "Reconstruir índice",
+            "Se borrará el índice actual y se reconstruirá desde cero.\n"
+            "¿Continuar?",
+            parent=self,
+        ):
+            self._set_status("Reconstrucción cancelada")
+            return
+        try:
+            result = self.service.rebuild_index(confirm=True)
+        except Exception:
+            log.exception("index rebuild failed")
+            self._set_status("La reconstrucción falló — consulta el registro")
+            return
+        self._set_status(f"Índice reconstruido: {result.detail}")
 
     # -- selection and preview -------------------------------------------------
 

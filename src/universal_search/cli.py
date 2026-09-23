@@ -208,6 +208,57 @@ def main() -> None:
         help="index database (default: the user data directory)",
     )
 
+    # -- index diagnostics and repair -------------------------------------------
+    diagnose = sub.add_parser(
+        "diagnose", help="index statistics, health checks and repairs"
+    )
+    diagnose_sub = diagnose.add_subparsers(
+        dest="diagnose_command", required=True
+    )
+    for name, help_text in (
+        ("summary", "counts, sizes, schema and worker state"),
+        ("health", "run every health check and report the worst verdict"),
+    ):
+        command = diagnose_sub.add_parser(name, help=help_text)
+        command.add_argument(
+            "--database", type=Path, default=default_database,
+            help="index database (default: the user data directory)",
+        )
+    diagnose_repair = diagnose_sub.add_parser(
+        "repair", help="repair or rebuild parts of the index"
+    )
+    repair_sub = diagnose_repair.add_subparsers(
+        dest="repair_action", required=True
+    )
+    repair_reconcile = repair_sub.add_parser(
+        "reconcile", help="run one indexing pass (safe, idempotent)"
+    )
+    repair_reconcile.add_argument("root", type=Path)
+    repair_fts = repair_sub.add_parser(
+        "fts", help="drop orphaned search rows and re-read missing ones (destructive)"
+    )
+    repair_extract = repair_sub.add_parser(
+        "extract", help="re-read one document (destructive)"
+    )
+    repair_extract.add_argument("path", type=Path)
+    repair_intel = repair_sub.add_parser(
+        "intelligence", help="recompute derived metadata (safe)"
+    )
+    repair_all = repair_sub.add_parser(
+        "all", help="delete the whole index and reindex (destructive)"
+    )
+    repair_all.add_argument("--root", type=Path, action="append", default=[])
+    for command in (repair_fts, repair_extract, repair_intel, repair_all):
+        command.add_argument(
+            "--database", type=Path, default=default_database,
+            help="index database (default: the user data directory)",
+        )
+    for command in (repair_fts, repair_extract, repair_all):
+        command.add_argument(
+            "--yes", action="store_true",
+            help="required: confirms that this operation deletes data",
+        )
+
     args = parser.parse_args()
     if args.command == "index":
         db = SearchDatabase(args.database)
@@ -221,6 +272,10 @@ def main() -> None:
         if records and records[-1].get("kind") == "index":
             last = records[-1]
             print(f"elapsed={last['duration_s']}s db_writes={last['db_writes']}")
+    elif args.command == "diagnose":
+        code = _diagnose_command(args)
+        if code:
+            raise SystemExit(code)
     elif args.command == "intelligence":
         code = _intelligence_command(args)
         if code:
@@ -323,6 +378,126 @@ def main() -> None:
                     else ""
                 )
                 print(f"  score={result.score:.3f}  {breakdown}{notes}\n")
+
+
+def _format_bytes(value: int) -> str:
+    """Human-readable size; diagnostics must not require a calculator."""
+    size = float(value)
+    for unit in ("B", "KiB", "MiB", "GiB"):
+        if size < 1024 or unit == "GiB":
+            return f"{size:.1f} {unit}" if unit != "B" else f"{int(size)} B"
+        size /= 1024
+    return f"{size:.1f} GiB"  # pragma: no cover - unreachable
+
+
+def _diagnose_command(args) -> int:
+    """Index statistics, health checks and repairs (spec 015).
+
+    Exit codes: 0 healthy, 1 warnings (or a declined repair), 2 fatal.
+    """
+    from universal_search.diagnostics import (
+        ConfirmationRequired,
+        RepairBlocked,
+        check,
+        collect,
+        rebuild_all,
+        rebuild_fts,
+        rebuild_intelligence,
+        re_extract,
+        reconcile,
+    )
+
+    if args.diagnose_command == "repair":
+        database = SearchDatabase(args.database)
+        action = args.repair_action
+        try:
+            if action == "reconcile":
+                result = reconcile(database, args.root)
+            elif action == "fts":
+                result = rebuild_fts(database, confirm=args.yes)
+            elif action == "extract":
+                result = re_extract(database, args.path, confirm=args.yes)
+            elif action == "intelligence":
+                result = rebuild_intelligence(database)
+            elif action == "all":
+                if not args.root:
+                    print(
+                        "Nothing to reindex: pass --root at least once.",
+                        file=sys.stderr,
+                    )
+                    return 1
+                result = rebuild_all(database, list(args.root), confirm=args.yes)
+            else:  # pragma: no cover - argparse rejects unknown actions
+                return 2
+        except ConfirmationRequired as exc:
+            print(f"Refusing to run a destructive repair: {exc}", file=sys.stderr)
+            print("Re-run with --yes when you are sure.", file=sys.stderr)
+            return 1
+        except RepairBlocked as exc:
+            print(f"Repair blocked: {exc}", file=sys.stderr)
+            return 1
+        print(f"{result.action}: {result.detail}")
+        return 0
+
+    database = SearchDatabase(args.database)
+    statistics = collect(database)
+    if args.diagnose_command == "summary":
+        print(f"database:   {statistics.database}")
+        if not statistics.exists:
+            print(f"state:      {statistics.error}")
+            return 1
+        print(
+            f"documents:  {statistics.documents}"
+            f" ({statistics.with_content} with text,"
+            f" {statistics.cloud_only} cloud-only)"
+        )
+        for extension, count in statistics.by_type[:5]:
+            print(f"  {extension or '(none)':<10} {count}")
+        for source, count in statistics.by_source:
+            print(f"  source {source:<4} {count}")
+        print(
+            f"size:       {_format_bytes(statistics.database_bytes)} db"
+            f" + {_format_bytes(statistics.wal_bytes)} wal"
+            f" + {_format_bytes(statistics.shm_bytes)} shm"
+        )
+        print(
+            f"schema:     {statistics.schema_version}"
+            f" (app {statistics.app_version})"
+        )
+        print(f"derived:    {statistics.intelligence_rows} analysed")
+        if statistics.last_index_pass:
+            last = statistics.last_index_pass
+            print(
+                f"last pass:  {last.get('duration_s')}s,"
+                f" {last.get('db_writes')} writes"
+            )
+            last_stats = last.get("stats") or {}
+            if last_stats:
+                print(
+                    f"  pending:  {last_stats.get('scanned', 0)} scanned,"
+                    f" {last_stats.get('unchanged', 0)} unchanged"
+                    f" (nothing queued: the indexer is continuous)"
+                )
+                print(
+                    f"  skipped:  {last_stats.get('ignored', 0)} ignored,"
+                    f" {last_stats.get('errors', 0)} unreadable,"
+                    f" {last_stats.get('extraction_errors', 0)} extraction error(s)"
+                )
+        if statistics.worker_state:
+            print(
+                f"worker:     {statistics.worker_state}"
+                f" (updated {statistics.worker_updated_at})"
+            )
+        if statistics.error:
+            print(f"error:      {statistics.error}", file=sys.stderr)
+            return 2
+        return 0
+
+    report = check(database)
+    print(report.render())
+    if report.status == "fatal":
+        return 2
+    return 0 if report.ok else 1
 
 
 def _intelligence_command(args) -> int:
