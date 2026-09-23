@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 from universal_search.appconfig import AppConfig, AppPaths
+from universal_search.context import get_context
 from universal_search.index.database import SearchDatabase
 from universal_search.index.search import SearchEngine, SearchResult
 
@@ -34,8 +35,40 @@ class SearchService:
         self.engine = SearchEngine(self.database)
         self.config = AppConfig.load(self.paths)
 
-    def search(self, query: str, limit: int = 50) -> list[SearchResult]:
-        return self.engine.search(query, limit)
+    def search(
+        self,
+        query: str,
+        limit: int = 50,
+        context: str | None = None,
+        explain: bool = False,
+    ) -> list[SearchResult]:
+        """Search with the active (or explicitly named) personal context.
+
+        Context resolution, usage-learning gating and every ranking decision
+        live in the core; this method only supplies configuration.
+        """
+        name = context if context is not None else self.config.active_context
+        resolved = get_context(self.config, name) if name else None
+        return self.engine.search(
+            query,
+            limit,
+            context=resolved,
+            usage=self.config.usage_tracking,
+            explain=explain,
+        )
+
+    def record_open(self, document_id: str, query: str) -> None:
+        """Record a "result opened" signal when local learning is enabled.
+
+        Privacy: disabled by default, stored only in the local database and
+        never transmitted (no network code exists in the application).
+        """
+        if not document_id or not self.config.usage_tracking:
+            return
+        try:
+            self.engine.record_open(document_id, query)
+        except Exception:
+            log.exception("could not record usage signal")
 
     def reload_config(self) -> AppConfig:
         self.config = AppConfig.load(self.paths)

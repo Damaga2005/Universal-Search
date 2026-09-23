@@ -1,6 +1,7 @@
 """Window-level tests: a real Tk window driven through its bindings."""
 
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -264,6 +265,74 @@ def test_cloud_only_result_shows_onedrive_marker(window) -> None:
     text = window.preview.cget("text")
     assert "onedrive" in text
     assert "☁" in text
+
+
+def test_context_combobox_selects_and_persists(window, monkeypatch) -> None:
+    from universal_search.gui import app as gui_app  # noqa: F401  (module under test)
+
+    window.service.save_config(
+        replace(
+            window.service.config,
+            contexts=({"name": "Universidad", "roots": []},),
+            active_context="",
+        )
+    )
+    assert window._context_values() == ["(todos)", "Universidad"]
+    assert window.context_var.get() == "(todos)"
+
+    searches: list[bool] = []
+    monkeypatch.setattr(window, "_execute_search", lambda: searches.append(True))
+    window.query_var.set("capacitor")  # trace only schedules; jobs never run here
+
+    window.context_var.set("Universidad")
+    window._on_context_changed()
+    assert window.service.config.active_context == "Universidad"
+    assert searches == [True]
+    assert "Universidad" in window.status_var.get()
+
+    window.context_var.set("(todos)")
+    window._on_context_changed()
+    assert window.service.config.active_context == ""
+    assert len(searches) == 2
+
+
+def test_open_records_usage_signal_only_when_enabled(window, monkeypatch) -> None:
+    from universal_search.gui import app as gui_app
+    from universal_search.index.search import SearchResult
+
+    result = SearchResult(
+        path=Path(r"C:\usage\y.md"),
+        name="y.md",
+        source="local",
+        snippet=None,
+        rank=-1.0,
+        score=0.5,
+        document_id="doc-usage-test",
+    )
+    window._clear_results()
+    window.results = [result]
+    window.listbox.insert(0, "y.md")
+    window.listbox.selection_set(0)
+
+    opened: list[str] = []
+    monkeypatch.setattr(gui_app, "open_path", lambda path: opened.append(str(path)))
+
+    # default: learning disabled -> the file opens, nothing is recorded
+    window._on_open()
+    assert opened == [str(result.path)]
+    assert window.service.engine.usage_rows() == []
+
+    # enabled -> the open is recorded with its query association
+    window.service.save_config(
+        replace(window.service.config, usage_tracking=True)
+    )
+    window.query_var.set("y")
+    window._on_open()
+    rows = window.service.engine.usage_rows()
+    assert len(rows) == 1
+    assert rows[0]["document_id"] == "doc-usage-test"
+    assert rows[0]["query"] == "y"
+    window.service.engine.clear_usage()
 
 
 def test_closing_window_does_not_touch_the_indexer(window, monkeypatch) -> None:

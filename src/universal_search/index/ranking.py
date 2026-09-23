@@ -20,9 +20,14 @@ Signals and default weights (see docs/RANKING.md for the rationale):
     doc_type         0.5  extractable content (1.0) vs metadata-only (0.4)
     source           0.4  provider/context weight (extension point)
     recency          0.3  secondary signal, bounded to [0.5, 1.0]
-    usage            0.0  reserved for future local usage signals
+    usage            0.0  local usage learning (0.0 until the user enables it)
+    context          0.0  bounded personal-context boost (0.0 unless active)
 
-No personalization, learning or network service exists in this module.
+When local usage learning or a personal context is active its weight is
+raised to ``ACTIVATED_USAGE_WEIGHT`` / ``ACTIVATED_CONTEXT_WEIGHT`` and the
+denominator grows accordingly (scores stay normalized to [0, 1]). The boosts
+are bounded inputs computed by :mod:`universal_search.context`: this module
+stores no personal data, learns nothing and performs no network access.
 """
 
 import math
@@ -71,7 +76,8 @@ class RankingWeights:
     doc_type: float = 0.5
     source: float = 0.4
     recency: float = 0.3
-    usage: float = 0.0  # reserved; usage signals are never collected
+    usage: float = 0.0    # local usage learning: 0.0 until enabled (then 0.5)
+    context: float = 0.0  # personal context boost: 0.0 unless applied (then 1.0)
 
     @property
     def total(self) -> float:
@@ -79,6 +85,11 @@ class RankingWeights:
 
 
 DEFAULT_WEIGHTS = RankingWeights()
+
+# Raised only when the corresponding optional, user-enabled signal takes part
+# (phase 008). The defaults above keep both at 0.0.
+ACTIVATED_USAGE_WEIGHT = 0.5
+ACTIVATED_CONTEXT_WEIGHT = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,6 +114,7 @@ class Ranker:
         terms: tuple[str, ...],
         *,
         usage_boost: float = 0.0,
+        context_boost: float = 0.0,
         now: datetime | None = None,
     ) -> dict[str, float]:
         """Compute each normalized signal for one candidate."""
@@ -181,8 +193,10 @@ class Ranker:
         # 10. recency, secondary and bounded
         signals["recency"] = self._recency(candidate.modified_at, now)
 
-        # reserved extension point: local usage signals (never collected yet)
+        # Optional bounded extension points (both off unless activated):
+        # local usage learning and the personal context preference.
         signals["usage"] = min(max(usage_boost, 0.0), 1.0)
+        signals["context"] = min(max(context_boost, 0.0), 1.0)
         return signals
 
     @staticmethod
@@ -227,19 +241,46 @@ class Ranker:
             -age_days / RECENCY_DECAY_DAYS
         )
 
+    def contributions(
+        self,
+        candidate: Candidate,
+        terms: tuple[str, ...],
+        *,
+        usage_boost: float = 0.0,
+        context_boost: float = 0.0,
+        now: datetime | None = None,
+    ) -> tuple[dict[str, float], float]:
+        """Weighted contribution of every signal plus the final score.
+
+        The breakdown is what makes personalization explainable: each point
+        of score is attributable to a named signal.
+        """
+        signals = self.signals(
+            candidate,
+            terms,
+            usage_boost=usage_boost,
+            context_boost=context_boost,
+            now=now,
+        )
+        weights = self.weights
+        points = {
+            name: getattr(weights, name) * value for name, value in signals.items()
+        }
+        return points, sum(points.values()) / weights.total
+
     def score(
         self,
         candidate: Candidate,
         terms: tuple[str, ...],
         *,
         usage_boost: float = 0.0,
+        context_boost: float = 0.0,
         now: datetime | None = None,
     ) -> float:
-        signals = self.signals(
-            candidate, terms, usage_boost=usage_boost, now=now
-        )
-        weights = self.weights
-        numerator = sum(
-            getattr(weights, name) * value for name, value in signals.items()
-        )
-        return numerator / weights.total
+        return self.contributions(
+            candidate,
+            terms,
+            usage_boost=usage_boost,
+            context_boost=context_boost,
+            now=now,
+        )[1]

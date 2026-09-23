@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from universal_search.appconfig import AppConfig, AppPaths
+from universal_search.context import configured_roots
 from universal_search.index.database import SearchDatabase
 from universal_search.index.indexer import IndexStats, Indexer
 
@@ -447,7 +448,7 @@ class BackgroundIndexer:
 
         observer = Observer()
         scheduled = 0
-        for root in self.config.roots:
+        for root in configured_roots(self.config):
             root_path = Path(root)
             if root_path.is_dir():
                 observer.schedule(_Handler(), str(root_path), recursive=True)
@@ -488,7 +489,7 @@ class BackgroundIndexer:
         self._last_pass = time.monotonic()
         config = AppConfig.load(self.paths)
         self.config = config
-        roots = [Path(root) for root in config.roots]
+        roots = [Path(root) for root in configured_roots(config)]
         rules = config.ignore_rules()
         self._set_state(STATE_INDEXING, roots=len(roots))
         totals = IndexStats()
@@ -543,7 +544,7 @@ class BackgroundIndexer:
             clear_stop(self.paths)
             self._install_signal_handlers()
             self._start_observers()
-            self._set_state(STATE_IDLE, roots=len(self.config.roots))
+            self._set_state(STATE_IDLE, roots=len(configured_roots(self.config)))
             # Initial reconciliation scan (spec requirement).
             self.reconcile()
             was_paused = is_paused(self.paths)

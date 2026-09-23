@@ -19,6 +19,16 @@ CREATE TABLE IF NOT EXISTS documents (
     indexed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS usage_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id TEXT NOT NULL,
+    query TEXT NOT NULL DEFAULT '',
+    opened_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS usage_events_document
+    ON usage_events(document_id);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
     document_id UNINDEXED,
     name,

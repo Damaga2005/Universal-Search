@@ -77,6 +77,9 @@ class AppConfig:
     indexer_interval_seconds: int = 300
     indexer_file_delay: float = 0.0
     onedrive_download_max_mb: float = 0.0
+    contexts: tuple[dict, ...] = ()
+    active_context: str = ""
+    usage_tracking: bool = False
     window_geometry: str = ""
 
     def ignore_rules(self) -> IgnoreRules:
@@ -113,6 +116,9 @@ class AppConfig:
                 raw.get("onedrive_download_max_mb"),
                 defaults.onedrive_download_max_mb,
             ),
+            contexts=_context_dicts(raw.get("contexts"), defaults.contexts),
+            active_context=_str(raw.get("active_context"), defaults.active_context),
+            usage_tracking=_bool(raw.get("usage_tracking"), defaults.usage_tracking),
             window_geometry=_str(raw.get("window_geometry"), defaults.window_geometry),
         )
 
@@ -155,6 +161,17 @@ def setup_logging(paths: AppPaths | None = None) -> logging.Logger:
 def _str_tuple(value, fallback: tuple[str, ...]) -> tuple[str, ...]:
     if isinstance(value, (list, tuple)):
         return tuple(str(item) for item in value)
+    return fallback
+
+
+def _context_dicts(value, fallback: tuple[dict, ...]) -> tuple[dict, ...]:
+    """Keep only usable context entries (dict with a non-empty name)."""
+    if isinstance(value, (list, tuple)):
+        return tuple(
+            item
+            for item in value
+            if isinstance(item, dict) and str(item.get("name") or "").strip()
+        )
     return fallback
 
 

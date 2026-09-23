@@ -10,6 +10,7 @@ import tkinter as tk
 from dataclasses import replace
 from tkinter import filedialog, ttk
 
+from universal_search.context import load_contexts
 from universal_search.gui import services
 from universal_search.gui.services import (
     SearchService,
@@ -65,6 +66,21 @@ class SearchWindow(tk.Tk):
         self.query_var = tk.StringVar()
         self.entry = ttk.Entry(top, textvariable=self.query_var, font=("Segoe UI", 14))
         self.entry.pack(fill="x")
+
+        context_bar = ttk.Frame(top, padding=(0, 6, 0, 0))
+        context_bar.pack(fill="x")
+        ttk.Label(context_bar, text="Contexto:").pack(side="left")
+        self.context_var = tk.StringVar()
+        self.context_combo = ttk.Combobox(
+            context_bar,
+            textvariable=self.context_var,
+            state="readonly",
+            width=28,
+            values=self._context_values(),
+        )
+        self.context_combo.pack(side="left", padx=(6, 0))
+        self.context_combo.bind("<<ComboboxSelected>>", self._on_context_changed)
+        self.context_var.set(self.service.config.active_context or "(todos)")
 
         menu = tk.Menu(self)
         file_menu = tk.Menu(menu, tearoff=0)
@@ -223,6 +239,7 @@ class SearchWindow(tk.Tk):
 
     def _execute_search(self) -> None:
         query = self.query_var.get()
+        self.context_combo.configure(values=self._context_values())  # keep list fresh
         try:
             results = self.service.search(query, limit=DEFAULT_LIMIT)
         except Exception:
@@ -230,6 +247,26 @@ class SearchWindow(tk.Tk):
             self._set_status("Error al buscar — consulta el registro de errores")
             return
         self._render(results)
+
+    # -- personal context -------------------------------------------------------
+
+    def _context_values(self) -> list[str]:
+        return ["(todos)"] + [
+            context.name for context in load_contexts(self.service.config)
+        ]
+
+    def _on_context_changed(self, _event=None) -> None:
+        label = self.context_var.get()
+        name = "" if label == "(todos)" else label
+        try:
+            self.service.save_config(replace(self.service.config, active_context=name))
+        except Exception:
+            log.exception("could not persist the active context")
+            self._set_status("No se pudo guardar el contexto — consulta el registro")
+            return
+        if self.query_var.get().strip():
+            self._execute_search()
+        self._set_status(f"Contexto: {name or 'ninguno'}")
 
     def _render(self, results: list[SearchResult]) -> None:
         self.results = results
@@ -324,11 +361,15 @@ class SearchWindow(tk.Tk):
             index = 0
         if index is None:
             return "break"
+        result = self.results[index]
         try:
-            open_path(self.results[index].path)
+            open_path(result.path)
         except Exception:
-            log.exception("could not open %s", self.results[index].path)
+            log.exception("could not open %s", result.path)
             self._set_status("No se pudo abrir el archivo — consulta el registro")
+            return "break"
+        # Local usage signal — recorded only when the user enabled learning.
+        self.service.record_open(result.document_id, self.query_var.get())
         return "break"
 
     def _on_reveal(self, _event=None):

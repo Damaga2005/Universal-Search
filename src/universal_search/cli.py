@@ -1,5 +1,6 @@
 import argparse
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 from universal_search.index.database import SearchDatabase
@@ -26,6 +27,13 @@ def main() -> None:
     search.add_argument("query")
     search.add_argument("--database", type=Path, default=Path("universal-search.db"))
     search.add_argument("--limit", type=int, default=20)
+    search.add_argument(
+        "--context", default=None,
+        help="context name to apply for this query (overrides the active one)",
+    )
+    search.add_argument(
+        "--explain", action="store_true", help="show the scoring breakdown"
+    )
     sub.add_parser("gui", help="launch the desktop search window")
     onedrive = sub.add_parser(
         "onedrive", help="show detected OneDrive roots and file availability"
@@ -33,6 +41,64 @@ def main() -> None:
     onedrive.add_argument(
         "--root", type=Path, default=None, help="scan only this root"
     )
+
+    # -- personal contexts ------------------------------------------------------
+    context = sub.add_parser(
+        "context", help="personal contexts (Universidad, Trabajo, ...)"
+    )
+    context_sub = context.add_subparsers(dest="context_command", required=True)
+    context_sub.add_parser("list", help="list defined contexts")
+    context_add = context_sub.add_parser("add", help="define or extend a context")
+    context_add.add_argument("name")
+    context_add.add_argument(
+        "--root", action="append", default=[],
+        help="indexed root of the context (repeatable)",
+    )
+    context_add.add_argument(
+        "--subject", action="append", default=[],
+        help="subject/category such as a university subject (repeatable)",
+    )
+    context_add.add_argument(
+        "--type", dest="doc_types", action="append", default=[],
+        help="preferred document type, e.g. pdf (repeatable)",
+    )
+    context_add.add_argument(
+        "--source", dest="sources", action="append", default=[],
+        help="preferred source: local or onedrive (repeatable)",
+    )
+    context_add.add_argument(
+        "--recency-days", type=int, default=None,
+        help="prefer documents modified within the last N days",
+    )
+    context_remove = context_sub.add_parser("remove", help="delete a context")
+    context_remove.add_argument("name")
+    context_use = context_sub.add_parser(
+        "use", help="activate a context for searches ('none' clears it)"
+    )
+    context_use.add_argument("name")
+    context_relate = context_sub.add_parser(
+        "relate", help="define related terms to improve recall"
+    )
+    context_relate.add_argument("name")
+    context_relate.add_argument("term")
+    context_relate.add_argument("synonyms", nargs="+")
+
+    # -- local usage learning (privacy: local-only, off by default) -------------
+    usage = sub.add_parser(
+        "usage", help="local usage learning (local-only, disabled by default)"
+    )
+    usage_sub = usage.add_subparsers(dest="usage_command", required=True)
+    usage_sub.add_parser("on", help="enable local usage learning")
+    usage_sub.add_parser("off", help="disable local usage learning")
+    usage_show = usage_sub.add_parser("show", help="inspect recorded signals")
+    usage_show.add_argument("--database", type=Path, default=Path("universal-search.db"))
+    usage_show.add_argument("--limit", type=int, default=20)
+    usage_clear = usage_sub.add_parser(
+        "clear", help="delete every recorded signal"
+    )
+    usage_clear.add_argument("--database", type=Path, default=Path("universal-search.db"))
+
+    # -- background indexer ------------------------------------------------------
     indexer = sub.add_parser("indexer", help="background indexer lifecycle")
     indexer_sub = indexer.add_subparsers(dest="indexer_command", required=True)
     indexer_sub.add_parser("run", help="run the worker in this process")
@@ -43,6 +109,7 @@ def main() -> None:
     indexer_sub.add_parser("resume", help="resume indexing")
     autostart = indexer_sub.add_parser("autostart", help="start with Windows")
     autostart.add_argument("choice", choices=("on", "off", "status"))
+
     args = parser.parse_args()
     if args.command == "index":
         db = SearchDatabase(args.database)
@@ -76,6 +143,14 @@ def main() -> None:
                 f"{root}: {total} file(s), {cloud} cloud-only, "
                 f"{unreadable} unreadable"
             )
+    elif args.command == "context":
+        code = _context_command(args)
+        if code:
+            raise SystemExit(code)
+    elif args.command == "usage":
+        code = _usage_command(args)
+        if code:
+            raise SystemExit(code)
     elif args.command == "gui":
         from universal_search.gui.app import run
 
@@ -83,8 +158,195 @@ def main() -> None:
     elif args.command == "indexer":
         raise SystemExit(_indexer_command(args))
     else:
-        for result in SearchEngine(SearchDatabase(args.database)).search(args.query, args.limit):
-            print(f"[{result.source}] {result.name}\n  {result.path}\n  {result.snippet or ''}\n")
+        # search
+        from universal_search.appconfig import AppConfig, AppPaths
+        from universal_search.context import get_context
+
+        config = AppConfig.load(AppPaths.discover())
+        if args.context:
+            context = get_context(config, args.context)
+            if context is None:
+                print(f"contexto desconocido: {args.context}", file=sys.stderr)
+                raise SystemExit(1)
+        elif config.active_context:
+            context = get_context(config, config.active_context)
+        else:
+            context = None
+        engine = SearchEngine(SearchDatabase(args.database))
+        results = engine.search(
+            args.query,
+            args.limit,
+            context=context,
+            usage=config.usage_tracking,
+            explain=args.explain,
+        )
+        for result in results:
+            print(
+                f"[{result.source}] {result.name}\n"
+                f"  {result.path}\n"
+                f"  {result.snippet or ''}\n"
+            )
+            if args.explain and result.explain:
+                breakdown = " ".join(
+                    f"{name}={value:.3f}"
+                    for name, value in sorted(
+                        result.explain.items(), key=lambda item: -item[1]
+                    )
+                    if value > 0.0005
+                )
+                notes = (
+                    f" · {'; '.join(result.explain_notes)}"
+                    if result.explain_notes
+                    else ""
+                )
+                print(f"  score={result.score:.3f}  {breakdown}{notes}\n")
+
+
+def _context_command(args) -> int:
+    """Context lifecycle presentation; state lives in local config.json."""
+    from universal_search.appconfig import AppConfig, AppPaths
+    from universal_search.context import (
+        Context,
+        context_from_dict,
+        get_context,
+        load_contexts,
+        with_active_context,
+        with_context,
+        with_context_removed,
+    )
+
+    paths = AppPaths.discover()
+    config = AppConfig.load(paths)
+    command = args.context_command
+
+    if command == "list":
+        contexts = load_contexts(config)
+        if not contexts:
+            print("no hay contextos definidos (universal-search context add ...)")
+            return 0
+        for item in contexts:
+            active = "  [activo]" if config.active_context == item.name else ""
+            print(
+                f"{item.name}{active}: {len(item.roots)} raíz(es), "
+                f"{len(item.subjects)} materia(s), "
+                f"{len(item.doc_types)} tipo(s), "
+                f"{len(item.related_terms)} término(s) relacionado(s)"
+            )
+        return 0
+
+    if command == "add":
+        context = context_from_dict(
+            {
+                "name": args.name,
+                "roots": list(args.root),
+                "subjects": list(args.subject),
+                "doc_types": list(args.doc_types),
+                "preferred_sources": list(args.sources),
+                "recency_days": args.recency_days,
+            }
+        )
+        if context is None:  # pragma: no cover - name is positional and required
+            return 1
+        config = with_context(config, context)
+        config.save(paths)
+        print(f"contexto «{context.name}» guardado ({len(context.roots)} raíz(es))")
+        return 0
+
+    if command == "remove":
+        if get_context(config, args.name) is None:
+            print(f"contexto desconocido: {args.name}", file=sys.stderr)
+            return 1
+        config = with_context_removed(config, args.name)
+        config.save(paths)
+        print(f"contexto «{args.name}» eliminado")
+        return 0
+
+    if command == "use":
+        name = "" if args.name in ("none", "off") else args.name
+        try:
+            config = with_active_context(config, name)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        config.save(paths)
+        print(f"contexto activo: {config.active_context or 'ninguno'}")
+        return 0
+
+    if command == "relate":
+        existing = get_context(config, args.name)
+        if existing is None:
+            print(f"contexto desconocido: {args.name}", file=sys.stderr)
+            return 1
+        term = args.term.casefold().strip()
+        synonyms = tuple(
+            dict.fromkeys(
+                item.casefold().strip()
+                for item in (*args.synonyms, term)
+                if item.casefold().strip() and item.casefold().strip() != term
+            )
+        )
+        updated = Context(
+            name=existing.name,
+            roots=existing.roots,
+            subjects=existing.subjects,
+            preferred_sources=existing.preferred_sources,
+            doc_types=existing.doc_types,
+            related_terms={**existing.related_terms, term: synonyms},
+            recency_days=existing.recency_days,
+        )
+        config = with_context(config, updated, merge=False)
+        config.save(paths)
+        rendered = ", ".join(synonyms) if synonyms else "(sin sinónimos)"
+        print(f"«{term}» ← {rendered}")
+        return 0
+
+    return 1  # pragma: no cover - argparse restricts the choices
+
+
+def _usage_command(args) -> int:
+    """Usage-learning presentation; the data is local-only and inspectable."""
+    from dataclasses import replace as _replace
+
+    from universal_search.appconfig import AppConfig, AppPaths
+
+    paths = AppPaths.discover()
+    config = AppConfig.load(paths)
+    command = args.usage_command
+
+    if command in ("on", "off"):
+        enabled = command == "on"
+        config = _replace(config, usage_tracking=enabled)
+        config.save(paths)
+        print(
+            "uso local activado (solo en este equipo; nunca se sube)"
+            if enabled
+            else "uso local desactivado"
+        )
+        if not enabled:
+            print("los eventos ya registrados siguen aquí: usage clear los borra")
+        return 0
+
+    from universal_search.index.database import SearchDatabase
+    from universal_search.index.search import SearchEngine
+
+    engine = SearchEngine(SearchDatabase(args.database))
+    if command == "show":
+        rows = engine.usage_rows(args.limit)
+        if not rows:
+            print("sin eventos de uso")
+            return 0
+        for row in rows:
+            query = row["query"] or "(sin consulta)"
+            location = row["path"] or row["document_id"]
+            print(f"{row['opened_at']}  «{query}»  ->  {row['name']}  {location}")
+        return 0
+
+    if command == "clear":
+        removed = engine.clear_usage()
+        print(f"{removed} evento(s) de uso borrado(s)")
+        return 0
+
+    return 1  # pragma: no cover - argparse restricts the choices
 
 
 def _indexer_command(args) -> int:
