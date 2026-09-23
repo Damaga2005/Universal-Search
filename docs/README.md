@@ -17,6 +17,16 @@ El roadmap por versiones (v0.1–v0.6+) vive en [ROADMAP.md](ROADMAP.md).
 | 008 | Contexto personal y búsqueda universitaria | ✅ Completada | [008-personal-context.md](development/008-personal-context.md) | [informe](development/008-personal-context-report.md) |
 | 009 | Búsqueda global (hotkey, filtros, recientes) | ✅ Completada | [009-global-search.md](development/009-global-search.md) | [informe](development/009-global-search-report.md) |
 | 010 | Release (v1.0.0, instalador) | ✅ Completada | [010-release.md](development/010-release.md) | [informe](development/010-release-report.md) |
+| 011 | Performance & escalabilidad: benchmarks, métricas locales, cachés acotadas | ✅ Completada | [011-performance-scalability.md](development/011-performance-scalability.md) | [informe](development/011-performance-scalability-report.md) |
+| 012 | Advanced search: lenguaje de consultas (parser/AST) | ⬜ Pendiente | [012-advanced-search.md](development/012-advanced-search.md) | — |
+| 013 | Ranking v2: evaluación y explicabilidad | ⬜ Pendiente | [013-ranking-v2.md](development/013-ranking-v2.md) | — |
+| 014 | Inteligencia documental local | ⬜ Pendiente | [014-document-intelligence.md](development/014-document-intelligence.md) | — |
+| 015 | Diagnóstico e índice mantenible | ⬜ Pendiente | [015-index-diagnostics.md](development/015-index-diagnostics.md) | — |
+| 016 | Integración con Windows | ⬜ Pendiente | [016-windows-integration.md](development/016-windows-integration.md) | — |
+| 017 | UX y accesibilidad | ⬜ Pendiente | [017-ux-accessibility.md](development/017-ux-accessibility.md) | — |
+| 018 | Privacidad y seguridad | ⬜ Pendiente | [018-privacy-security.md](development/018-privacy-security.md) | — |
+| 019 | Arquitectura de proveedores y extensión | ⬜ Pendiente | [019-provider-plugin-architecture.md](development/019-provider-plugin-architecture.md) | — |
+| 020 | Release de producción y fiabilidad | ⬜ Pendiente | [020-production-release.md](development/020-production-release.md) | — |
 
 Verificado en la fase 010: **208 tests en verde**
 (`.venv\Scripts\python -m pytest`), E2E completo de indexador, CLI, GUI e

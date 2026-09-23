@@ -34,6 +34,19 @@
 - [ ] Related-document graph
 - [x] Installable Windows application
 
+## v0.7+ (phases 011–020)
+
+- [x] Performance & scalability (011)
+- [ ] Advanced search language (012)
+- [ ] Ranking v2: evaluation & explainability (013)
+- [ ] Local document intelligence (014)
+- [ ] Index diagnostics & maintenance (015)
+- [ ] Windows integration (016)
+- [ ] UX & accessibility (017)
+- [ ] Privacy & security hardening (018)
+- [ ] Provider & extension architecture (019)
+- [ ] Production release & reliability (020)
+
 ---
 
 Phases 001–010 are implemented and documented (per-phase reports in

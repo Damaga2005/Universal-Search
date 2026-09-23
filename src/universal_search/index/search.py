@@ -1,5 +1,6 @@
 import re
 import sqlite3
+import time
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from universal_search.context import (
     usage_boost_from,
 )
 from universal_search.index.database import SearchDatabase
+from universal_search.metrics import record_search
 from universal_search.index.ranking import (
     ACTIVATED_CONTEXT_WEIGHT,
     ACTIVATED_USAGE_WEIGHT,
@@ -157,6 +159,36 @@ class SearchEngine:
         self.candidate_pool = candidate_pool
 
     def search(
+        self,
+        query: str,
+        limit: int = 20,
+        *,
+        context: Context | None = None,
+        usage: bool = False,
+        explain: bool = False,
+        source: str | None = None,
+        doc_type: str | None = None,
+    ) -> list[SearchResult]:
+        """Rank ``query`` and record latency + result count (spec 011).
+
+        Thin wrapper: every CLI/GUI/service path funnels through here, so
+        the local metrics observe real usage — counters only, never the
+        query text itself.
+        """
+        started = time.perf_counter()
+        results = self._search(
+            query,
+            limit,
+            context=context,
+            usage=usage,
+            explain=explain,
+            source=source,
+            doc_type=doc_type,
+        )
+        record_search((time.perf_counter() - started) * 1000, len(results))
+        return results
+
+    def _search(
         self,
         query: str,
         limit: int = 20,

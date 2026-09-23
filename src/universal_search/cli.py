@@ -2,7 +2,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from universal_search import __version__
+from universal_search import __version__, metrics
 from universal_search.appconfig import AppPaths
 from universal_search.index.database import SearchDatabase
 from universal_search.index.indexer import Indexer
@@ -168,6 +168,11 @@ def main() -> None:
         )
         print(f"Indexed {stats.scanned} files.")
         print(stats.summary())
+        # Phase 011: expose duration and rows written for this pass.
+        records = metrics.records()
+        if records and records[-1].get("kind") == "index":
+            last = records[-1]
+            print(f"elapsed={last['duration_s']}s db_writes={last['db_writes']}")
     elif args.command == "onedrive":
         from universal_search.providers.base import ScanError
         from universal_search.providers.onedrive import (

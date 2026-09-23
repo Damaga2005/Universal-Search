@@ -33,6 +33,7 @@ from universal_search.context import configured_roots
 from universal_search.hotkey import HotkeyServer, launch_gui, request_show
 from universal_search.index.database import SearchDatabase
 from universal_search.index.indexer import IndexStats, Indexer
+from universal_search.metrics import set_sink
 
 log = logging.getLogger("universal_search.indexer")
 
@@ -530,6 +531,10 @@ class BackgroundIndexer:
         Returns False when interrupted by stop/pause; errors in one root do
         not prevent the remaining roots from being indexed.
         """
+        # Local metrics sink (spec 011): every pass records duration and
+        # counters into the user's metrics.jsonl — counters only, no paths
+        # or content.
+        set_sink(self.paths.metrics_file)
         self._last_pass = time.monotonic()
         config = AppConfig.load(self.paths)
         self.config = config

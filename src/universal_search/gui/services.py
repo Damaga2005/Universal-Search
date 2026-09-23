@@ -20,6 +20,7 @@ from universal_search.hotkey import (
 )
 from universal_search.index.database import SearchDatabase
 from universal_search.index.search import SearchEngine, SearchResult
+from universal_search.metrics import set_sink
 
 # Public API: everything the window (and tests) may reach through this
 # module. The hotkey pid/show helpers are re-exports on purpose — the UI
@@ -53,6 +54,9 @@ class SearchService:
     ) -> None:
         self.paths = paths or AppPaths.discover()
         self.paths.ensure()
+        # Local metrics (spec 011): searches record latency/result counts
+        # and flush here, throttled, into the app's metrics.jsonl.
+        set_sink(self.paths.metrics_file)
         self.database = SearchDatabase(
             Path(database_path) if database_path else self.paths.database
         )

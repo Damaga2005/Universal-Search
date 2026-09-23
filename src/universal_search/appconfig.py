@@ -53,6 +53,11 @@ class AppPaths:
         return self.home / "indexer-status.json"
 
     @property
+    def metrics_file(self) -> Path:
+        """Append-only local metrics log (phase 011; never leaves the PC)."""
+        return self.home / "metrics.jsonl"
+
+    @property
     def pause_file(self) -> Path:
         return self.home / "indexer-paused.flag"
 

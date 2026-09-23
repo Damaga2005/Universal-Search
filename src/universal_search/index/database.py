@@ -123,3 +123,52 @@ class SearchDatabase:
         if version != SCHEMA_VERSION:
             connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             connection.commit()
+
+    def sizes(self) -> dict[str, int]:
+        """Byte sizes of the database files (growth monitoring, spec 011)."""
+        database = _file_size(self.path)
+        wal = _file_size(Path(str(self.path) + "-wal"))
+        shm = _file_size(Path(str(self.path) + "-shm"))
+        return {"database": database, "wal": wal, "shm": shm,
+                "total": database + wal + shm}
+
+    def maintenance(self, *, vacuum: bool = False) -> dict:
+        """Full WAL checkpoint (optionally VACUUM) plus file/page sizes.
+
+        Growth strategy from the phase-011 audit: SQLite's autocheckpoint
+        already keeps the WAL steady (~4 MB measured under continuous
+        indexing), so normal operation cannot grow without bound; this
+        forces a TRUNCATE checkpoint on demand. ``vacuum=True`` reclaims
+        fragmented free pages by rewriting the file — it needs an
+        exclusive lock, so run it while indexing is paused. Returns the
+        sizes plus freelist page counts before/after.
+        """
+        connection = self.connect()
+        try:
+            before = connection.execute("PRAGMA freelist_count").fetchone()[0]
+            connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            if vacuum:
+                connection.execute("VACUUM")
+            after = connection.execute("PRAGMA freelist_count").fetchone()[0]
+            pages = connection.execute("PRAGMA page_count").fetchone()[0]
+            page_size = connection.execute("PRAGMA page_size").fetchone()[0]
+            connection.commit()
+        finally:
+            connection.close()
+        sizes = self.sizes()
+        sizes.update(
+            {
+                "freelist_before": before,
+                "freelist_after": after,
+                "pages": pages,
+                "page_size": page_size,
+            }
+        )
+        return sizes
+
+
+def _file_size(path: Path) -> int:
+    try:
+        return path.stat().st_size
+    except OSError:
+        return 0

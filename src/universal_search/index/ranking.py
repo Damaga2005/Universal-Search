@@ -129,6 +129,20 @@ def _path_component_tokens(path: str) -> frozenset[str]:
     return frozenset(component_tokens)
 
 
+def clear_caches() -> None:
+    """Explicit invalidation for every ranking cache (spec 011).
+
+    Normal operation never needs this: all four caches are keyed by
+    value (content digest, exact strings), so a hit is byte-identical
+    and eviction is a pure memory decision. Rebuild tooling and tests
+    use this to start from a cold, provably empty state.
+    """
+    _CONTENT_WORDS.clear()
+    _parse_iso.cache_clear()
+    _name_parts.cache_clear()
+    _path_component_tokens.cache_clear()
+
+
 @dataclass(frozen=True, slots=True)
 class RankingWeights:
     filename_exact: float = 3.0

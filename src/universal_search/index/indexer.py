@@ -10,6 +10,7 @@ from pathlib import Path
 from universal_search.domain.document import Document, document_id_for
 from universal_search.domain.extraction import ExtractionResult
 from universal_search.index.database import SearchDatabase
+from universal_search.metrics import record_index
 from universal_search.providers.base import IgnoredPath, ScanError
 from universal_search.providers.ignore import IgnoreRules
 from universal_search.providers.local import read_local_content, scan_local
@@ -206,7 +207,9 @@ class Indexer:
         run_id = time.time_ns()
         root_path = Path(root).resolve()
         own_files = _own_database_files(self.database.path)
+        started = time.perf_counter()
         with closing(self.database.connect()) as connection:
+            writes_before = connection.total_changes
             pending = 0
             for item in scan_local(root_path, rules):
                 if isinstance(item, IgnoredPath):
@@ -316,6 +319,8 @@ class Indexer:
 
             self._delete_missing(connection, root_path, run_id, stats)
             connection.commit()
+            db_writes = connection.total_changes - writes_before
+        record_index(time.perf_counter() - started, stats.as_dict(), db_writes)
         return stats
 
     @staticmethod
