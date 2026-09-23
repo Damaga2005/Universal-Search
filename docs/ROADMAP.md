@@ -38,7 +38,7 @@
 
 - [x] Performance & scalability (011)
 - [x] Advanced search language (012)
-- [ ] Ranking v2: evaluation & explainability (013)
+- [x] Ranking v2: evaluation & explainability (013)
 - [ ] Local document intelligence (014)
 - [ ] Index diagnostics & maintenance (015)
 - [ ] Windows integration (016)

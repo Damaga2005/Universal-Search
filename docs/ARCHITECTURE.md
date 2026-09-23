@@ -38,9 +38,10 @@ logic lives in the UI.
   - `ranking.py` — composite score normalized to [0,1] (filename exact/
     tokens, phrase, BM25, term frequency, proximity, path, doc type, source,
     recency, plus the bounded usage/context boosts of phase 008) — see
-    `docs/RANKING.md`. The hot path fuses phrase/counts/positions into one
-    pass and caches content/name/path tokens per distinct value, because
-    the same candidates are re-scored on every keystroke.
+    `docs/RANKING.md`. Weights live in one frozen `RankingWeights`; the hot
+    path fuses phrase/counts/positions into one pass and caches
+    content/name/path tokens per distinct value, because the same
+    candidates are re-scored on every keystroke.
   - `search.py` — queries are translated by `query/` before any I/O, so a
     malformed query never opens the database nor reaches the metrics
     recorder. Candidate pool (`max(limit×5, 50)`) computed first
@@ -83,6 +84,23 @@ trigger itself. Stop escalates marker → terminate only if ignored. Autostart
 writes `HKCU\…\CurrentVersion\Run` through an injected registry (testable).
 Indexing logic is never moved into the GUI: the GUI only spawns/controls the
 worker and reads its status.
+
+## Measurement instruments (development-only)
+
+Two top-level packages sit outside the shipped application and are used to
+justify changes instead of asserting them. They are not importable from the
+wheel and never run at runtime:
+
+- `benchmarks/` (phase 011) — `python -m benchmarks`: latency, indexing and
+  memory baselines over a deterministic synthetic tree.
+- `evaluation/` (phase 013) — `python -m evaluation`: a labelled corpus
+  (no private document), Precision@K / Recall@K / MRR, the per-signal
+  breakdown of every result, and `--flip WEIGHT QUERY` to report whether a
+  weight is load-bearing and how much headroom it has.
+  `evaluation/baseline.json` is the committed regression baseline.
+
+Both are deterministic (no RNG, no clock in the data) and the test suite
+imports them, so `pythonpath = ["."]` is set in the pytest configuration.
 
 ## Data, dependencies, non-goals
 

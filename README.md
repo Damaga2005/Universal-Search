@@ -35,8 +35,10 @@ query latency 48.6 → 34.4 ms (`docs/development/optimization-report.md`);
 phase 011 added the reproducible benchmark suite, local metrics and
 bounded ranking caches; phase 012 added the advanced query language
 (phrases, `AND`/`OR`, negation and `name:`/`path:`/`type:`/`source:`/
-`after:`/`before:`/`size:` filters) shared by the CLI and the GUI —
-**316 passing tests**.
+`after:`/`before:`/`size:` filters) shared by the CLI and the GUI; phase
+013 added a labelled evaluation corpus with Precision@K/Recall@K/MRR and
+measured the headroom of every ranking weight instead of asserting it —
+**361 passing tests**.
 
 | Fase | Entrega | Estado |
 |------|---------|--------|
@@ -52,6 +54,7 @@ bounded ranking caches; phase 012 added the advanced query language
 | 010 | Release (v1.0.0) | ✅ |
 | 011 | Performance & scalability (benchmarks, métricas) | ✅ |
 | 012 | Advanced search (lenguaje de consultas) | ✅ |
+| 013 | Ranking v2 (corpus etiquetado, P@K/R@K/MRR) | ✅ |
 
 Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
 by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).
@@ -106,9 +109,14 @@ powershell -File packaging/make-shortcut.ps1 -TargetExe "dist\UniversalSearch\Un
 python -m venv .venv
 .venv\Scripts\python -m pip install -e . pytest
 .venv\Scripts\python -m pytest
+
+# measurement instruments (deterministic, development only)
+python -m benchmarks --profile 1000     # latency / indexing / memory (011)
+python -m evaluation                     # labelled corpus, P@K / R@K / MRR (013)
+python -m evaluation --flip recency diagrama   # headroom of one ranking weight
 ```
 
 Development prompts live in `docs/development/`, with a per-phase report for
 each completed phase. Documentation hub with the roadmap status:
 [`docs/README.md`](docs/README.md). Architecture: `docs/ARCHITECTURE.md`.
-Roadmap: `docs/ROADMAP.md`.
+Ranking: `docs/RANKING.md`. Roadmap: `docs/ROADMAP.md`.
