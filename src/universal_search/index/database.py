@@ -36,6 +36,28 @@ CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
     content,
     tokenize = 'unicode61'
 );
+
+-- Derived, disposable document intelligence (spec 014). Search never reads
+-- this table: it is rebuilt from the indexed content by
+-- `universal-search intelligence rebuild`, versioned per row, and can be
+-- deleted without touching the index.
+CREATE TABLE IF NOT EXISTS document_intelligence (
+    document_id TEXT PRIMARY KEY,
+    version INTEGER NOT NULL,
+    language TEXT,
+    title TEXT,
+    headings TEXT,
+    terms TEXT,
+    pairs TEXT,
+    sections INTEGER NOT NULL DEFAULT 0,
+    analyzed_chars INTEGER NOT NULL DEFAULT 0,
+    truncated INTEGER NOT NULL DEFAULT 0,
+    content_hash TEXT,
+    analyzed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS document_intelligence_language
+    ON document_intelligence(language);
 """
 
 # Columns added after the first release; applied to existing databases.
@@ -56,9 +78,11 @@ MIGRATIONS = (
 #      migrations have a version to step from.
 # Releases bump SCHEMA_VERSION whenever SCHEMA or MIGRATIONS change
 # (tests/test_release.py enforces the stamp on fresh and legacy databases).
-SCHEMA_VERSION = 3  # documents gains mtime_ns, last_seen_run, availability
+# Adding an object to SCHEMA also upgrades existing databases: the
+# schema-present gate sees a missing object and re-runs the idempotent DDL.
+SCHEMA_VERSION = 4  # + document_intelligence (disposable derived data, 014)
 
-# Every object SCHEMA creates. When all four already exist the idempotent
+# Every object SCHEMA creates. When all of them already exist the idempotent
 # DDL is skipped: one indexed sqlite_master lookup replaces re-parsing the
 # whole script on every connection (profiled as pure overhead per query).
 SCHEMA_OBJECTS = (
@@ -66,6 +90,8 @@ SCHEMA_OBJECTS = (
     "usage_events",
     "usage_events_document",
     "documents_fts",
+    "document_intelligence",
+    "document_intelligence_language",
 )
 
 # Applied to every connection. WAL is the persistent journal mode; the rest

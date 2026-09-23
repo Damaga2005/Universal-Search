@@ -160,6 +160,54 @@ def main() -> None:
     autostart = indexer_sub.add_parser("autostart", help="start with Windows")
     autostart.add_argument("choice", choices=("on", "off", "status"))
 
+    # -- local document intelligence (derived, local-only, rebuildable) -----------
+    intelligence = sub.add_parser(
+        "intelligence",
+        help="local document intelligence (derived data, local-only)",
+    )
+    intel_sub = intelligence.add_subparsers(
+        dest="intelligence_command", required=True
+    )
+    intel_rebuild = intel_sub.add_parser(
+        "rebuild", help="derive language, structure and keywords from the index"
+    )
+    intel_rebuild.add_argument(
+        "--database", type=Path, default=default_database,
+        help="index database (default: the user data directory)",
+    )
+    intel_rebuild.add_argument(
+        "--limit", type=int, default=None,
+        help="analyse at most this many documents in this pass",
+    )
+    intel_rebuild.add_argument(
+        "--force", action="store_true",
+        help="recompute every document, ignoring the stored version",
+    )
+    intel_show = intel_sub.add_parser(
+        "show", help="show the derived analysis of one document"
+    )
+    intel_show.add_argument("reference", help="path or document id")
+    intel_show.add_argument(
+        "--database", type=Path, default=default_database,
+        help="index database (default: the user data directory)",
+    )
+    intel_related = intel_sub.add_parser(
+        "related", help="documents sharing concepts with this one"
+    )
+    intel_related.add_argument("reference", help="path or document id")
+    intel_related.add_argument(
+        "--database", type=Path, default=default_database,
+        help="index database (default: the user data directory)",
+    )
+    intel_related.add_argument("--limit", type=int, default=10)
+    intel_clear = intel_sub.add_parser(
+        "clear", help="delete every derived analysis (the index is untouched)"
+    )
+    intel_clear.add_argument(
+        "--database", type=Path, default=default_database,
+        help="index database (default: the user data directory)",
+    )
+
     args = parser.parse_args()
     if args.command == "index":
         db = SearchDatabase(args.database)
@@ -173,6 +221,10 @@ def main() -> None:
         if records and records[-1].get("kind") == "index":
             last = records[-1]
             print(f"elapsed={last['duration_s']}s db_writes={last['db_writes']}")
+    elif args.command == "intelligence":
+        code = _intelligence_command(args)
+        if code:
+            raise SystemExit(code)
     elif args.command == "onedrive":
         from universal_search.providers.base import ScanError
         from universal_search.providers.onedrive import (
@@ -271,6 +323,66 @@ def main() -> None:
                     else ""
                 )
                 print(f"  score={result.score:.3f}  {breakdown}{notes}\n")
+
+
+def _intelligence_command(args) -> int:
+    """Derived document intelligence (spec 014): rebuild, inspect, relate.
+
+    All three subcommands read or write only the derived table; none of
+    them can damage the search index.
+    """
+    from universal_search.intelligence import (
+        analysis_for,
+        clear,
+        rebuild,
+        related,
+        summarize,
+    )
+
+    database = SearchDatabase(args.database)
+    command = args.intelligence_command
+    if command == "rebuild":
+        stats = rebuild(database, limit=args.limit, force=args.force)
+        print(
+            f"Intelligence rebuilt: {stats.updated} updated, "
+            f"{stats.skipped} unchanged, {stats.failed} failed, "
+            f"{stats.removed} removed (of {stats.scanned} scanned)."
+        )
+        return 0
+    if command == "show":
+        analysis = analysis_for(database, args.reference)
+        if analysis is None:
+            print(
+                f"No analysis for {args.reference}. "
+                "Run: universal-search intelligence rebuild",
+                file=sys.stderr,
+            )
+            return 1
+        for line in summarize(analysis):
+            print(line)
+        return 0
+    if command == "related":
+        neighbours = related(database, args.reference, limit=args.limit)
+        if not neighbours:
+            print(
+                f"No related documents for {args.reference} "
+                f"(rebuild the intelligence first).",
+                file=sys.stderr,
+            )
+            return 1
+        for neighbour in neighbours:
+            shared = ", ".join(neighbour.shared_terms[:5])
+            print(
+                f"[{neighbour.score:.3f}] {neighbour.name}\n"
+                f"  {neighbour.path}\n"
+                f"  shared: {shared}\n"
+            )
+        return 0
+    if command == "clear":
+        removed = clear(database)
+        print(f"Deleted {removed} derived analyses. The index is untouched.")
+        return 0
+    return 0  # pragma: no cover - argparse rejects unknown subcommands
 
 
 def _context_command(args) -> int:

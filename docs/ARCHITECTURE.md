@@ -52,9 +52,19 @@ logic lives in the UI.
     returns those rows newest first with score 0.0. Scoring,
     context/usage/explain (phase 008), snippets with FTS highlight markers
     stripped for display.
+- **Intelligence** (`universal_search/intelligence/`, spec 014): a pure,
+  deterministic analysis pipeline over already-indexed text — `language.py`
+  (function-word profiles, shared stop-word list), `structure.py` (title,
+  headings, sections), `keywords.py` (bounded term vector and
+  co-occurrence pairs), `analysis.py` (orchestration, per-document work
+  cap) and `store.py` (versioned `document_intelligence` rows, incremental
+  `rebuild`, `related` by cosine over term vectors). Derived data only:
+  **search never reads it**, deleting it costs nothing, and document
+  similarity is computed without the ranking formula.
 - **Presentation**:
   - `cli.py` — `index | search | gui | onedrive | context | usage | hotkey
-    | recent | indexer …` (diagnostics and control) plus `--version`.
+    | recent | indexer | intelligence …` (diagnostics and control) plus
+    `--version`.
   - `gui/` — Tk window (`app.py`, view only) + service layer (`services.py`,
     testable without Tk). `appconfig.py` provides paths/config/logging.
     The service turns a `QueryError` into `last_query_error` so the window

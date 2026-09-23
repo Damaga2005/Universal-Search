@@ -37,8 +37,10 @@ bounded ranking caches; phase 012 added the advanced query language
 (phrases, `AND`/`OR`, negation and `name:`/`path:`/`type:`/`source:`/
 `after:`/`before:`/`size:` filters) shared by the CLI and the GUI; phase
 013 added a labelled evaluation corpus with Precision@K/Recall@K/MRR and
-measured the headroom of every ranking weight instead of asserting it —
-**361 passing tests**.
+measured the headroom of every ranking weight instead of asserting it;
+phase 014 added deterministic local document intelligence (language,
+headings, bounded keyword vectors, co-occurrence and related documents,
+rebuildable on demand) — **401 passing tests**.
 
 | Fase | Entrega | Estado |
 |------|---------|--------|
@@ -55,6 +57,7 @@ measured the headroom of every ranking weight instead of asserting it —
 | 011 | Performance & scalability (benchmarks, métricas) | ✅ |
 | 012 | Advanced search (lenguaje de consultas) | ✅ |
 | 013 | Ranking v2 (corpus etiquetado, P@K/R@K/MRR) | ✅ |
+| 014 | Inteligencia documental local (reconstruible) | ✅ |
 
 Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
 by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).
@@ -78,6 +81,11 @@ universal-search context list      # context add|remove|use|relate …
 universal-search usage on          # usage show | clear
 universal-search hotkey show       # hotkey set ctrl+alt+s | on | off
 universal-search recent show       # recent on | off | clear
+
+# local document intelligence (derived data, local-only, rebuildable)
+universal-search intelligence rebuild        # language, headings, keywords
+universal-search intelligence show informe.pdf
+universal-search intelligence related informe.pdf --limit 5
 
 # background indexer — runs independently; closing the GUI does not stop it
 universal-search indexer start     # detached worker (single instance)

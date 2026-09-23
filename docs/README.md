@@ -20,7 +20,7 @@ El roadmap por versiones (v0.1–v0.6+) vive en [ROADMAP.md](ROADMAP.md).
 | 011 | Performance & escalabilidad: benchmarks, métricas locales, cachés acotadas | ✅ Completada | [011-performance-scalability.md](development/011-performance-scalability.md) | [informe](development/011-performance-scalability-report.md) |
 | 012 | Advanced search: lenguaje de consultas (parser/AST) | ✅ Completada | [012-advanced-search.md](development/012-advanced-search.md) | [informe](development/012-advanced-search-report.md) |
 | 013 | Ranking v2: evaluación y explicabilidad | ✅ Completada | [013-ranking-v2.md](development/013-ranking-v2.md) | [informe](development/013-ranking-v2-report.md) |
-| 014 | Inteligencia documental local | ⬜ Pendiente | [014-document-intelligence.md](development/014-document-intelligence.md) | — |
+| 014 | Inteligencia documental local | ✅ Completada | [014-document-intelligence.md](development/014-document-intelligence.md) | [informe](development/014-document-intelligence-report.md) |
 | 015 | Diagnóstico e índice mantenible | ⬜ Pendiente | [015-index-diagnostics.md](development/015-index-diagnostics.md) | — |
 | 016 | Integración con Windows | ⬜ Pendiente | [016-windows-integration.md](development/016-windows-integration.md) | — |
 | 017 | UX y accesibilidad | ⬜ Pendiente | [017-ux-accessibility.md](development/017-ux-accessibility.md) | — |
