@@ -433,6 +433,12 @@ def test_copy_path_recents_and_show_request(window, monkeypatch) -> None:
     hotkey.clear_gui_pid(window.service.paths)
 
 
+def test_window_title_shows_the_product_version(window) -> None:
+    from universal_search import __version__
+
+    assert window.title() == f"Universal Search {__version__}"
+
+
 def test_closing_window_does_not_touch_the_indexer(window, monkeypatch) -> None:
     """Closing the GUI must never stop the background worker (spec)."""
     from universal_search.gui import app as gui_app

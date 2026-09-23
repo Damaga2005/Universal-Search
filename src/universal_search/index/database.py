@@ -45,6 +45,19 @@ MIGRATIONS = (
     "ALTER TABLE documents ADD COLUMN availability TEXT NOT NULL DEFAULT 'available'",
 )
 
+# -- migration strategy ---------------------------------------------------------
+# Three safe-to-repeat mechanisms guard every connection:
+#   1. SCHEMA creates missing tables/indexes (fresh databases).
+#   2. MIGRATIONS adds columns discovered missing by introspection, so a
+#      database created before a column existed gains it without losing rows
+#      (upgrades preserve the search index - spec 010).
+#   3. PRAGMA user_version records the migration level actually applied, so
+#      the stamp is observable by tests and tools, and future *ordered*
+#      migrations have a version to step from.
+# Releases bump SCHEMA_VERSION whenever SCHEMA or MIGRATIONS change
+# (tests/test_release.py enforces the stamp on fresh and legacy databases).
+SCHEMA_VERSION = 3  # documents gains mtime_ns, last_seen_run, availability
+
 
 class SearchDatabase:
     def __init__(self, path: Path) -> None:
@@ -69,3 +82,7 @@ class SearchDatabase:
                 connection.execute(statement)
                 columns.add(column)
                 connection.commit()
+        version = connection.execute("PRAGMA user_version").fetchone()[0]
+        if version != SCHEMA_VERSION:
+            connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+            connection.commit()

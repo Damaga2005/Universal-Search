@@ -10,6 +10,7 @@ import tkinter as tk
 from dataclasses import replace
 from tkinter import filedialog, ttk
 
+from universal_search import __version__
 from universal_search.context import load_contexts
 from universal_search.gui import services
 from universal_search.gui.services import (
@@ -45,7 +46,7 @@ class SearchWindow(tk.Tk):
         self._search_job: str | None = None
         self.closed = False
 
-        self.title("Universal Search")
+        self.title(f"Universal Search {__version__}")
         self.geometry(self.service.config.window_geometry or "940x580")
         self.minsize(680, 400)
 

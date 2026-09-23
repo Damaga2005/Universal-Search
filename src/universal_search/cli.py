@@ -3,6 +3,8 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 
+from universal_search import __version__
+from universal_search.appconfig import AppPaths
 from universal_search.index.database import SearchDatabase
 from universal_search.index.indexer import Indexer
 from universal_search.index.search import SearchEngine
@@ -13,10 +15,22 @@ def main() -> None:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(errors="replace")
     parser = argparse.ArgumentParser(prog="universal-search")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+    )
+    # One index, one location: the default database lives in the per-user data
+    # directory (never the current or install directory) so the CLI, the GUI
+    # and the background worker always see the same index. --database
+    # overrides it for tests and tooling.
+    default_database = AppPaths.discover().database
     sub = parser.add_subparsers(dest="command", required=True)
     index = sub.add_parser("index")
     index.add_argument("root", type=Path)
-    index.add_argument("--database", type=Path, default=Path("universal-search.db"))
+    index.add_argument("--database", type=Path, default=default_database,
+        help="index database (default: the user data directory)",
+    )
     index.add_argument(
         "--onedrive-download-mb",
         type=float,
@@ -25,7 +39,9 @@ def main() -> None:
     )
     search = sub.add_parser("search")
     search.add_argument("query")
-    search.add_argument("--database", type=Path, default=Path("universal-search.db"))
+    search.add_argument("--database", type=Path, default=default_database,
+        help="index database (default: the user data directory)",
+    )
     search.add_argument("--limit", type=int, default=20)
     search.add_argument(
         "--context", default=None,
@@ -99,12 +115,16 @@ def main() -> None:
     usage_sub.add_parser("on", help="enable local usage learning")
     usage_sub.add_parser("off", help="disable local usage learning")
     usage_show = usage_sub.add_parser("show", help="inspect recorded signals")
-    usage_show.add_argument("--database", type=Path, default=Path("universal-search.db"))
+    usage_show.add_argument("--database", type=Path, default=default_database,
+        help="index database (default: the user data directory)",
+    )
     usage_show.add_argument("--limit", type=int, default=20)
     usage_clear = usage_sub.add_parser(
         "clear", help="delete every recorded signal"
     )
-    usage_clear.add_argument("--database", type=Path, default=Path("universal-search.db"))
+    usage_clear.add_argument("--database", type=Path, default=default_database,
+        help="index database (default: the user data directory)",
+    )
 
     # -- global shortcut ---------------------------------------------------------
     hotkey = sub.add_parser(
@@ -198,7 +218,7 @@ def main() -> None:
         raise SystemExit(_indexer_command(args))
     else:
         # search
-        from universal_search.appconfig import AppConfig, AppPaths
+        from universal_search.appconfig import AppConfig
         from universal_search.context import get_context
 
         config = AppConfig.load(AppPaths.discover())

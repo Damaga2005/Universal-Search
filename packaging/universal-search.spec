@@ -20,6 +20,9 @@ from pathlib import Path
 
 ROOT = Path(SPECPATH).parent
 ICON = ROOT / "packaging" / "universal_search.ico"
+# Windows version resource for both executables; the numbers must match
+# universal_search.__version__ (tests/test_release.py enforces this).
+VERSION_FILE = ROOT / "packaging" / "version_file.txt"
 
 a = Analysis(
     [str(ROOT / "packaging" / "entry-gui.py")],
@@ -56,6 +59,7 @@ exe_gui = EXE(
     upx=False,
     console=False,  # windowed application: no console, no tracebacks
     icon=str(ICON),
+    version=str(VERSION_FILE),  # "1.0.0" version resource in file properties
 )
 
 exe_cli = EXE(
@@ -70,6 +74,7 @@ exe_cli = EXE(
     upx=False,
     console=True,  # CLI surface: search/index/indexer with visible output
     icon=str(ICON),
+    version=str(VERSION_FILE),
 )
 
 coll = COLLECT(

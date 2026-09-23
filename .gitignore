@@ -9,3 +9,4 @@ build/
 htmlcov/
 .vscode/
 .idea/
+/universal-search.db*
