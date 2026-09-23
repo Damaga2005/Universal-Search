@@ -23,6 +23,9 @@ log = logging.getLogger("universal_search.gui")
 
 DEBOUNCE_MS = 150
 DEFAULT_LIMIT = 50
+SHOW_POLL_MS = 250
+SOURCE_FILTER_VALUES = ("(todas)", "local", "onedrive")
+TYPE_FILTER_VALUES = ("(todos)", "pdf", "docx", "xlsx", "pptx", "md", "txt")
 
 TYPE_LABELS = {
     ".pdf": "PDF",
@@ -48,6 +51,8 @@ class SearchWindow(tk.Tk):
 
         self._build_ui()
         self._bind_keys()
+        # Publish the PID: the worker's global hotkey targets this window.
+        services.register_gui_pid(self.service.paths)
         self._set_status("Listo — escribe para buscar")
         self.query_var.trace_add("write", self._on_query_changed)
         self.entry.focus_set()
@@ -82,10 +87,43 @@ class SearchWindow(tk.Tk):
         self.context_combo.bind("<<ComboboxSelected>>", self._on_context_changed)
         self.context_var.set(self.service.config.active_context or "(todos)")
 
+        ttk.Label(context_bar, text="Fuente:").pack(side="left", padx=(12, 0))
+        self.source_var = tk.StringVar(value=SOURCE_FILTER_VALUES[0])
+        self.source_combo = ttk.Combobox(
+            context_bar,
+            textvariable=self.source_var,
+            state="readonly",
+            width=9,
+            values=SOURCE_FILTER_VALUES,
+        )
+        self.source_combo.pack(side="left", padx=(6, 0))
+        self.source_combo.bind("<<ComboboxSelected>>", self._on_filter_changed)
+
+        ttk.Label(context_bar, text="Tipo:").pack(side="left", padx=(12, 0))
+        self.type_var = tk.StringVar(value=TYPE_FILTER_VALUES[0])
+        self.type_combo = ttk.Combobox(
+            context_bar,
+            textvariable=self.type_var,
+            state="readonly",
+            width=8,
+            values=TYPE_FILTER_VALUES,
+        )
+        self.type_combo.pack(side="left", padx=(6, 0))
+        self.type_combo.bind("<<ComboboxSelected>>", self._on_filter_changed)
+
+        self.recent_button = ttk.Menubutton(context_bar, text="Recientes ▾")
+        self.recent_menu = tk.Menu(self.recent_button, tearoff=0)
+        self.recent_button["menu"] = self.recent_menu
+        self.recent_button.pack(side="right")
+        self._refresh_recent_menu()
+
         menu = tk.Menu(self)
         file_menu = tk.Menu(menu, tearoff=0)
         file_menu.add_command(
             label="Añadir carpeta a indexar…", command=self._add_root
+        )
+        file_menu.add_command(
+            label="Copiar ruta del resultado (Ctrl+C)", command=self._copy_path
         )
         file_menu.add_separator()
         file_menu.add_command(label="Salir", command=self._on_close)
@@ -162,8 +200,10 @@ class SearchWindow(tk.Tk):
         self.listbox.bind("<Escape>", self._on_escape)
         self.listbox.bind("<Double-Button-1>", self._on_open)
         self.listbox.bind("<<ListboxSelect>>", self._update_preview)
+        self.listbox.bind("<Control-c>", self._copy_path)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self._poll_indexer()
+        self._poll_show_request()
 
     # -- background indexer hooks ------------------------------------------------
 
@@ -178,6 +218,29 @@ class SearchWindow(tk.Tk):
             summary = "indexador: ?"
         self.indexer_var.set(summary)
         self.after(2000, self._poll_indexer)
+
+    # -- global hotkey signaling -------------------------------------------------
+
+    def _poll_show_request(self) -> None:
+        """Consume the worker's show-request flag (global hotkey pressed)."""
+        if self.closed:
+            return
+        try:
+            if services.consume_show_request(self.service.paths):
+                self._present()
+        except Exception:
+            log.exception("could not handle show request")
+        self.after(SHOW_POLL_MS, self._poll_show_request)
+
+    def _present(self) -> None:
+        """Bring the window forward and put the cursor in the query box."""
+        if self.state() == "iconic":
+            self.deiconify()
+        self.lift()
+        self.attributes("-topmost", True)
+        self.after(300, lambda: self.attributes("-topmost", False))
+        self.entry.focus_force()
+        self._set_status("Atajo global — escribe para buscar")
 
     def _indexer_action(self, action: str) -> None:
         handlers = {
@@ -221,12 +284,7 @@ class SearchWindow(tk.Tk):
     # -- searching ------------------------------------------------------------
 
     def _on_query_changed(self, *_args) -> None:
-        if self._search_job is not None:
-            try:
-                self.after_cancel(self._search_job)
-            except Exception:  # job already ran
-                pass
-            self._search_job = None
+        self._cancel_pending_search()
         if not self.query_var.get().strip():
             self._clear_results()
             self._set_status("Listo — escribe para buscar")
@@ -240,8 +298,14 @@ class SearchWindow(tk.Tk):
     def _execute_search(self) -> None:
         query = self.query_var.get()
         self.context_combo.configure(values=self._context_values())  # keep list fresh
+        self._refresh_recent_menu()
         try:
-            results = self.service.search(query, limit=DEFAULT_LIMIT)
+            results = self.service.search(
+                query,
+                limit=DEFAULT_LIMIT,
+                source=self._active_source_filter(),
+                doc_type=self._active_type_filter(),
+            )
         except Exception:
             log.exception("search failed for %r", query)
             self._set_status("Error al buscar — consulta el registro de errores")
@@ -268,6 +332,52 @@ class SearchWindow(tk.Tk):
             self._execute_search()
         self._set_status(f"Contexto: {name or 'ninguno'}")
 
+    # -- filters and recent queries ----------------------------------------------
+
+    def _active_source_filter(self) -> str | None:
+        value = self.source_var.get()
+        return None if value == SOURCE_FILTER_VALUES[0] else value
+
+    def _active_type_filter(self) -> str | None:
+        value = self.type_var.get()
+        return None if value == TYPE_FILTER_VALUES[0] else value
+
+    def _on_filter_changed(self, _event=None) -> None:
+        if self.query_var.get().strip():
+            self._execute_search()
+        self._set_status(f"Filtro: {self.source_var.get()} · {self.type_var.get()}")
+
+    def _refresh_recent_menu(self) -> None:
+        """Show/hide the recents menu according to configuration (optional)."""
+        if not self.service.config.recent_queries_enabled:
+            self.recent_button.pack_forget()
+            return
+        self.recent_button.pack(side="right")
+        self.recent_menu.delete(0, "end")
+        entries = self.service.config.recent_queries
+        if not entries:
+            self.recent_menu.add_command(
+                label="(sin búsquedas recientes)", state="disabled"
+            )
+            return
+        for entry in entries:
+            self.recent_menu.add_command(
+                label=entry, command=lambda query=entry: self._apply_recent(query)
+            )
+
+    def _apply_recent(self, query: str) -> None:
+        self.query_var.set(query)  # the trace schedules a search…
+        self._cancel_pending_search()  # …but we run it immediately instead
+        self._execute_search()
+
+    def _cancel_pending_search(self) -> None:
+        if self._search_job is not None:
+            try:
+                self.after_cancel(self._search_job)
+            except Exception:  # job already ran
+                pass
+            self._search_job = None
+
     def _render(self, results: list[SearchResult]) -> None:
         self.results = results
         self.listbox.delete(0, "end")
@@ -285,9 +395,10 @@ class SearchWindow(tk.Tk):
         plain = " ".join(
             (result.snippet or "").replace("[", "").replace("]", "").split()
         )
+        source = f"[{result.source}] "
         if plain:
-            return f"{result.name}    {plain[:100]}"
-        return result.name
+            return f"{source}{result.name}    {plain[:100]}"
+        return f"{source}{result.name}"
 
     def _clear_results(self) -> None:
         self.results = []
@@ -368,6 +479,9 @@ class SearchWindow(tk.Tk):
             log.exception("could not open %s", result.path)
             self._set_status("No se pudo abrir el archivo — consulta el registro")
             return "break"
+        # Recent queries (optional, local): recorded when the user commits
+        # to a result, never on every intermediate keystroke.
+        self.service.record_query(self.query_var.get())
         # Local usage signal — recorded only when the user enabled learning.
         self.service.record_open(result.document_id, self.query_var.get())
         return "break"
@@ -392,6 +506,18 @@ class SearchWindow(tk.Tk):
             self._on_close()
         return "break"
 
+    def _copy_path(self, _event=None):
+        index = self._selected_index()
+        if index is None and self.results:
+            index = 0
+        if index is None:
+            return "break"
+        path = str(self.results[index].path)
+        self.clipboard_clear()
+        self.clipboard_append(path)
+        self._set_status(f"Ruta copiada: {path}")
+        return "break"
+
     def _add_root(self) -> None:
         chosen = filedialog.askdirectory(title="Carpeta a indexar")
         if not chosen:
@@ -412,6 +538,7 @@ class SearchWindow(tk.Tk):
         except Exception:
             log.exception("could not persist window geometry")
         self.closed = True
+        services.unregister_gui_pid(self.service.paths)
         self.destroy()
 
 

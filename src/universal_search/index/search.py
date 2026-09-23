@@ -51,6 +51,36 @@ USAGE_ROWS_SQL = """
 SNIPPET_RADIUS = 80
 
 
+def _filtered_sql(
+    source: str | None, doc_type: str | None
+) -> tuple[str, list[str]]:
+    """Optional SQL-level filters for the results query.
+
+    Both are parameter comparisons against already-indexed columns; no
+    filesystem access happens while evaluating them (spec 009).
+    ``doc_type`` accepts ``pdf`` or ``.pdf`` — stored extensions carry the
+    dot.
+    """
+    extra = ""
+    params: list[str] = []
+    if source:
+        extra += " AND d.source = ?"
+        params.append(source)
+    if doc_type:
+        extra += " AND d.extension = ?"
+        params.append(
+            doc_type if str(doc_type).startswith(".") else f".{doc_type}"
+        )
+    if not extra:
+        return RESULTS_SQL, []
+    return (
+        RESULTS_SQL.replace(
+            "WHERE documents_fts MATCH ?", f"WHERE documents_fts MATCH ?{extra}", 1
+        ),
+        params,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class SearchResult:
     path: Path
@@ -115,6 +145,8 @@ class SearchEngine:
         context: Context | None = None,
         usage: bool = False,
         explain: bool = False,
+        source: str | None = None,
+        doc_type: str | None = None,
     ) -> list[SearchResult]:
         """Rank the index for ``query``.
 
@@ -123,7 +155,9 @@ class SearchEngine:
         boost marks documents preferred by that context. ``usage`` adds the
         local usage signal when the user enabled learning (privacy:
         disabled by default). ``explain`` returns the full scoring
-        breakdown so any personalization can be inspected.
+        breakdown so any personalization can be inspected. ``source`` and
+        ``doc_type`` are SQL-level filters — still pure index queries, the
+        filesystem is never touched during a search.
         """
         terms = query_terms(query)
         if not terms:
@@ -139,14 +173,19 @@ class SearchEngine:
             match = f"({sanitize_query(query)}) OR ({quoted})"
 
         with self.database.connect() as connection:
+            sql, filter_params = _filtered_sql(source, doc_type)
             try:
-                rows = connection.execute(RESULTS_SQL, (match, pool)).fetchall()
+                rows = connection.execute(
+                    sql, [match, *filter_params, pool]
+                ).fetchall()
             except sqlite3.OperationalError:
                 # The query used FTS5 operators incorrectly; retry as plain text.
                 fallback = sanitize_query(query)
                 if not fallback:
                     return []
-                rows = connection.execute(RESULTS_SQL, (fallback, pool)).fetchall()
+                rows = connection.execute(
+                    sql, [fallback, *filter_params, pool]
+                ).fetchall()
             usage_counts = (
                 self._usage_counts(connection, rows) if usage and rows else {}
             )

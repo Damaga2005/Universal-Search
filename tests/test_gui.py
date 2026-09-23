@@ -335,6 +335,104 @@ def test_open_records_usage_signal_only_when_enabled(window, monkeypatch) -> Non
     window.service.engine.clear_usage()
 
 
+def test_filters_apply_to_searches(window, monkeypatch) -> None:
+    captured: dict = {}
+
+    def spy(query, limit=50, **kwargs):
+        captured.clear()
+        captured.update(kwargs)
+        captured["query"] = query
+        return []
+
+    monkeypatch.setattr(window.service, "search", spy)
+    window.query_var.set("practica")
+
+    # no filters by default
+    window._execute_search()
+    assert captured["source"] is None
+    assert captured["doc_type"] is None
+
+    # selecting a filter re-runs the search with it
+    window.source_var.set("onedrive")
+    window.type_var.set("txt")
+    window._on_filter_changed()
+    assert captured["source"] == "onedrive"
+    assert captured["doc_type"] == "txt"
+    assert "Filtro" in window.status_var.get()
+
+    # back to unfiltered for the rest of the suite
+    window.source_var.set("(todas)")
+    window.type_var.set("(todos)")
+    window._execute_search()
+    assert captured["source"] is None
+    assert captured["doc_type"] is None
+
+
+def test_copy_path_recents_and_show_request(window, monkeypatch) -> None:
+    from universal_search import hotkey
+    from universal_search.index.search import SearchResult
+
+    # -- copy path: bound on the results list and observable in the status bar
+    assert_bound(window.listbox, "<Control-c>")
+    result = SearchResult(
+        path=Path(r"C:\docs\nota.md"),
+        name="nota.md",
+        source="local",
+        snippet=None,
+        rank=-1.0,
+        score=0.5,
+        document_id="doc-copy-test",
+    )
+    window._clear_results()
+    window.results = [result]
+    window.listbox.insert(0, "nota.md")
+    window.listbox.selection_set(0)
+    window._copy_path()
+    assert "Ruta copiada" in window.status_var.get()
+    assert window.clipboard_get() == str(result.path)
+
+    # -- recents menu: visible, populated from configuration, applies queries
+    window.service.save_config(
+        replace(
+            window.service.config,
+            recent_queries_enabled=True,
+            recent_queries=("fourier", "memoria final"),
+        )
+    )
+    window._refresh_recent_menu()
+    assert window.recent_button.winfo_manager() == "pack"
+    labels = [
+        window.recent_menu.entrycget(index, "label")
+        for index in range(window.recent_menu.index("end") + 1)
+    ]
+    assert labels == ["fourier", "memoria final"]
+
+    executed: list[str] = []
+    monkeypatch.setattr(
+        window, "_execute_search", lambda: executed.append(window.query_var.get())
+    )
+    window._apply_recent("fourier")
+    assert window.query_var.get() == "fourier"
+    assert executed == ["fourier"]
+    assert window._search_job is None  # runs immediately, no queued duplicate
+
+    # disabled -> the button disappears (recents are optional)
+    window.service.save_config(
+        replace(window.service.config, recent_queries_enabled=False)
+    )
+    window._refresh_recent_menu()
+    assert window.recent_button.winfo_manager() == ""
+
+    # -- show request: worker touches the flag, the window consumes it
+    hotkey.write_gui_pid(window.service.paths)  # our PID: a live window
+    assert hotkey.request_show(window.service.paths) is True
+    assert window.service.paths.show_request_file.exists()
+    window._poll_show_request()
+    assert not window.service.paths.show_request_file.exists()
+    assert "Atajo global" in window.status_var.get()
+    hotkey.clear_gui_pid(window.service.paths)
+
+
 def test_closing_window_does_not_touch_the_indexer(window, monkeypatch) -> None:
     """Closing the GUI must never stop the background worker (spec)."""
     from universal_search.gui import app as gui_app

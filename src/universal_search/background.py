@@ -30,6 +30,7 @@ from pathlib import Path
 
 from universal_search.appconfig import AppConfig, AppPaths
 from universal_search.context import configured_roots
+from universal_search.hotkey import HotkeyServer, launch_gui, request_show
 from universal_search.index.database import SearchDatabase
 from universal_search.index.indexer import IndexStats, Indexer
 
@@ -397,6 +398,7 @@ class BackgroundIndexer:
         interval: float | None = None,
         file_delay: float | None = None,
         observers: bool = True,
+        hotkey_server=None,
     ) -> None:
         self.paths = paths or AppPaths.discover()
         self.stop_event = stop_event or threading.Event()
@@ -410,6 +412,7 @@ class BackgroundIndexer:
         self.database = SearchDatabase(self.paths.database)
         self.indexer = Indexer(self.database)
         self.use_observers = observers
+        self.hotkey_server = hotkey_server  # tests inject a fake server
         self._observer = None
         self._dirty = threading.Event()
         self._last_pass = 0.0
@@ -466,6 +469,47 @@ class BackgroundIndexer:
             except Exception:  # pragma: no cover - best effort on shutdown
                 log.exception("observer shutdown failed")
             self._observer = None
+
+    # -- global hotkey ------------------------------------------------------------
+
+    def _start_hotkey(self) -> None:
+        """Register the global shortcut; failures never stop indexing."""
+        if not self.config.hotkey_enabled:
+            return
+        server = self.hotkey_server
+        if server is None:
+            try:
+                server = HotkeyServer(self.config.hotkey, self._on_hotkey_press)
+            except ValueError as exc:
+                log.warning(
+                    "hotkey inválido en la configuración (%s); atajo desactivado",
+                    exc,
+                )
+                return
+            self.hotkey_server = server
+        try:
+            started = server.start()
+        except Exception:
+            log.exception("no se pudo iniciar el atajo global")
+            return
+        if not started:
+            log.warning(
+                "atajo global no disponible (%s)",
+                getattr(server, "error", None) or getattr(server, "spec", "?"),
+            )
+
+    def _stop_hotkey(self) -> None:
+        if self.hotkey_server is not None:
+            try:
+                self.hotkey_server.stop()
+            except Exception:  # pragma: no cover - best effort shutdown
+                log.exception("hotkey shutdown failed")
+
+    def _on_hotkey_press(self) -> None:
+        """Present the running window, or launch one when there is none."""
+        if request_show(self.paths):
+            return
+        launch_gui()
 
     # -- status -------------------------------------------------------------------
 
@@ -544,6 +588,7 @@ class BackgroundIndexer:
             clear_stop(self.paths)
             self._install_signal_handlers()
             self._start_observers()
+            self._start_hotkey()
             self._set_state(STATE_IDLE, roots=len(configured_roots(self.config)))
             # Initial reconciliation scan (spec requirement).
             self.reconcile()
@@ -584,6 +629,7 @@ class BackgroundIndexer:
             return EXIT_CRASH
         finally:
             self._stop_observers()
+            self._stop_hotkey()
             release_lock(self.paths)
             clear_stop(self.paths)
             if not crashed:

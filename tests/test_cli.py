@@ -199,3 +199,108 @@ def test_cli_search_with_context_and_explain(tmp_path: Path, monkeypatch, capsys
         main()
     assert exit_info.value.code == 1
     assert "desconocido" in capsys.readouterr().err
+
+
+def test_cli_hotkey_and_recent_commands(tmp_path: Path, monkeypatch, capsys) -> None:
+    from universal_search.appconfig import AppConfig, AppPaths
+
+    monkeypatch.setenv("UNIVERSAL_SEARCH_HOME", str(tmp_path / "home"))
+
+    run_cli(monkeypatch, "hotkey", "show")
+    main()
+    shown = capsys.readouterr().out
+    assert "ctrl+alt+s" in shown and "(activado)" in shown
+
+    run_cli(monkeypatch, "hotkey", "set", "win+f2")
+    main()
+    assert "win+f2" in capsys.readouterr().out
+    assert AppConfig.load(AppPaths.discover()).hotkey == "win+f2"
+
+    # an unusable shortcut exits 1, explains itself and changes nothing
+    with pytest.raises(SystemExit) as exit_info:
+        run_cli(monkeypatch, "hotkey", "set", "banana+s")
+        main()
+    assert exit_info.value.code == 1
+    assert "atajo inválido" in capsys.readouterr().err
+    assert AppConfig.load(AppPaths.discover()).hotkey == "win+f2"
+
+    run_cli(monkeypatch, "hotkey", "off")
+    main()
+    assert AppConfig.load(AppPaths.discover()).hotkey_enabled is False
+
+    run_cli(monkeypatch, "recent", "show")
+    main()
+    assert "sin búsquedas recientes" in capsys.readouterr().out
+
+    paths = AppPaths.discover()
+    AppConfig(recent_queries=("fourier", "memoria final")).save(paths)
+    run_cli(monkeypatch, "recent", "show")
+    main()
+    listing = capsys.readouterr().out
+    assert "(recientes activadas)" in listing
+    assert "fourier" in listing and "memoria final" in listing
+
+    run_cli(monkeypatch, "recent", "clear")
+    main()
+    assert "borradas" in capsys.readouterr().out
+    assert AppConfig.load(paths).recent_queries == ()
+
+    run_cli(monkeypatch, "recent", "off")
+    main()
+    assert AppConfig.load(paths).recent_queries_enabled is False
+    run_cli(monkeypatch, "recent", "on")
+    main()
+    assert AppConfig.load(paths).recent_queries_enabled is True
+
+
+def test_cli_search_filters(tmp_path: Path, monkeypatch, capsys) -> None:
+    monkeypatch.setenv("UNIVERSAL_SEARCH_HOME", str(tmp_path / "home"))
+    files = tmp_path / "files"
+    files.mkdir()
+    (files / "termo.md").write_text(
+        "practica de termo aplicada", encoding="utf-8"
+    )
+    (files / "amplificador.txt").write_text(
+        "practica de amplificador clase A", encoding="utf-8"
+    )
+    database = tmp_path / "filters.db"
+    run_cli(monkeypatch, "index", files, "--database", database)
+    main()
+    capsys.readouterr()
+
+    run_cli(monkeypatch, "search", "practica", "--database", database)
+    main()
+    plain = capsys.readouterr().out
+    assert "termo.md" in plain and "amplificador.txt" in plain
+
+    run_cli(
+        monkeypatch, "search", "practica", "--database", database,
+        "--type", "txt",
+    )
+    main()
+    only_txt = capsys.readouterr().out
+    assert "amplificador.txt" in only_txt
+    assert "termo.md" not in only_txt
+
+    run_cli(
+        monkeypatch, "search", "practica", "--database", database,
+        "--source", "local",
+    )
+    main()
+    assert "termo.md" in capsys.readouterr().out
+
+    run_cli(
+        monkeypatch, "search", "practica", "--database", database,
+        "--source", "onedrive",
+    )
+    main()
+    assert capsys.readouterr().out.strip() == ""  # no such source in the index
+
+    # an unknown source is rejected by the argument parser
+    with pytest.raises(SystemExit) as exit_info:
+        run_cli(
+            monkeypatch, "search", "practica", "--database", database,
+            "--source", "s3",
+        )
+        main()
+    assert exit_info.value.code == 2

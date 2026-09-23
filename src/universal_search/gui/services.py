@@ -11,8 +11,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-from universal_search.appconfig import AppConfig, AppPaths
+from universal_search.appconfig import AppConfig, AppPaths, remember_query
 from universal_search.context import get_context
+from universal_search.hotkey import (
+    consume_show_request,
+    write_gui_pid as register_gui_pid,
+    clear_gui_pid as unregister_gui_pid,
+)
 from universal_search.index.database import SearchDatabase
 from universal_search.index.search import SearchEngine, SearchResult
 
@@ -41,11 +46,15 @@ class SearchService:
         limit: int = 50,
         context: str | None = None,
         explain: bool = False,
+        source: str | None = None,
+        doc_type: str | None = None,
     ) -> list[SearchResult]:
         """Search with the active (or explicitly named) personal context.
 
         Context resolution, usage-learning gating and every ranking decision
         live in the core; this method only supplies configuration.
+        ``source``/``doc_type`` are index-level filters (spec 009): queries
+        never scan the filesystem.
         """
         name = context if context is not None else self.config.active_context
         resolved = get_context(self.config, name) if name else None
@@ -55,6 +64,8 @@ class SearchService:
             context=resolved,
             usage=self.config.usage_tracking,
             explain=explain,
+            source=source,
+            doc_type=doc_type,
         )
 
     def record_open(self, document_id: str, query: str) -> None:
@@ -69,6 +80,20 @@ class SearchService:
             self.engine.record_open(document_id, query)
         except Exception:
             log.exception("could not record usage signal")
+
+    def record_query(self, query: str) -> None:
+        """Remember an executed query for the recents menu.
+
+        Optional (``recent_queries_enabled``, default on), local-only, and
+        capped by the shared :func:`remember_query` policy.
+        """
+        updated = remember_query(self.config, query)
+        if updated is self.config:
+            return
+        try:
+            self.save_config(updated)
+        except Exception:
+            log.exception("could not persist recent queries")
 
     def reload_config(self) -> AppConfig:
         self.config = AppConfig.load(self.paths)

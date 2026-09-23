@@ -34,6 +34,14 @@ def main() -> None:
     search.add_argument(
         "--explain", action="store_true", help="show the scoring breakdown"
     )
+    search.add_argument(
+        "--source", choices=("local", "onedrive"), default=None,
+        help="only results from this source",
+    )
+    search.add_argument(
+        "--type", dest="doc_type", default=None,
+        help="only results of this type, e.g. pdf",
+    )
     sub.add_parser("gui", help="launch the desktop search window")
     onedrive = sub.add_parser(
         "onedrive", help="show detected OneDrive roots and file availability"
@@ -98,6 +106,29 @@ def main() -> None:
     )
     usage_clear.add_argument("--database", type=Path, default=Path("universal-search.db"))
 
+    # -- global shortcut ---------------------------------------------------------
+    hotkey = sub.add_parser(
+        "hotkey", help="global shortcut that opens the search window"
+    )
+    hotkey_sub = hotkey.add_subparsers(dest="hotkey_command", required=True)
+    hotkey_sub.add_parser("show", help="show the current shortcut and state")
+    hotkey_set = hotkey_sub.add_parser(
+        "set", help="change the shortcut, e.g. ctrl+alt+s"
+    )
+    hotkey_set.add_argument("spec")
+    hotkey_sub.add_parser("on", help="enable the global shortcut")
+    hotkey_sub.add_parser("off", help="disable the global shortcut")
+
+    # -- recent queries (optional, local-only) ------------------------------------
+    recent = sub.add_parser(
+        "recent", help="recent queries shown in the GUI (optional, local-only)"
+    )
+    recent_sub = recent.add_subparsers(dest="recent_command", required=True)
+    recent_sub.add_parser("show", help="list remembered queries")
+    recent_sub.add_parser("on", help="enable the recents menu")
+    recent_sub.add_parser("off", help="disable the recents menu")
+    recent_sub.add_parser("clear", help="forget every remembered query")
+
     # -- background indexer ------------------------------------------------------
     indexer = sub.add_parser("indexer", help="background indexer lifecycle")
     indexer_sub = indexer.add_subparsers(dest="indexer_command", required=True)
@@ -151,6 +182,14 @@ def main() -> None:
         code = _usage_command(args)
         if code:
             raise SystemExit(code)
+    elif args.command == "hotkey":
+        code = _hotkey_command(args)
+        if code:
+            raise SystemExit(code)
+    elif args.command == "recent":
+        code = _recent_command(args)
+        if code:
+            raise SystemExit(code)
     elif args.command == "gui":
         from universal_search.gui.app import run
 
@@ -179,6 +218,8 @@ def main() -> None:
             context=context,
             usage=config.usage_tracking,
             explain=args.explain,
+            source=args.source,
+            doc_type=args.doc_type,
         )
         for result in results:
             print(
@@ -347,6 +388,84 @@ def _usage_command(args) -> int:
         return 0
 
     return 1  # pragma: no cover - argparse restricts the choices
+
+
+def _hotkey_command(args) -> int:
+    """Global-shortcut presentation; registration happens in the worker."""
+    from dataclasses import replace as _replace
+
+    from universal_search.appconfig import AppConfig, AppPaths
+    from universal_search.hotkey import parse_hotkey
+
+    paths = AppPaths.discover()
+    config = AppConfig.load(paths)
+    command = args.hotkey_command
+
+    if command == "set":
+        try:
+            parse_hotkey(args.spec)
+        except ValueError as exc:
+            print(f"atajo inválido: {exc}", file=sys.stderr)
+            return 1
+        config = _replace(
+            config, hotkey=args.spec.strip().lower(), hotkey_enabled=True
+        )
+        config.save(paths)
+        print(f"atajo global: {config.hotkey}")
+        print("reinicia el indexador para aplicarlo")
+        return 0
+
+    if command in ("on", "off"):
+        config = _replace(config, hotkey_enabled=command == "on")
+        config.save(paths)
+        print(
+            "atajo global activado"
+            if config.hotkey_enabled
+            else "atajo global desactivado"
+        )
+        if config.hotkey_enabled:
+            print("reinicia el indexador para aplicarlo")
+        return 0
+
+    state = "activado" if config.hotkey_enabled else "desactivado"
+    print(f"atajo global: {config.hotkey} ({state})")
+    return 0
+
+
+def _recent_command(args) -> int:
+    """Recent-queries presentation (optional feature, purely local)."""
+    from dataclasses import replace as _replace
+
+    from universal_search.appconfig import AppConfig, AppPaths
+
+    paths = AppPaths.discover()
+    config = AppConfig.load(paths)
+    command = args.recent_command
+
+    if command in ("on", "off"):
+        config = _replace(config, recent_queries_enabled=command == "on")
+        config.save(paths)
+        print(
+            "búsquedas recientes activadas"
+            if config.recent_queries_enabled
+            else "búsquedas recientes desactivadas"
+        )
+        return 0
+
+    if command == "clear":
+        config = _replace(config, recent_queries=())
+        config.save(paths)
+        print("búsquedas recientes borradas")
+        return 0
+
+    state = "activadas" if config.recent_queries_enabled else "desactivadas"
+    print(f"(recientes {state})")
+    if not config.recent_queries:
+        print("sin búsquedas recientes")
+        return 0
+    for entry in config.recent_queries:
+        print(entry)
+    return 0
 
 
 def _indexer_command(args) -> int:
