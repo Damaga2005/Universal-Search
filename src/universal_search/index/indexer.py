@@ -1,5 +1,6 @@
 import hashlib
 import os
+import sqlite3
 import time
 from collections.abc import Callable
 from contextlib import closing
@@ -21,6 +22,13 @@ from universal_search.providers.onedrive import (
 
 
 ContentReader = Callable[[Path], ExtractionResult]
+
+# Reconciliation flushes a transaction every this many changed files: one
+# amortized WAL write instead of a commit per row (profiled: a commit costs
+# as much as reading and extracting the file itself). At most this much work
+# stays uncommitted if the process dies mid-pass; graceful stops commit at
+# the end of the pass because the final commit below always runs.
+COMMIT_EVERY = 200
 
 
 @dataclass
@@ -77,13 +85,37 @@ class IndexStats:
 class Indexer:
     def __init__(self, database: SearchDatabase) -> None:
         self.database = database
+        self._connection: sqlite3.Connection | None = None
+
+    def connection(self) -> sqlite3.Connection:
+        """The one connection every write reuses.
+
+        Profiled on Windows: opening a connection per document and then
+        checkpointing it on last close cost ~12ms of pure overhead each
+        (the WAL checkpoint alone was ~8ms), drowning the ~1ms of real
+        SQL underneath. The connection opens lazily and lives until
+        close(); readers elsewhere in the process are unaffected (WAL).
+        """
+        if self._connection is None:
+            self._connection = self.database.connect()
+        return self._connection
+
+    def close(self) -> None:
+        """Release the shared connection (idempotent)."""
+        if self._connection is not None:
+            self._connection.close()
+            self._connection = None
 
     # -- single document ---------------------------------------------------
 
     def upsert(self, document: Document) -> None:
-        with closing(self.database.connect()) as connection:
+        connection = self.connection()
+        try:
             self._upsert(connection, document)
             connection.commit()
+        except BaseException:
+            connection.rollback()
+            raise
 
     @staticmethod
     def _upsert(
@@ -175,6 +207,7 @@ class Indexer:
         root_path = Path(root).resolve()
         own_files = _own_database_files(self.database.path)
         with closing(self.database.connect()) as connection:
+            pending = 0
             for item in scan_local(root_path, rules):
                 if isinstance(item, IgnoredPath):
                     stats.ignored += 1
@@ -205,7 +238,10 @@ class Indexer:
                         "UPDATE documents SET last_seen_run = ? WHERE id = ?",
                         (run_id, stored["id"]),
                     )
-                    connection.commit()
+                    pending += 1
+                    if pending >= COMMIT_EVERY:
+                        connection.commit()
+                        pending = 0
                     continue
 
                 content: str | None = None
@@ -271,7 +307,10 @@ class Indexer:
                         availability=availability,
                     )
                     stats.updated += 1
-                connection.commit()
+                pending += 1
+                if pending >= COMMIT_EVERY:
+                    connection.commit()
+                    pending = 0
                 if delay:
                     time.sleep(delay)
 

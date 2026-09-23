@@ -100,8 +100,12 @@ def test_query_latency_budget(populated_home) -> None:
             assert results
     mean = sum(samples) / len(samples)
     worst = max(samples)
-    assert mean < 0.15, f"mean query latency {mean * 1000:.1f} ms"
-    assert worst < 0.5, f"worst query latency {worst * 1000:.1f} ms"
+    # Measured 2026-09 after the optimization pass: ~30 ms mean / ~60 ms
+    # worst on this fixture (bench009 on 2000 docs: mean 34.4, p95 46.6).
+    # Budgets stay ~3x the measurement so only a real regression trips
+    # them (pre-optimization mean was 48.6 ms; build was 16x slower).
+    assert mean < 0.1, f"mean query latency {mean * 1000:.1f} ms"
+    assert worst < 0.3, f"worst query latency {worst * 1000:.1f} ms"
 
 
 def test_service_startup_and_first_query_budget(tmp_path) -> None:

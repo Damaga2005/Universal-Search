@@ -30,11 +30,12 @@ are bounded inputs computed by :mod:`universal_search.context`: this module
 stores no personal data, learns nothing and performs no network access.
 """
 
+import hashlib
 import math
 import re
-from collections import Counter
 from dataclasses import dataclass, fields
 from datetime import datetime, timezone
+from functools import lru_cache
 
 
 WORD_RE = re.compile(r"\w+", re.UNICODE)
@@ -60,6 +61,72 @@ def tokens(text: str) -> list[str]:
 def query_terms(query: str) -> tuple[str, ...]:
     """Case-folded word terms of a free-text query, duplicates preserved."""
     return tuple(tokens(query.casefold()))
+
+
+# Bounded cache behind content_words(): keyed by SHA-256 of the content, so
+# a hit is byte-identical text - never a stale approximation. Capped
+# wholesale, trading hit rate for a fixed memory ceiling.
+_CONTENT_WORDS: dict[bytes, tuple[tuple[str, ...], frozenset[str]]] = {}
+_CONTENT_WORDS_CAP = 1024
+
+
+def content_words(content: str) -> tuple[tuple[str, ...], frozenset[str]]:
+    """Case-folded content tokens plus their set, shared across queries.
+
+    One search per keystroke re-scores the same candidate pool, and
+    tokenizing identical text again is pure waste (profiled: the dominant
+    per-query cost). Both values feed the word-based signals below; callers
+    must treat them as read-only.
+    """
+    digest = hashlib.sha256(content.encode("utf-8")).digest()
+    cached = _CONTENT_WORDS.get(digest)
+    if cached is None:
+        words = tuple(tokens(content.casefold()))
+        cached = (words, frozenset(words))
+        if len(_CONTENT_WORDS) >= _CONTENT_WORDS_CAP:
+            _CONTENT_WORDS.clear()
+        _CONTENT_WORDS[digest] = cached
+    return cached
+
+
+@lru_cache(maxsize=4096)
+def _parse_iso(value: str) -> datetime | None:
+    """Parse an ISO-8601 timestamp once per distinct string.
+
+    Every keystroke re-scores the same candidate rows, and
+    ``datetime.fromisoformat`` per candidate per query was measurable
+    overhead. Returns ``None`` for anything invalid, which callers treat
+    as neutral recency (same as the old inline ``except ValueError``).
+    """
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+@lru_cache(maxsize=4096)
+def _name_parts(name: str) -> tuple[tuple[str, ...], str, str]:
+    """(name tokens, name phrase, stem phrase) once per distinct filename.
+
+    Candidates recur on every keystroke; re-tokenizing the name and its
+    stem for each of them was measurable overhead in the per-candidate
+    hot path. ``name`` arrives casefolded, as the caller did before.
+    """
+    name_toks = tokens(name)
+    stem = name.rsplit(".", 1)[0] if "." in name else name
+    return name_toks, " ".join(name_toks), " ".join(tokens(stem))
+
+
+@lru_cache(maxsize=4096)
+def _path_component_tokens(path: str) -> frozenset[str]:
+    """Tokens of ``path``'s parent directories, once per distinct path."""
+    component_tokens: set[str] = set()
+    for component in re.split(r"[\\/]", path)[:-1]:
+        component_tokens.update(tokens(component.casefold()))
+    return frozenset(component_tokens)
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,16 +184,13 @@ class Ranker:
     ) -> dict[str, float]:
         """Compute each normalized signal for one candidate."""
         unique = tuple(dict.fromkeys(terms))
+        unique_set = set(unique)
         name = candidate.name.casefold()
-        stem = name.rsplit(".", 1)[0] if "." in name else name
         phrase = " ".join(unique)
-        name_phrase = " ".join(tokens(name))
-        stem_phrase = " ".join(tokens(stem))
+        name_toks, name_phrase, stem_phrase = _name_parts(name)
         content = candidate.content or ""
-        content_cf = content.casefold()
-        words = tokens(content_cf)
-        word_set = set(words)
-        name_tokens = set(tokens(name))
+        words, word_set = content_words(content)
+        name_tokens = set(name_toks)
 
         signals: dict[str, float] = {}
 
@@ -144,10 +208,7 @@ class Ranker:
 
         # 3. path match — parent directories only, single-character terms are
         #    excluded so drive letters can never dominate.
-        components = re.split(r"[\\/]", candidate.path)[:-1]
-        component_tokens: set[str] = set()
-        for component in components:
-            component_tokens.update(tokens(component.casefold()))
+        component_tokens = _path_component_tokens(candidate.path)
         eligible = [term for term in unique if len(term) >= 2]
         signals["path_match"] = (
             sum(term in component_tokens for term in eligible) / len(eligible)
@@ -155,18 +216,37 @@ class Ranker:
             else 0.0
         )
 
-        # 4. exact phrase match in content
+        # 4/5/6. One pass over the content tokens feeds the phrase check,
+        #    the per-term counts and the positions for proximity — three
+        #    former scans merged into one. This is the per-candidate hot
+        #    path: every keystroke re-runs it for the whole pool.
+        span = len(unique)
+        first = unique[0] if unique else ""
+        counts: dict[str, int] = {}
+        positions: dict[str, list[int]] = {}
+        adjacent = False
+        for index, word in enumerate(words):
+            if word in unique_set:
+                counts[word] = counts.get(word, 0) + 1
+                positions.setdefault(word, []).append(index)
+                if (
+                    span > 1
+                    and word == first
+                    and words[index:index + span] == unique
+                ):
+                    adjacent = True
+
+        # 4. exact phrase in content: the query terms must appear as
+        #    adjacent tokens; token boundaries are respected, so a
+        #    substring inside a longer word can never fake a phrase.
         if not unique:
             signals["phrase_exact"] = 0.0
-        elif len(unique) == 1:
+        elif span == 1:
             signals["phrase_exact"] = 1.0 if unique[0] in word_set else 0.0
         else:
-            signals["phrase_exact"] = (
-                1.0 if " ".join(unique) in " ".join(words) else 0.0
-            )
+            signals["phrase_exact"] = 1.0 if adjacent else 0.0
 
         # 5. term frequency, saturating
-        counts = Counter(word for word in words if word in set(unique))
         signals["term_freq"] = (
             sum(
                 min(counts.get(term, 0) / FREQ_SATURATION, 1.0)
@@ -176,7 +256,7 @@ class Ranker:
         ) if unique else 0.0
 
         # 6. proximity: tightest window covering every term
-        signals["proximity"] = self._proximity(unique, words)
+        signals["proximity"] = self._proximity(unique, positions)
 
         # 7. BM25 relevance, mapped monotonically into [0, 1)
         positive = max(0.0, -candidate.bm25_rank)
@@ -198,13 +278,17 @@ class Ranker:
         return signals
 
     @staticmethod
-    def _proximity(terms: tuple[str, ...], words: list[str]) -> float:
-        if not terms or not words:
+    def _proximity(
+        terms: tuple[str, ...], positions: dict[str, list[int]]
+    ) -> float:
+        """Tightest window covering every term, from precomputed positions.
+
+        ``positions`` comes from the fused pass in :meth:`signals`; a term
+        with no occurrence yields 0.0, exactly as when the positions were
+        rebuilt here from the word list.
+        """
+        if not terms:
             return 0.0
-        positions: dict[str, list[int]] = {}
-        for index, word in enumerate(words):
-            if word in terms:
-                positions.setdefault(word, []).append(index)
         lists = [positions.get(term) for term in terms]
         if any(not item for item in lists):
             return 0.0
@@ -225,16 +309,13 @@ class Ranker:
     def _recency(modified_at: str | None, now: datetime | None) -> float:
         if not modified_at:
             return NEUTRAL_RECENCY
-        try:
-            modified = datetime.fromisoformat(modified_at)
-            if modified.tzinfo is None:
-                modified = modified.replace(tzinfo=timezone.utc)
-            reference = now or datetime.now(timezone.utc)
-            if reference.tzinfo is None:
-                reference = reference.replace(tzinfo=timezone.utc)
-            age_days = max((reference - modified).days, 0)
-        except ValueError:
+        modified = _parse_iso(modified_at)
+        if modified is None:
             return NEUTRAL_RECENCY
+        reference = now or datetime.now(timezone.utc)
+        if reference.tzinfo is None:
+            reference = reference.replace(tzinfo=timezone.utc)
+        age_days = max((reference - modified).days, 0)
         return RECENCY_FLOOR + (1.0 - RECENCY_FLOOR) * math.exp(
             -age_days / RECENCY_DECAY_DAYS
         )
@@ -275,10 +356,19 @@ class Ranker:
         context_boost: float = 0.0,
         now: datetime | None = None,
     ) -> float:
-        return self.contributions(
+        """Final score for ``candidate`` — fast path without explain dict.
+
+        Numerically identical to ``contributions(...)[1]``: it only skips
+        the per-signal points dict that the explain path requires.
+        """
+        signals = self.signals(
             candidate,
             terms,
             usage_boost=usage_boost,
             context_boost=context_boost,
             now=now,
-        )[1]
+        )
+        weights = self.weights
+        return sum(
+            getattr(weights, name) * value for name, value in signals.items()
+        ) / weights.total
