@@ -41,10 +41,15 @@ the GUI stays fully decoupled from the core.
   `packaging/universal_search.ico` (magnifier on a blue rounded tile) using
   **only the standard library** (custom PNG encoder + ICO container), sizes
   16/32/48/64/256.
-- **Packaging**: `packaging/entry-gui.py`, `packaging/universal-search.spec`
-  (PyInstaller, `console=False`, icon attached), optional extra
-  `.[build] = pyinstaller`; `packaging/make-shortcut.ps1` creates a Start Menu
-  shortcut via `WScript.Shell`.
+- **Packaging** (build executed and verified): `packaging/entry-gui.py` is a
+  dispatcher — with arguments it runs the CLI, without them it opens the
+  window — so a frozen deployment still supports `indexer start/autostart`.
+  `packaging/universal-search.spec` (PyInstaller, icon attached) produces one
+  folder with **two executables sharing a single runtime**:
+  `UniversalSearch.exe` (windowed, `console=False`) and
+  `universal-search.exe` (console, for CLI + background indexer). Optional
+  extra `.[build] = pyinstaller`; `packaging/make-shortcut.ps1` creates a
+  Start Menu shortcut via `WScript.Shell`.
 
 ## Technical decisions
 
