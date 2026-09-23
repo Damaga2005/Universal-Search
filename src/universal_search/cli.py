@@ -1,4 +1,5 @@
 import argparse
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -208,6 +209,27 @@ def main() -> None:
         help="index database (default: the user data directory)",
     )
 
+    # -- privacy ----------------------------------------------------------------
+    privacy = sub.add_parser(
+        "privacy", help="what is stored, where, and how to remove it"
+    )
+    privacy_sub = privacy.add_subparsers(dest="privacy_command", required=True)
+    privacy_show = privacy_sub.add_parser(
+        "show", help="data inventory with measured sizes (nothing leaves the machine)"
+    )
+    privacy_show.add_argument(
+        "--database", type=Path, default=default_database,
+        help="index database (default: the user data directory)",
+    )
+    privacy_forget = privacy_sub.add_parser(
+        "forget", help="stop indexing one file and delete its derived data"
+    )
+    privacy_forget.add_argument("path", type=Path)
+    privacy_forget.add_argument(
+        "--database", type=Path, default=default_database,
+        help="index database (default: the user data directory)",
+    )
+
     # -- index diagnostics and repair -------------------------------------------
     diagnose = sub.add_parser(
         "diagnose", help="index statistics, health checks and repairs"
@@ -272,6 +294,10 @@ def main() -> None:
         if records and records[-1].get("kind") == "index":
             last = records[-1]
             print(f"elapsed={last['duration_s']}s db_writes={last['db_writes']}")
+    elif args.command == "privacy":
+        code = _privacy_command(args)
+        if code:
+            raise SystemExit(code)
     elif args.command == "diagnose":
         code = _diagnose_command(args)
         if code:
@@ -378,6 +404,48 @@ def main() -> None:
                     else ""
                 )
                 print(f"  score={result.score:.3f}  {breakdown}{notes}\n")
+
+
+def _privacy_command(args) -> int:
+    """Data inventory and per-document removal (spec 018)."""
+    from universal_search.privacy import forget, inventory_report
+
+    database = SearchDatabase(args.database)
+    if args.privacy_command == "forget":
+        try:
+            result = forget(database, args.path)
+        except sqlite3.OperationalError as exc:
+            # Another process holds the index: say so instead of crashing.
+            print(
+                f"Could not write to the index ({exc}). Close the window "
+                f"and the indexer, then try again.",
+                file=sys.stderr,
+            )
+            return 1
+        if not result.total:
+            print(f"{args.path} is not in the index.", file=sys.stderr)
+            return 1
+        print(
+            f"Forgotten: {result.total} row(s) for {result.path} "
+            f"({result.documents} document, {result.search_rows} search, "
+            f"{result.derived_rows} derived, {result.usage_rows} usage). "
+            f"The file itself was not touched."
+        )
+        return 0
+
+    report = inventory_report(database)
+    print(f"index:            {report['index']}")
+    print(f"application home: {report['application_home']}")
+    print("sizes:")
+    for name, size in (report["bytes"] or {}).items():
+        print(f"  {name:<8} {_format_bytes(size)}")
+    print("stored data (nothing leaves this machine):")
+    for item in report["items"]:
+        marker = " (optional)" if item["optional"] else ""
+        print(f"  {item['key']}{marker}: {item['what']}")
+        print(f"      where:      {item['where']}")
+        print(f"      deletion:   {item['deletion']}")
+    return 0
 
 
 def _format_bytes(value: int) -> str:

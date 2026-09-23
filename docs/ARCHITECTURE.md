@@ -74,10 +74,14 @@ logic lives in the UI.
   them with every OS touchpoint injectable (`startfile`, `popen`, `winreg`,
   `user32`); `NullPlatform` answers honestly elsewhere. The core imports
   none of it directly, so the suite runs — and passes — on any OS.
+- **Privacy** (`universal_search/privacy.py`, spec 018): the data inventory
+  as data — what is stored, why, how long, and how to delete it — plus
+  `forget()`, which removes a document and everything derived from it while
+  leaving the file alone. See `docs/PRIVACY.md`.
 - **Presentation**:
   - `cli.py` — `index | search | gui | onedrive | context | usage | hotkey
-    | recent | indexer | intelligence | diagnose …` (diagnostics and
-    control) plus `--version`.
+    | recent | indexer | intelligence | diagnose | privacy …`
+    (diagnostics and control) plus `--version`.
   - `gui/` — Tk window (`app.py`, view only) + service layer (`services.py`,
     testable without Tk). `appconfig.py` provides paths/config/logging.
     The service turns a `QueryError` into `last_query_error` so the window

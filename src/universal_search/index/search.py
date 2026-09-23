@@ -24,15 +24,19 @@ from universal_search.query import parse_query, translate
 # metadata table.  Joining `documents` for every matched row before the
 # LIMIT cost ~6ms on a 2000-doc index; evaluated over the pool only the
 # same query runs in ~10.5ms instead of ~16.7ms (profiled, 2026-09).
+#
+# The snippet is NOT built by FTS5 `snippet()`: that function walks every
+# phrase instance, so one document that repeats a term thousands of times
+# took 1.9 s (and >150 s at 2 MB) while MATCH and bm25 stayed instant
+# (measured, phase 018). `build_snippet()` below is a single linear pass,
+# so latency no longer depends on how often a term occurs.
 RESULTS_SQL = """
     SELECT d.path, d.name, d.source, d.extension, d.modified_at,
            d.availability, d.id AS document_id,
            f.content AS content,
-           f.snippet AS snippet,
            f.rank AS rank
     FROM (
         SELECT document_id, content,
-               snippet(documents_fts, 3, '[', ']', '…', 18) AS snippet,
                bm25(documents_fts) AS rank
         FROM documents_fts
         WHERE documents_fts MATCH ?
@@ -148,8 +152,11 @@ def filters_only_results(
 def build_snippet(content: str | None, terms: tuple[str, ...]) -> str | None:
     """Short excerpt of ``content`` centred on the first matching term.
 
-    Used when the FTS snippet carries no highlight (name/path-only matches),
-    which previously leaked the whole content into the result list.
+    Replaces FTS5's ``snippet()`` (phase 018): that function walks every
+    phrase instance, so its cost grows with how often a term occurs — a
+    log with 10 000 mentions of one word took 1.9 s. This is a single
+    linear pass with a bounded window, so a pathological document costs
+    the same order as a normal one.
     """
     if not content or not terms:
         return None
@@ -342,11 +349,9 @@ class SearchEngine:
 
         results: list[SearchResult] = []
         for score, candidate, row, points, notes in ranked[:limit]:
-            fts_snippet = row["snippet"]
-            if fts_snippet and "[" in fts_snippet and "]" in fts_snippet:
-                snippet = fts_snippet
-            else:
-                snippet = build_snippet(candidate.content, terms)
+            # One linear pass over the content, bounded window: latency
+            # does not depend on how many times a term occurs (phase 018).
+            snippet = build_snippet(candidate.content, terms)
             results.append(
                 SearchResult(
                     path=Path(candidate.path),

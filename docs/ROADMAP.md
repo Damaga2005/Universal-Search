@@ -43,7 +43,7 @@
 - [x] Index diagnostics & maintenance (015)
 - [x] Windows integration (016)
 - [x] UX & accessibility (017)
-- [ ] Privacy & security hardening (018)
+- [x] Privacy & security hardening (018)
 - [ ] Provider & extension architecture (019)
 - [ ] Production release & reliability (020)
 

@@ -46,7 +46,10 @@ phase 016 isolated every Windows touchpoint behind a `platforms` adapter,
 enforced single-instance window behaviour and added per-user Start Menu
 and Explorer integration scripts; phase 017 moved search off the UI thread,
 added loading / empty / error states, a central light-dark theme, scalable
-type and focused results rows — **465 passing tests**.
+type and focused results rows; phase 018 documented the threat model and
+data inventory, added `privacy forget`, and fixed a real availability bug:
+FTS5's `snippet()` walked every phrase instance, so one document repeating
+a term 10 000 times took 1.9 s per search — **489 passing tests**.
 
 | Fase | Entrega | Estado |
 |------|---------|--------|
@@ -67,6 +70,7 @@ type and focused results rows — **465 passing tests**.
 | 015 | Diagnóstico y mantenimiento del índice | ✅ |
 | 016 | Integración con Windows (adaptador, shell) | ✅ |
 | 017 | UX y accesibilidad (hilo, tema, estados) | ✅ |
+| 018 | Privacidad y seguridad (inventario, forget) | ✅ |
 
 Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
 by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).
@@ -101,6 +105,10 @@ universal-search diagnose summary
 universal-search diagnose health             # exit 0 ok / 1 warnings / 2 fatal
 universal-search diagnose repair reconcile C:\Users\me\Docs
 universal-search diagnose repair all --root C:\Users\me\Docs --yes
+
+# privacy: what is stored, and how to make it go away
+universal-search privacy show
+universal-search privacy forget C:\Users\me\Docs\informe.pdf
 
 # background indexer — runs independently; closing the GUI does not stop it
 universal-search indexer start     # detached worker (single instance)
@@ -142,4 +150,4 @@ python -m evaluation --flip recency diagrama   # headroom of one ranking weight
 Development prompts live in `docs/development/`, with a per-phase report for
 each completed phase. Documentation hub with the roadmap status:
 [`docs/README.md`](docs/README.md). Architecture: `docs/ARCHITECTURE.md`.
-Ranking: `docs/RANKING.md`. Roadmap: `docs/ROADMAP.md`.
+Ranking: `docs/RANKING.md`. Privacy: `docs/PRIVACY.md`. Roadmap: `docs/ROADMAP.md`.

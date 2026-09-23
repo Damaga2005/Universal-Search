@@ -143,6 +143,24 @@ def release_lock(paths: AppPaths, pid: int | None = None) -> None:
 
 # -- status (atomic) ------------------------------------------------------------
 
+def _replace_with_retry(temporary: Path, target: Path, attempts: int = 5) -> None:
+    """``os.replace`` with a short retry.
+
+    Windows can hold the destination open for a few milliseconds (a
+    virus scanner, an indexer, the reader of the status file itself), and
+    the worker writes this file continuously: a lost status write is a
+    transient "the indexer looks stuck" for the user.
+    """
+    for attempt in range(attempts):
+        try:
+            os.replace(temporary, target)
+            return
+        except PermissionError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(0.02)
+
+
 def write_status(
     paths: AppPaths,
     state: str,
@@ -168,7 +186,7 @@ def write_status(
         payload["roots"] = roots
     temporary = paths.status_file.with_name(paths.status_file.name + ".tmp")
     temporary.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-    os.replace(temporary, paths.status_file)
+    _replace_with_retry(temporary, paths.status_file)
 
 
 def read_status(paths: AppPaths) -> dict | None:
