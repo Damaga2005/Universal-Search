@@ -28,6 +28,7 @@ El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
 | 019 | Arquitectura de proveedores y extensión | ✅ Completada | [019-provider-plugin-architecture.md](development/019-provider-plugin-architecture.md) | [informe](development/019-provider-plugin-architecture-report.md) |
 | 020 | Release de producción y fiabilidad | ✅ Completada | [020-production-release.md](development/020-production-release.md) | [informe](development/020-production-release-report.md) |
 | 021 | Bandeja de notificación y experiencia en segundo plano | ✅ Completada | [021-tray-and-background-experience.md](development/021-tray-and-background-experience.md) | [informe](development/021-tray-and-background-experience-report.md) |
+| 022 | Grafo local de documentos relacionados | ✅ Completada | [022-related-document-graph.md](development/022-related-document-graph.md) | [informe](development/022-related-document-graph-report.md) |
 
 Verificado en la fase 010: **208 tests en verde**
 (`.venv\Scripts\python -m pytest`), E2E completo de indexador, CLI, GUI e
@@ -35,9 +36,9 @@ instalador. Posteriormente, pasada de auditoría + optimización con
 perfilado: indexación ×16 (2000 docs 45,3s → 2,8s) y consulta media
 48,6 → 34,4 ms —
 [informe](development/optimization-report.md). La verificación más reciente,
-fase 021, deja **646 tests passed y 2 skipped**, pyflakes limpio y el paquete
-PyInstaller validado; detalles y límites en el
-[informe de la fase 021](development/021-tray-and-background-experience-report.md).
+fase 022, deja **681 tests passed y 2 skipped**, pyflakes limpio y un grafo
+local acotado; detalles y límites en el
+[informe de la fase 022](development/022-related-document-graph-report.md).
 
 ## Cómo ejecutar
 
@@ -69,5 +70,5 @@ Construir los ejecutables: ver «Build the Windows executables» en el
 Cada fase se considera terminada solo cuando: todos los tests pasan (los
 anteriores incluidos), hay cobertura de tests propia, se documenta en un
 informe y se marca en `ROADMAP.md`. Las fases entregadas siguen esa convención.
-El alcance pendiente, desde el grafo de documentos relacionados hasta las fases
-022–030, queda reflejado en `ROADMAP.md`.
+El alcance pendiente desde la fase 023 hasta la 030 queda reflejado en
+`ROADMAP.md`.

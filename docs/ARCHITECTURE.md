@@ -35,7 +35,7 @@ lives in the UI.
   - `database.py` — SQLite metadata + FTS5 (`unicode61`); per-connection
     pragmas (WAL, `synchronous=NORMAL`, 16 MB page cache, 256 MB mmap) and
     a schema-present gate so reconnects skip DDL (migrations still run).
-    Schema version 5: additive migrations, a `schema_migrations` ledger,
+    Schema version 6: additive migrations, a `schema_migrations` ledger,
     consistent `backup()` and **downgrade refusal** — an index written by
     a newer build raises `UnsupportedSchemaVersion` instead of being
     silently re-stamped (spec 020).
@@ -63,15 +63,23 @@ lives in the UI.
     returns those rows newest first with score 0.0. Scoring,
     context/usage/explain (phase 008), snippets with FTS highlight markers
     stripped for display.
-- **Intelligence** (`universal_search/intelligence/`, spec 014): a pure,
-  deterministic analysis pipeline over already-indexed text — `language.py`
-  (function-word profiles, shared stop-word list), `structure.py` (title,
-  headings, sections), `keywords.py` (bounded term vector and
-  co-occurrence pairs), `analysis.py` (orchestration, per-document work
-  cap) and `store.py` (versioned `document_intelligence` rows, incremental
-  `rebuild`, `related` by cosine over term vectors). Derived data only:
-  **search never reads it**, deleting it costs nothing, and document
-  similarity is computed without the ranking formula.
+- **Intelligence** (`universal_search/intelligence/`, specs 014 and 022): a
+  pure, deterministic analysis pipeline over already-indexed text —
+  `language.py` (function-word profiles, shared stop-word list),
+  `structure.py` (title, headings, sections), `keywords.py` (bounded term
+  vector and co-occurrence pairs), `analysis.py` (orchestration and the
+  `DocumentRecord` boundary), and `store.py` (versioned
+  `document_intelligence` rows and incremental rebuild). `graph.py` owns the
+  optional derived relationship graph: bounded normalized terms, weighted
+  keyword/title/heading/phrase/directory/reference/provider signals, stored
+  evidence, graph and preprocessing versions, capped inverted postings,
+  fixed-size alias/mention candidate aggregation, durable dirty markers,
+  transactional FTS hash repair, cursor-paged batched orphan cleanup,
+  deterministic full rebuilds and bounded incremental repair.
+  `GraphStore.related()` is the
+  only graph lookup; `SearchEngine` and ranking never read these tables.
+  Derived data only: **search never reads it**, deleting it costs nothing, and
+  document similarity is computed without the ranking formula.
 - **Diagnostics** (`universal_search/diagnostics/`, spec 015): read-only by
   default — `stats.py` (`collect`: counts, sizes, schema, worker state),
   `health.py` (`check`: twelve checks, `ok`/`warning`/`fatal`) and
@@ -108,7 +116,11 @@ lives in the UI.
     worker thread and are delivered through a queue that the Tk main loop
     drains, with a generation number so a stale answer can never replace a
     newer one. `theme.py` owns every colour and font size, `rows.py` the
-    result-line format (both pure, both testable without a display).
+    result-line format (both pure, both testable without a display). The
+    service also owns related-document lookup; the window presents a small
+    ranked evidence list from the existing Diagnostic menu rather than a
+    graph visualization. Related work uses a worker/queue/generation path so
+    a first graph rebuild cannot freeze Tk.
   - `hotkey.py` — global shortcut server (phase 009), hosted by the worker.
     A hotkey that cannot be registered is reported in the worker status
     file, so a dead shortcut is visible instead of silent. The window is
@@ -232,7 +244,7 @@ the seam described above.
 versioning, the migration and downgrade rules, the build, the installer,
 the manual update strategy (no auto-updater, by decision), the release
 checklist, the final quality gate with recorded results, and the known
-issues. `CHANGELOG.md` records what changed in phases 011–021.
+issues. `CHANGELOG.md` records what changed in phases 011–022.
 
 ## Data, dependencies, non-goals
 
@@ -245,4 +257,4 @@ issues. `CHANGELOG.md` records what changed in phases 011–021.
   privileged daemon. Settings and diagnostics stay in the existing window;
   autostart remains the worker's `indexer run` command.
 - Delivered phases plug into this layering without moving core logic into a
-  frontend. Still open: the related-document graph and planned phases 022–030.
+  frontend. Still open: planned phases 023–030.

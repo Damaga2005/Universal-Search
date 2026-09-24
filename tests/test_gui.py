@@ -275,6 +275,90 @@ def test_cloud_only_result_shows_onedrive_marker(window) -> None:
     assert "☁" in text
 
 
+def test_related_window_lists_ranked_evidence(window, monkeypatch) -> None:
+    from universal_search.index.search import SearchResult
+    from universal_search.intelligence.graph import (
+        RelatedDocument,
+        RelationshipEvidence,
+    )
+
+    result = SearchResult(
+        path=Path(r"C:\docs\bjt.md"),
+        name="bjt.md",
+        source="local",
+        snippet=None,
+        rank=-1.0,
+        score=0.5,
+        document_id="bjt-id",
+    )
+    window._clear_results()
+    window.results = [result]
+    window.listbox.insert(0, "bjt.md")
+    window.listbox.selection_set(0)
+    monkeypatch.setattr(
+        window.service,
+        "related",
+        lambda reference: [
+            RelatedDocument(
+                document_id="notes-id",
+                score=0.8,
+                evidence=(
+                    RelationshipEvidence("phrase_overlap", 0.9, ("ebers moll",)),
+                ),
+                name="notes.md",
+                path=r"C:\docs\notes.md",
+            )
+        ],
+    )
+
+    window._show_related()
+    assert window.pump()
+
+    assert window.related_window is not None
+    children = window.related_window.winfo_children()
+    listboxes = [
+        child for child in children if child.winfo_class() == "Listbox"
+    ]
+    # The list is inside a frame, so inspect the frame child as well.
+    if not listboxes:
+        frames = [child for child in children if child.winfo_class() == "TFrame"]
+        listboxes = [
+            nested
+            for frame in frames
+            for nested in frame.winfo_children()
+            if nested.winfo_class() == "Listbox"
+        ]
+    assert listboxes
+    assert "notes.md" in listboxes[0].get(0)
+    assert "phrase_overlap" in listboxes[0].get(0)
+    window.related_window.destroy()
+    window.related_window = None
+
+
+def test_related_lookup_does_not_block_the_tk_thread(window, monkeypatch) -> None:
+    import threading
+
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_related(_reference):
+        started.set()
+        release.wait(0.4)
+        return []
+
+    monkeypatch.setattr(window.service, "related", slow_related)
+    began = time.monotonic()
+    window._show_related("slow-id")
+    elapsed = time.monotonic() - began
+
+    assert elapsed < 0.2
+    assert started.wait(0.5)
+    assert window._related_inflight == 1
+    assert window.related_window is None
+    release.set()
+    assert window.pump()
+
+
 def test_context_combobox_selects_and_persists(window, monkeypatch) -> None:
     window.service.save_config(
         replace(

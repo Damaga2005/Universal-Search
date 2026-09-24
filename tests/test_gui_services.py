@@ -67,6 +67,23 @@ def test_service_finds_indexed_documents(tmp_path: Path) -> None:
     assert [result.name for result in results] == ["capacitor.md"]
 
 
+def test_service_exposes_ranked_related_documents_with_evidence(tmp_path: Path) -> None:
+    files = tmp_path / "files"
+    files.mkdir()
+    (files / "bjt.md").write_text("BJT transistor Ebers-Moll model", encoding="utf-8")
+    (files / "notes.md").write_text("BJT transistor Ebers-Moll notes", encoding="utf-8")
+    service = SearchService(
+        database_path=tmp_path / "index.db", paths=AppPaths(tmp_path / "home")
+    )
+    Indexer(service.database).index_root(files)
+
+    related = service.related("bjt.md")
+
+    assert [item.name for item in related] == ["notes.md"]
+    assert related[0].evidence
+    assert any(item.kind == "phrase_overlap" for item in related[0].evidence)
+
+
 # -- open and reveal -------------------------------------------------------------
 
 def test_open_path_uses_the_platform(tmp_path: Path, monkeypatch) -> None:

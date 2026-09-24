@@ -69,6 +69,72 @@ CREATE TABLE IF NOT EXISTS document_intelligence (
 CREATE INDEX IF NOT EXISTS document_intelligence_language
     ON document_intelligence(language);
 
+-- Phase 022 derived relationship graph. These tables are local, disposable
+-- and rebuilt from canonical documents; search and ranking never read them.
+CREATE TABLE IF NOT EXISTS document_graph_nodes (
+    document_id TEXT PRIMARY KEY,
+    version INTEGER NOT NULL,
+    preprocessing_version INTEGER NOT NULL,
+    generation TEXT NOT NULL,
+    name TEXT NOT NULL,
+    path TEXT NOT NULL,
+    source TEXT NOT NULL,
+    content_hash TEXT,
+    language TEXT,
+    title TEXT,
+    headings TEXT NOT NULL DEFAULT '[]',
+    terms TEXT NOT NULL DEFAULT '[]',
+    normalized_terms TEXT NOT NULL DEFAULT '[]',
+    phrases TEXT NOT NULL DEFAULT '[]',
+    context TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS document_graph_edges (
+    source_document_id TEXT NOT NULL,
+    target_document_id TEXT NOT NULL,
+    edge_type TEXT NOT NULL,
+    relationship_type TEXT NOT NULL,
+    weight REAL NOT NULL,
+    evidence TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    preprocessing_version INTEGER NOT NULL,
+    generation TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(source_document_id, target_document_id, edge_type),
+    CHECK(source_document_id <> target_document_id)
+);
+
+CREATE TABLE IF NOT EXISTS document_graph_terms (
+    term TEXT NOT NULL,
+    document_id TEXT NOT NULL,
+    weight REAL NOT NULL,
+    version INTEGER NOT NULL,
+    preprocessing_version INTEGER NOT NULL,
+    generation TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(term, document_id)
+);
+
+CREATE TABLE IF NOT EXISTS document_graph_metadata (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS document_graph_edges_source
+    ON document_graph_edges(source_document_id, weight DESC, target_document_id);
+CREATE INDEX IF NOT EXISTS document_graph_edges_target
+    ON document_graph_edges(target_document_id, weight DESC, source_document_id);
+CREATE INDEX IF NOT EXISTS document_graph_terms_term
+    ON document_graph_terms(term, document_id);
+CREATE INDEX IF NOT EXISTS document_graph_terms_document
+    ON document_graph_terms(document_id, term);
+CREATE INDEX IF NOT EXISTS document_graph_nodes_generation
+    ON document_graph_nodes(generation, version);
+
 -- Forward-only migration ledger (spec 020). One row per schema version
 -- this database has actually been stamped with; append-only, so it is an
 -- audit trail rather than state. A database newer than this build refuses
@@ -99,7 +165,7 @@ MIGRATIONS = (
 # (tests/test_release.py enforces the stamp on fresh and legacy databases).
 # Adding an object to SCHEMA also upgrades existing databases: the
 # schema-present gate sees a missing object and re-runs the idempotent DDL.
-SCHEMA_VERSION = 5  # + schema_migrations ledger and downgrade refusal (020)
+SCHEMA_VERSION = 6  # + versioned related-document graph (022)
 
 # Every object SCHEMA creates. When all of them already exist the idempotent
 # DDL is skipped: one indexed sqlite_master lookup replaces re-parsing the
@@ -111,6 +177,15 @@ SCHEMA_OBJECTS = (
     "documents_fts",
     "document_intelligence",
     "document_intelligence_language",
+    "document_graph_nodes",
+    "document_graph_edges",
+    "document_graph_terms",
+    "document_graph_metadata",
+    "document_graph_edges_source",
+    "document_graph_edges_target",
+    "document_graph_terms_term",
+    "document_graph_terms_document",
+    "document_graph_nodes_generation",
     "schema_migrations",
 )
 

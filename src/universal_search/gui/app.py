@@ -54,8 +54,13 @@ class SearchWindow(tk.Tk):
         self._search_job: str | None = None
         self._result_poll: str | None = None
         self._results_queue: queue.Queue = queue.Queue()
+        self._related_queue: queue.Queue = queue.Queue()
         self._generation = 0
+        self._related_generation = 0
         self._inflight = 0
+        self._related_inflight = 0
+        self._related_poll: str | None = None
+        self.related_window: tk.Toplevel | None = None
         self.closed = False
 
         # Theme and scaling resolved once, from configuration (spec 017).
@@ -185,6 +190,9 @@ class SearchWindow(tk.Tk):
         diagnose_menu = tk.Menu(menu, tearoff=0)
         diagnose_menu.add_command(
             label="Estado del índice", command=self._show_diagnostics
+        )
+        diagnose_menu.add_command(
+            label="Documentos relacionados...", command=self._show_related
         )
         diagnose_menu.add_separator()
         diagnose_menu.add_command(
@@ -404,8 +412,10 @@ class SearchWindow(tk.Tk):
             self.update()
             idle = (
                 self._inflight == 0
+                and self._related_inflight == 0
                 and self._search_job is None
                 and self._results_queue.empty()
+                and self._related_queue.empty()
             )
             if idle:
                 # One more cycle so a result queued by a worker that just
@@ -560,6 +570,104 @@ class SearchWindow(tk.Tk):
         text.insert("1.0", report)
         text.configure(state="disabled")
         text.pack(side="top", fill="both", expand=True, padx=8, pady=8)
+
+    def _show_related(self, document_id: str | None = None) -> None:
+        """Load a small ranked evidence list without blocking Tk."""
+        reference = document_id
+        if reference is None:
+            index = self._selected_index()
+            if index is None or not self.results:
+                self._set_status("Selecciona un resultado para ver relacionados")
+                return
+            result = self.results[index]
+            reference = result.document_id or str(result.path)
+        self._related_generation += 1
+        generation = self._related_generation
+        self._related_inflight += 1
+        self._set_status("Cargando documentos relacionados…")
+
+        def work() -> None:
+            try:
+                related = self.service.related(reference)
+            except Exception as exc:  # pragma: no cover - defensive
+                log.exception("could not load related documents")
+                self._related_queue.put((generation, [], str(exc)))
+            else:
+                self._related_queue.put((generation, related, None))
+
+        threading.Thread(target=work, name="related", daemon=True).start()
+        self._poll_related()
+
+    def _poll_related(self) -> None:
+        """Drain related work on the Tk thread, dropping stale generations."""
+        if self.closed:
+            return
+        while True:
+            try:
+                generation, related, failure = self._related_queue.get_nowait()
+            except queue.Empty:
+                break
+            self._related_inflight = max(0, self._related_inflight - 1)
+            if generation != self._related_generation:
+                continue
+            if failure is not None:
+                self._set_status("No se pudieron cargar los relacionados")
+                continue
+            self._render_related(related)
+        self._related_poll = self.after(RESULT_POLL_MS, self._poll_related)
+
+    def _render_related(self, related) -> None:
+        """Create the evidence list after the worker has finished."""
+        if self.related_window is not None:
+            try:
+                if self.related_window.winfo_exists():
+                    self.related_window.destroy()
+            except tk.TclError:
+                pass
+        window = tk.Toplevel(self)
+        self.related_window = window
+        window.title("Documentos relacionados")
+        window.geometry("760x360")
+        ttk.Label(
+            window,
+            text="Relaciones locales; no cambian la relevancia de la búsqueda.",
+            padding=(10, 8),
+        ).pack(anchor="w")
+        frame = ttk.Frame(window, padding=(10, 0, 10, 10))
+        frame.pack(fill="both", expand=True)
+        if not related:
+            ttk.Label(frame, text="No hay documentos relacionados.").pack(anchor="nw")
+            return
+        listbox = tk.Listbox(
+            frame,
+            selectmode="browse",
+            exportselection=False,
+            activestyle="none",
+            relief="flat",
+            highlightthickness=1,
+            highlightcolor=self.theme.accent,
+            highlightbackground=self.theme.background,
+            background=self.theme.background,
+            foreground=self.theme.foreground,
+            selectbackground=self.theme.selection_background,
+            selectforeground=self.theme.selection_foreground,
+        )
+        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=listbox.yview)
+        listbox.configure(yscrollcommand=scrollbar.set)
+        listbox.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        for item in related:
+            evidence = []
+            for detail in getattr(item, "evidence", ()):
+                values = ", ".join(getattr(detail, "values", ()))
+                evidence.append(
+                    f"{getattr(detail, 'kind', 'signal')}"
+                    + (f": {values}" if values else "")
+                )
+            reason = "; ".join(evidence[:3]) or "relación local"
+            name = getattr(item, "name", "") or item.document_id
+            listbox.insert("end", f"{item.score:.3f}  {name}  —  {reason}")
+        self._set_status(f"{len(related)} documento(s) relacionado(s)")
 
     def _rebuild_index(self) -> None:
         """Full rebuild, behind an explicit confirmation (never implied)."""

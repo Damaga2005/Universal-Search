@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import os
 import sqlite3
 import time
@@ -23,6 +24,7 @@ from universal_search.providers.onedrive import (
 
 
 ContentReader = Callable[[Path], ExtractionResult]
+log = logging.getLogger("universal_search.indexer")
 
 # Reconciliation flushes a transaction every this many changed files: one
 # amortized WAL write instead of a commit per row (profiled: a commit costs
@@ -107,16 +109,45 @@ class Indexer:
             self._connection.close()
             self._connection = None
 
+    def _invalidate_graph(self, document_ids: set[str]) -> None:
+        """Refresh optional derived edges without making indexing depend on them."""
+        try:
+            from universal_search.intelligence.graph import GraphStore
+
+            GraphStore(self.database).invalidate(document_ids)
+        except Exception:
+            # The dirty marker was committed with the canonical write.  A
+            # later related() lookup repairs this state; indexing itself must
+            # not fail because an optional derived layer is unavailable.
+            log.exception("graph invalidation deferred to dirty-marker repair")
+            return
+
+    @staticmethod
+    def _mark_graph_dirty(connection, document_ids: set[str]) -> None:
+        if not document_ids:
+            return
+        from universal_search.intelligence.graph import mark_graph_dirty
+
+        mark_graph_dirty(connection, document_ids)
+
     # -- single document ---------------------------------------------------
 
     def upsert(self, document: Document) -> None:
         connection = self.connection()
+        previous = connection.execute(
+            "SELECT id FROM documents WHERE path = ?", (str(document.path),)
+        ).fetchone()
+        touched = {document.id}
+        if previous is not None:
+            touched.add(str(previous["id"]))
         try:
             self._upsert(connection, document)
+            self._mark_graph_dirty(connection, touched)
             connection.commit()
         except BaseException:
             connection.rollback()
             raise
+        self._invalidate_graph(touched)
 
     @staticmethod
     def _upsert(
@@ -127,11 +158,22 @@ class Indexer:
         availability: str = AVAILABILITY_AVAILABLE,
     ) -> None:
         previous = connection.execute(
-            "SELECT id FROM documents WHERE path = ?", (str(document.path),)
+            "SELECT id, name, path FROM documents WHERE path = ?",
+            (str(document.path),),
         ).fetchone()
         stale_ids = {document.id}
         if previous is not None:
             stale_ids.add(previous["id"])
+            if previous["id"] != document.id:
+                from universal_search.intelligence.graph import (
+                    scrub_reference_metadata,
+                )
+
+                scrub_reference_metadata(
+                    connection,
+                    [previous["id"]],
+                    {previous["id"]: (previous["name"], previous["path"])},
+                )
         for stale_id in stale_ids:
             connection.execute("DELETE FROM documents_fts WHERE document_id = ?", (stale_id,))
         if mtime_ns is None:
@@ -170,7 +212,31 @@ class Indexer:
 
     @staticmethod
     def _delete(connection, document_id: str) -> None:
+        from universal_search.intelligence.graph import scrub_reference_metadata
+
+        row = connection.execute(
+            "SELECT name, path FROM documents WHERE id = ?", (document_id,)
+        ).fetchone()
+        aliases = (
+            {document_id: (row["name"], row["path"])} if row is not None else None
+        )
+        scrub_reference_metadata(connection, [document_id], aliases)
+        Indexer._mark_graph_dirty(connection, {document_id})
         connection.execute("DELETE FROM documents_fts WHERE document_id = ?", (document_id,))
+        # Graph rows are derived and must disappear with their canonical
+        # document.  The explicit deletes keep cleanup correct for legacy
+        # databases created before graph foreign keys/triggers existed.
+        connection.execute(
+            "DELETE FROM document_graph_edges WHERE source_document_id = ?"
+            " OR target_document_id = ?",
+            (document_id, document_id),
+        )
+        connection.execute(
+            "DELETE FROM document_graph_terms WHERE document_id = ?", (document_id,)
+        )
+        connection.execute(
+            "DELETE FROM document_graph_nodes WHERE document_id = ?", (document_id,)
+        )
         connection.execute("DELETE FROM documents WHERE id = ?", (document_id,))
 
     # -- reconciliation ----------------------------------------------------
@@ -211,6 +277,7 @@ class Indexer:
         with closing(self.database.connect()) as connection:
             writes_before = connection.total_changes
             pending = 0
+            graph_touched: set[str] = set()
             for item in scan_local(root_path, rules):
                 if isinstance(item, IgnoredPath):
                     stats.ignored += 1
@@ -243,6 +310,7 @@ class Indexer:
                     )
                     pending += 1
                     if pending >= COMMIT_EVERY:
+                        self._mark_graph_dirty(connection, graph_touched)
                         connection.commit()
                         pending = 0
                     continue
@@ -284,6 +352,7 @@ class Indexer:
                         availability=availability,
                     )
                     stats.created += 1
+                    graph_touched.add(document.id)
                 elif (
                     content is not None
                     and stored["content_hash"] is not None
@@ -310,16 +379,23 @@ class Indexer:
                         availability=availability,
                     )
                     stats.updated += 1
+                    graph_touched.add(document.id)
+                    if stored["id"] != document.id:
+                        graph_touched.add(str(stored["id"]))
                 pending += 1
                 if pending >= COMMIT_EVERY:
+                    self._mark_graph_dirty(connection, graph_touched)
                     connection.commit()
                     pending = 0
                 if delay:
                     time.sleep(delay)
 
             self._delete_missing(connection, root_path, run_id, stats)
+            self._mark_graph_dirty(connection, graph_touched)
             connection.commit()
             db_writes = connection.total_changes - writes_before
+        if graph_touched:
+            self._invalidate_graph(graph_touched)
         record_index(time.perf_counter() - started, stats.as_dict(), db_writes)
         return stats
 

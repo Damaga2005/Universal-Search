@@ -169,6 +169,44 @@ def test_history_survives_a_second_distinct_upgrade(tmp_path: Path):
     assert history == [4, SCHEMA_VERSION]
 
 
+def test_direct_v5_to_v6_migration_preserves_canonical_and_fts_rows(
+    tmp_path: Path,
+):
+    database = phase_010_index(tmp_path)
+    import sqlite3
+
+    raw = sqlite3.connect(database.path)
+    try:
+        raw.execute("PRAGMA user_version = 5")
+        raw.commit()
+    finally:
+        raw.close()
+
+    with database.connect() as connection:
+        version = connection.execute("PRAGMA user_version").fetchone()[0]
+        objects = {
+            row["name"]
+            for row in connection.execute("SELECT name FROM sqlite_master")
+        }
+        document = connection.execute(
+            "SELECT path, content_hash FROM documents WHERE id = 'doc-antiguo'"
+        ).fetchone()
+        fts = connection.execute(
+            "SELECT content FROM documents_fts WHERE document_id = 'doc-antiguo'"
+        ).fetchone()
+
+    assert version == SCHEMA_VERSION
+    assert {
+        "document_graph_nodes",
+        "document_graph_edges",
+        "document_graph_terms",
+        "document_graph_metadata",
+    } <= objects
+    assert document["path"].endswith("antiguo.md")
+    assert document["content_hash"] == "hash"
+    assert "antiguo" in fts["content"]
+
+
 # -- downgrade refusal --------------------------------------------------------
 
 def test_a_newer_index_is_refused_not_downgraded(tmp_path: Path):

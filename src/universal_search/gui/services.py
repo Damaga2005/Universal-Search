@@ -6,6 +6,7 @@ and every behaviour is testable without Tk.
 """
 
 import logging
+from contextlib import closing
 from pathlib import Path
 
 from universal_search.appconfig import AppConfig, AppPaths, remember_query
@@ -104,6 +105,60 @@ class SearchService:
             return []
         self.last_query_error = None
         return results
+
+    def related(
+        self,
+        document_id: str | Path | None = None,
+        limit: int = 10,
+        *,
+        document: str | None = None,
+        reference: str | None = None,
+    ):
+        """Return explainable related documents for an id, path or name.
+
+        The GUI never opens SQLite or reimplements graph comparison.  The
+        first request builds the optional graph if the index has not been
+        derived yet; an existing graph is reused and remains independent of
+        normal search ranking.
+        """
+        from universal_search.intelligence.graph import GraphStore
+
+        graph = GraphStore(self.database)
+        target = document if document is not None else reference
+        if target is None:
+            target = document_id
+        if target is None:
+            return []
+        resolved_id = self._resolve_document_id(str(target))
+        if resolved_id is None:
+            return []
+        if not graph.has_data():
+            graph.rebuild_from_database()
+        return graph.related(resolved_id, limit=limit)
+
+    # Descriptive aliases for callers that do not want to overload ``related``.
+    related_documents = related
+    get_related_documents = related
+
+    def rebuild_related_graph(self):
+        """Rebuild the optional graph from canonical indexed documents."""
+        from universal_search.intelligence.graph import GraphStore
+
+        return GraphStore(self.database).rebuild_from_database()
+
+    def _resolve_document_id(self, reference: str) -> str | None:
+        """Resolve a graph reference without exposing SQL to the window."""
+        with closing(self.database.connect()) as connection:
+            row = connection.execute(
+                """
+                SELECT id FROM documents
+                WHERE id = ? OR path = ? OR name = ?
+                ORDER BY (path = ?) DESC, path
+                LIMIT 1
+                """,
+                (reference, reference, reference, reference),
+            ).fetchone()
+        return str(row["id"]) if row is not None else None
 
     def diagnostics(self) -> dict:
         """Index statistics and health, assembled without Tk (spec 015).

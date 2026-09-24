@@ -58,8 +58,10 @@ reproducible release procedure; phase 021 added an optional native Windows
 notification-area controller, an application state service, GUI show/diagnostics
 signalling and generation-aware worker ownership without adding a runtime
 dependency. Startup claims survive Windows launcher PID differences; owner-scoped
-stop markers and a held OS lease prevent replacement/PID-reuse handoff races.
-The current gate is **646 passing tests, 2 skipped**.
+stop markers and a held OS lease prevent replacement/PID-reuse handoff races;
+phase 022 added a versioned, bounded local relationship graph with explainable
+signals, incremental maintenance and a small related-documents list in the GUI.
+The current gate is **681 passing tests, 2 skipped**.
 
 | Fase | Entrega | Estado |
 |------|---------|--------|
@@ -84,6 +86,7 @@ The current gate is **646 passing tests, 2 skipped**.
 | 019 | Arquitectura de proveedores y extensiones | ✅ |
 | 020 | Release de producción y fiabilidad (CI, migraciones, copias) | ✅ |
 | 021 | Bandeja de notificación y experiencia en segundo plano | ✅ |
+| 022 | Grafo local de documentos relacionados | ✅ |
 
 Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
 by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).
@@ -110,7 +113,7 @@ universal-search hotkey show       # hotkey set ctrl+alt+s | on | off
 universal-search recent show       # recent on | off | clear
 
 # local document intelligence (derived data, local-only, rebuildable)
-universal-search intelligence rebuild        # language, headings, keywords
+universal-search intelligence rebuild        # language, headings, keywords and graph
 universal-search intelligence show informe.pdf
 universal-search intelligence related informe.pdf --limit 5
 
@@ -134,6 +137,11 @@ universal-search indexer pause     # universal-search indexer resume
 universal-search indexer stop
 universal-search indexer autostart on
 ```
+
+The related-document graph is derived, local and optional. Rebuild it with
+`intelligence rebuild`; open the ranked evidence list from the GUI's
+Diagnostic menu. It never changes normal search ranking, and all graph rows
+can be removed with `intelligence clear`.
 
 The tray is optional and must be started explicitly. Windows autostart still
 registers only the `indexer run` worker; it does not launch the tray. The

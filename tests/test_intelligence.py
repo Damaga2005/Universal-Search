@@ -18,7 +18,9 @@ from universal_search.index.indexer import Indexer
 from universal_search.index.ranking import Candidate, Ranker, RankingWeights
 from universal_search.index.search import SearchEngine
 from universal_search.intelligence import (
+    GRAPH_SCHEMA_VERSION,
     INTELLIGENCE_VERSION,
+    GraphStore,
     analysis_for,
     analyze,
     clear,
@@ -476,6 +478,40 @@ def test_term_vocabulary_answers_with_terms_not_a_search(indexed: SearchDatabase
     rebuild(indexed)
     document_keywords = set(analysis_for(indexed, "bjt.md").keywords)
     assert set(term_vocabulary("transistor polarizacion")) <= document_keywords
+
+
+def test_rebuild_rechecks_fts_content_hash(indexed: SearchDatabase):
+    rebuild(indexed)
+    with indexed.connect() as connection:
+        connection.execute(
+            "UPDATE documents_fts SET content = ? WHERE document_id ="
+            " (SELECT id FROM documents WHERE name = 'bjt.md')",
+            ("replacement CMOS MUX content",),
+        )
+        connection.commit()
+
+    stats = rebuild(indexed)
+
+    assert stats.updated == 1
+    assert "cmos" in analysis_for(indexed, "bjt.md").keywords
+
+
+def test_intelligence_rebuild_keeps_the_related_graph_versioned(indexed: SearchDatabase):
+    rebuild(indexed)
+    store = GraphStore(indexed)
+    with indexed.connect() as connection:
+        document_id = connection.execute(
+            "SELECT id FROM documents WHERE name = 'bjt.md'"
+        ).fetchone()["id"]
+    related_items = store.related(document_id)
+    assert related_items
+    with indexed.connect() as connection:
+        versions = {
+            row["version"]
+            for row in connection.execute("SELECT version FROM document_graph_edges")
+        }
+    assert versions == {GRAPH_SCHEMA_VERSION}
+    assert all(item.evidence for item in related_items)
 
 
 # -- CLI -----------------------------------------------------------------------

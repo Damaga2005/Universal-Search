@@ -15,9 +15,11 @@ Contract with the rest of the application:
   the two answers answer different questions.
 """
 
+import hashlib
 import json
 import math
 import sqlite3
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -28,6 +30,7 @@ from universal_search.intelligence.analysis import (
     DocumentAnalysis,
     analyze,
 )
+from universal_search.intelligence.graph import RelatedDocument
 
 WRITE_BATCH = 200
 
@@ -75,25 +78,9 @@ class RebuildStats:
         }
 
 
-@dataclass(frozen=True, slots=True)
-class RelatedDocument:
-    """One neighbour of a document, with why it is a neighbour."""
-
-    document_id: str
-    name: str
-    path: str
-    score: float
-    shared_terms: tuple[str, ...]
-
-    def as_dict(self) -> dict[str, object]:
-        return {
-            "document_id": self.document_id,
-            "name": self.name,
-            "path": self.path,
-            "score": round(self.score, 6),
-            "shared_terms": list(self.shared_terms),
-        }
-
+# ``RelatedDocument`` is defined by graph.py and re-exported here for the
+# phase-014 API.  It keeps the old name/path/shared_terms view while carrying
+# the phase-022 evidence contract.
 
 # -- serialization -------------------------------------------------------------
 
@@ -195,7 +182,15 @@ def rebuild(
     the index.
     """
     scanned = updated = skipped = failed = 0
-    with database.connect() as connection:
+    graph_missing = False
+    with closing(database.connect()) as connection:
+        graph_missing = not bool(
+            connection.execute(
+                "SELECT 1 FROM document_graph_metadata LIMIT 1"
+            ).fetchone()
+        )
+        from universal_search.intelligence.graph import mark_graph_dirty
+
         stored = {} if force else _stored_state(connection)
         pending: list[tuple] = []
         live_ids: set[str] = set()
@@ -215,7 +210,17 @@ def rebuild(
             scanned += 1
             document_id = row["document_id"]
             live_ids.add(document_id)
+            content = row["content"]
             content_hash = row["content_hash"]
+            if content is not None:
+                actual_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+                if actual_hash != content_hash:
+                    connection.execute(
+                        "UPDATE documents SET content_hash = ? WHERE id = ?",
+                        (actual_hash, document_id),
+                    )
+                    content_hash = actual_hash
+                    mark_graph_dirty(connection, [document_id], "content-hash-mismatch")
             known = stored.get(document_id)
             if (
                 known is not None
@@ -225,12 +230,13 @@ def rebuild(
                 skipped += 1
                 continue
             try:
-                analysis = analyze(row["content"], name=row["name"] or "")
+                analysis = analyze(content, name=row["name"] or "")
             except Exception:  # pragma: no cover - defensive: one bad
                 # document must never abort a rebuild of a thousand good
                 # ones; it is reported and left for the next pass.
                 failed += 1
                 continue
+            mark_graph_dirty(connection, [document_id], "intelligence-rebuild")
             pending.append(analysis_params(document_id, analysis, content_hash))
             if len(pending) == WRITE_BATCH:
                 connection.executemany(UPSERT_SQL, pending)
@@ -241,6 +247,17 @@ def rebuild(
             updated += len(pending)
         removed = _remove_orphans(connection, live_ids)
         connection.commit()
+    if not graph_missing:
+        from universal_search.intelligence.graph import GraphStore
+
+        graph_missing = not GraphStore(database).has_data()
+    if updated or removed or force or graph_missing:
+        # The graph consumes the same canonical rows, but remains an optional
+        # derived layer.  Import lazily so intelligence storage and indexing
+        # do not acquire an import cycle.
+        from universal_search.intelligence.graph import GraphStore
+
+        GraphStore(database).rebuild_from_database()
     return RebuildStats(
         scanned=scanned, updated=updated, skipped=skipped,
         failed=failed, removed=removed,
@@ -249,12 +266,17 @@ def rebuild(
 
 def clear(database: SearchDatabase) -> int:
     """Delete every derived row. The index is untouched and still complete."""
-    with database.connect() as connection:
+    with closing(database.connect()) as connection:
         count = connection.execute(
             "SELECT COUNT(*) FROM document_intelligence"
         ).fetchone()[0]
         connection.execute("DELETE FROM document_intelligence")
         connection.commit()
+    # The graph is derived from the same canonical documents and must not
+    # survive an explicit intelligence clear.
+    from universal_search.intelligence.graph import GraphStore
+
+    GraphStore(database).clear()
     return int(count)
 
 
@@ -300,7 +322,7 @@ def analysis_for(
     database: SearchDatabase, reference: str
 ) -> DocumentAnalysis | None:
     """Stored analysis of a document, addressed by path, name or id."""
-    with database.connect() as connection:
+    with closing(database.connect()) as connection:
         row = _resolve(connection, reference)
         return row_to_analysis(row) if row is not None else None
 
@@ -336,47 +358,18 @@ def related(
 ) -> list[RelatedDocument]:
     """Documents sharing concepts with ``reference``, closest first.
 
-    A pure lexical question, answered over the bounded term vectors: no
-    query parsing, no ranking weights, no FTS pool. Ties break by ascending
-    path so the list is reproducible.
+    The graph store owns the bounded comparison and evidence.  This adapter
+    keeps the phase-014 path/name lookup contract, while the returned objects
+    also expose the phase-022 ``evidence`` tuple.
     """
-    with database.connect() as connection:
+    from universal_search.intelligence.graph import GraphStore
+
+    with closing(database.connect()) as connection:
         source = _resolve(connection, reference)
         if source is None:
             return []
-        source_id = source["document_id"]
-        origin = _terms_dict(row_to_analysis(source))
-        if not origin:
-            return []
-        others = connection.execute(
-            """
-            SELECT i.document_id AS document_id, i.terms AS terms,
-                   d.name AS name, d.path AS path
-            FROM document_intelligence AS i
-            JOIN documents AS d ON d.id = i.document_id
-            WHERE i.document_id <> ? AND i.terms <> '[]'
-            """,
-            (source_id,),
-        ).fetchall()
-
-    neighbours: list[RelatedDocument] = []
-    for row in others:
-        pairs = _load(row["terms"]) or []
-        vector = {str(pair[0]): int(pair[1]) for pair in pairs}
-        score, shared = _cosine(origin, vector)
-        if score <= 0.0:
-            continue
-        neighbours.append(
-            RelatedDocument(
-                document_id=row["document_id"],
-                name=row["name"],
-                path=row["path"],
-                score=score,
-                shared_terms=tuple(shared),
-            )
-        )
-    neighbours.sort(key=lambda item: (-item.score, item.path))
-    return neighbours[: max(limit, 0)]
+        source_id = str(source["document_id"])
+    return GraphStore(database).related(source_id, limit=limit)
 
 
 def term_vocabulary(text: str) -> list[str]:

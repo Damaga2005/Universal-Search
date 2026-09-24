@@ -49,7 +49,7 @@
 ## v0.8+ (phases 021–030)
 
 - [x] Tray & background experience (021)
-- [ ] Related-document graph (022)
+- [x] Related-document graph (022)
 - [ ] Indexing UX & control center (023)
 - [ ] Provider expansion (024)
 - [ ] Content extraction v2 (025)
@@ -61,9 +61,7 @@
 
 ---
 
-Phases 001–021 are implemented and documented (per-phase reports in
-`docs/development/`). The phase-021 final-fix quality gate measured
-**646 passing tests, 2 skipped**, clean pyflakes, a successful
-frozen-package smoke, and an opt-in real Windows tray add/Exit/delete smoke.
-Still open:
-the related-document graph and every planned phase from 022 through 030.
+Phases 001–022 are implemented and documented (per-phase reports in
+`docs/development/`). The phase-022 quality gate measured **681 passing tests,
+2 skipped**, clean pyflakes, bounded graph candidates and local evidence-based
+related results. Still open: the planned phases from 023 through 030.

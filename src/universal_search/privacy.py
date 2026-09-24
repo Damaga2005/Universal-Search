@@ -76,6 +76,18 @@ INVENTORY: tuple[DataItem, ...] = (
         optional=True,
     ),
     DataItem(
+        key="relationship_graph",
+        what="bounded document nodes, term postings and explainable relationship edges",
+        where=(
+            "SQLite tables `document_graph_nodes`, `document_graph_terms`, "
+            "`document_graph_edges` and `document_graph_metadata`"
+        ),
+        purpose="local related-document discovery (phase 022); never search ranking",
+        retention="until rebuilt, cleared or the document is forgotten",
+        deletion="`universal-search intelligence clear`, `privacy forget`, or rebuild",
+        optional=True,
+    ),
+    DataItem(
         key="usage",
         what="document id + query text of opened results, timestamps",
         where="SQLite table `usage_events`",
@@ -236,11 +248,12 @@ def forget(database: SearchDatabase, path: Path | str) -> ForgetResult:
     connection = database.connect()
     try:
         row = connection.execute(
-            "SELECT id FROM documents WHERE path = ?", (target,)
+            "SELECT id, name, path FROM documents WHERE path = ?", (target,)
         ).fetchone()
         if row is None:
             row = connection.execute(
-                "SELECT id FROM documents WHERE name = ?", (Path(target).name,)
+                "SELECT id, name, path FROM documents WHERE name = ?",
+                (Path(target).name,),
             ).fetchone()
         if row is None:
             return ForgetResult(target, 0, 0, 0, 0)
@@ -252,6 +265,31 @@ def forget(database: SearchDatabase, path: Path | str) -> ForgetResult:
             "DELETE FROM document_intelligence WHERE document_id = ?",
             (document_id,),
         ).rowcount
+        # Phase 022 graph rows are derived from the same document and must
+        # not survive a privacy-forget operation.  Keep them out of the
+        # historical ``derived_rows`` count so the phase-018 API stays stable.
+        connection.execute(
+            "DELETE FROM document_graph_edges WHERE source_document_id = ?"
+            " OR target_document_id = ?",
+            (document_id, document_id),
+        )
+        connection.execute(
+            "DELETE FROM document_graph_terms WHERE document_id = ?", (document_id,)
+        )
+        connection.execute(
+            "DELETE FROM document_graph_nodes WHERE document_id = ?", (document_id,)
+        )
+        from universal_search.intelligence.graph import scrub_reference_metadata
+
+        scrub_reference_metadata(
+            connection,
+            [document_id],
+            {document_id: (row["name"], row["path"])},
+        )
+        connection.execute(
+            "DELETE FROM document_graph_metadata WHERE key = ?",
+            (f"dirty:{document_id}",),
+        )
         usage_rows = connection.execute(
             "DELETE FROM usage_events WHERE document_id = ?", (document_id,)
         ).rowcount

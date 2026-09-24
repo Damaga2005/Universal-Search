@@ -7,6 +7,31 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 022 — Related-document graph
+- Added a versioned local graph of document nodes, bounded term postings and
+  explainable relationship edges. Candidate generation uses inverted terms,
+  phrases, safe references and directory hints with explicit per-document,
+  minimum-similarity and stored-edge caps; it never performs an unbounded
+  all-pairs scan.
+- Added deterministic full rebuild, graph/preprocessing-version invalidation,
+  incremental update refresh and deletion cleanup. The graph is derived beside
+  document intelligence and is never read by `SearchEngine` or query ranking.
+- Added a service-layer related list and a small GUI evidence window; the
+  existing intelligence CLI remains compatible and can remove all graph data.
+- Graph persistence was added to the privacy inventory. No cloud service,
+  model, network client or new runtime dependency was introduced.
+- Fix round: capped posting storage/retrieval and counters, durable dirty
+  markers with recoverable lookup repair, FTS content-hash checks, bounded
+  incremental maintenance, symmetric explicit references, and worker/queue
+  GUI lookup.
+- Fix round 2: bounded alias/mention/declared candidate aggregation,
+  transactional FTS hash/dirty repair, and direct/reverse reference metadata
+  scrubbing on privacy forget and canonical deletion.
+- Fix round 3: cursor-paged, batch-capped FTS orphan cleanup with alias-aware
+  reverse-reference and dirty-marker scrubbing in one transaction.
+- Phase 022 quality gate: **681 passed, 2 skipped**, clean pyflakes; measured
+  bounds and performance are recorded in the phase report.
+
 ### Phase 021 — Tray & background experience
 - Added the optional `universal-search tray` command and a native Windows
   notification-area adapter implemented with standard-library `ctypes`; no new

@@ -5,6 +5,8 @@ plus the rule that matters most in a repair tool: nothing is deleted
 without an explicit confirmation, in the API and in the CLI.
 """
 
+import hashlib
+import json
 import sys
 from pathlib import Path
 
@@ -20,9 +22,12 @@ from universal_search.diagnostics import (
     re_extract,
     reconcile,
 )
+from universal_search.diagnostics.repair import ORPHAN_CLEANUP_BATCH_SIZE
 from universal_search.index.database import SCHEMA_VERSION, SearchDatabase
 from universal_search.index.indexer import Indexer
 from universal_search.index.search import SearchEngine
+from universal_search.intelligence import analysis_for, rebuild as rebuild_intelligence_rows
+from universal_search.intelligence.graph import GraphStore
 
 
 def build(root: Path, names=("uno.md", "dos.md", "tres.txt")) -> SearchDatabase:
@@ -181,6 +186,135 @@ def test_rebuild_fts_repairs_both_orphan_directions(
     assert check(indexed).by_name("fts.coverage").status == "ok"
 
 
+def test_rebuild_fts_scrubs_orphan_aliases_and_dirty_marker(
+    indexed: SearchDatabase, tmp_path: Path
+):
+    source_path = tmp_path / "tree" / "uno.md"
+    source_before = source_path.read_text(encoding="utf-8")
+    with indexed.connect() as connection:
+        source_id = connection.execute(
+            "SELECT id FROM documents WHERE name = 'uno.md'"
+        ).fetchone()["id"]
+        connection.execute(
+            "INSERT INTO documents_fts(document_id, name, path, content)"
+            " VALUES (?, ?, ?, ?)",
+            ("orphan-alias", "ghost.md", "/safe/ghost.md", "orphan text"),
+        )
+        connection.execute(
+            "INSERT INTO document_graph_metadata(key, value) VALUES (?, ?)",
+            (
+                f"references:{source_id}",
+                json.dumps(
+                    ["orphan-alias", "ghost.md", "/safe/ghost.md", "keep.md"]
+                ),
+            ),
+        )
+        connection.execute(
+            "INSERT INTO document_graph_metadata(key, value) VALUES (?, ?)",
+            ("references:orphan-alias", json.dumps([source_id])),
+        )
+        connection.execute(
+            "INSERT INTO document_graph_metadata(key, value) VALUES (?, ?)",
+            ("dirty:orphan-alias", json.dumps("rebuild-fts")),
+        )
+        connection.commit()
+
+    result = rebuild_fts(indexed, confirm=True)
+
+    assert result.changed == 1
+    with indexed.connect() as connection:
+        metadata = {
+            row["key"]: json.loads(row["value"])
+            for row in connection.execute(
+                "SELECT key, value FROM document_graph_metadata"
+                " WHERE key LIKE 'references:%'"
+            )
+        }
+        assert connection.execute(
+            "SELECT COUNT(*) FROM document_graph_metadata"
+            " WHERE key = 'dirty:orphan-alias'"
+        ).fetchone()[0] == 0
+    assert "references:orphan-alias" not in metadata
+    assert metadata[f"references:{source_id}"] == ["keep.md"]
+    assert source_path.read_text(encoding="utf-8") == source_before
+
+
+def test_rebuild_fts_orphan_cleanup_is_batched(
+    indexed: SearchDatabase, monkeypatch
+):
+    import universal_search.intelligence.graph as graph_module
+
+    orphan_count = ORPHAN_CLEANUP_BATCH_SIZE * 2 + 17
+    with indexed.connect() as connection:
+        connection.executemany(
+            "INSERT INTO documents_fts(document_id, name, path, content)"
+            " VALUES (?, ?, ?, ?)",
+            [
+                (
+                    f"orphan-{index:04d}",
+                    f"orphan-{index:04d}.md",
+                    f"/safe/orphan-{index:04d}.md",
+                    "orphan text",
+                )
+                for index in range(orphan_count)
+            ],
+        )
+        connection.commit()
+
+    calls: list[tuple[str, ...]] = []
+    original = graph_module.scrub_reference_metadata
+
+    def spy(connection, document_ids, aliases=None):
+        ids = tuple(sorted(str(item) for item in document_ids))
+        calls.append(ids)
+        return original(connection, ids, aliases)
+
+    monkeypatch.setattr(graph_module, "scrub_reference_metadata", spy)
+    result = rebuild_fts(indexed, confirm=True)
+
+    assert result.changed == orphan_count
+    assert calls
+    assert max(len(ids) for ids in calls) <= ORPHAN_CLEANUP_BATCH_SIZE
+    assert len(calls) <= (
+        orphan_count + ORPHAN_CLEANUP_BATCH_SIZE - 1
+    ) // ORPHAN_CLEANUP_BATCH_SIZE
+    with indexed.connect() as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM documents_fts"
+            " WHERE document_id LIKE 'orphan-%'"
+        ).fetchone()[0] == 0
+
+
+def test_rebuild_fts_updates_canonical_hash_and_marks_graph_dirty(
+    indexed: SearchDatabase, tmp_path: Path
+):
+    rebuild_intelligence_rows(indexed)
+    target = tmp_path / "tree" / "uno.md"
+    target.write_text("contenido reconstruido sobre mosfetos", encoding="utf-8")
+    with indexed.connect() as connection:
+        document_id = _id_of(indexed, "uno.md")
+        connection.execute(
+            "DELETE FROM documents_fts WHERE document_id = ?", (document_id,)
+        )
+        connection.commit()
+
+    result = rebuild_fts(indexed, confirm=True)
+
+    assert result.changed == 1
+    expected_hash = hashlib.sha256(
+        "contenido reconstruido sobre mosfetos".encode("utf-8")
+    ).hexdigest()
+    with indexed.connect() as connection:
+        assert connection.execute(
+            "SELECT content_hash FROM documents WHERE id = ?", (document_id,)
+        ).fetchone()[0] == expected_hash
+        assert connection.execute(
+            "SELECT COUNT(*) FROM document_graph_metadata WHERE key = ?",
+            (f"dirty:{document_id}",),
+        ).fetchone()[0] == 1
+    assert target.read_text(encoding="utf-8") == "contenido reconstruido sobre mosfetos"
+
+
 def test_destructive_repairs_refuse_without_confirmation(indexed: SearchDatabase,
                                                           tmp_path: Path):
     with pytest.raises(ConfirmationRequired):
@@ -204,6 +338,28 @@ def test_re_extract_replaces_one_document(indexed: SearchDatabase,
     outsider = tmp_path / "tree" / "nuevo.md"
     outsider.write_text("nuevo", "utf-8")
     assert re_extract(indexed, outsider, confirm=True).changed == 0
+
+
+def test_re_extract_invalidates_obsolete_intelligence_and_graph(
+    indexed: SearchDatabase, tmp_path: Path
+):
+    rebuild_intelligence_rows(indexed)
+    target = tmp_path / "tree" / "uno.md"
+    target.write_text("contenido nuevo sobre mosfetos", encoding="utf-8")
+    re_extract(indexed, target, confirm=True)
+
+    stats = rebuild_intelligence_rows(indexed)
+    analysis = analysis_for(indexed, "uno.md")
+    assert stats.updated == 1
+    assert analysis is not None
+    assert "mosfetos" in analysis.keywords
+    assert "bjt" not in analysis.keywords
+    assert all(
+        "bjt" not in value
+        for item in GraphStore(indexed).related(_id_of(indexed, "uno.md"))
+        for evidence in item.evidence
+        for value in evidence.values
+    )
 
 
 def test_rebuild_intelligence_is_safe(indexed: SearchDatabase):

@@ -5,6 +5,7 @@ to re-prove that SQLite is injection-safe: it is to make sure a future
 change cannot quietly undo a property the application depends on.
 """
 
+import json
 import logging
 import os
 import sys
@@ -51,10 +52,12 @@ def test_inventory_is_complete_and_never_leaves_the_machine():
         assert item.retention and item.deletion
         assert item.leaves_machine is False
     keys = {item.key for item in INVENTORY}
+    graph_item = next(item for item in INVENTORY if item.key == "relationship_graph")
+    assert "document_graph_metadata" in graph_item.where
     # Everything the application actually persists must be declared.
     assert {
-        "documents", "content", "intelligence", "usage", "recents",
-        "logs", "metrics", "process_coordination",
+        "documents", "content", "intelligence", "relationship_graph", "usage",
+        "recents", "logs", "metrics", "process_coordination",
     } <= keys
 
 
@@ -136,6 +139,10 @@ def test_forget_removes_the_document_and_everything_derived(
     target = tmp_path / "tree" / "privado" / "secreto.txt"
     rebuild(indexed)
     with closing(indexed.connect()) as connection:
+        target_id = connection.execute(
+            "SELECT id FROM documents WHERE path = ?", (str(target),)
+        ).fetchone()["id"]
+    with closing(indexed.connect()) as connection:
         connection.execute(
             "INSERT INTO usage_events(document_id, query)"
             " SELECT id, ? FROM documents WHERE path = ?",
@@ -161,6 +168,67 @@ def test_forget_removes_the_document_and_everything_derived(
             "SELECT COUNT(*) FROM document_intelligence"
             " WHERE document_id NOT IN (SELECT id FROM documents)"
         ).fetchone()[0] == 0
+        assert connection.execute(
+            "SELECT COUNT(*) FROM document_graph_nodes"
+            " WHERE document_id NOT IN (SELECT id FROM documents)"
+        ).fetchone()[0] == 0
+        assert connection.execute(
+            "SELECT COUNT(*) FROM document_graph_edges"
+            " WHERE source_document_id NOT IN (SELECT id FROM documents)"
+            " OR target_document_id NOT IN (SELECT id FROM documents)"
+        ).fetchone()[0] == 0
+        assert connection.execute(
+            "SELECT COUNT(*) FROM document_graph_metadata WHERE key IN (?, ?)",
+            (f"dirty:{target_id}", f"references:{target_id}"),
+        ).fetchone()[0] == 0
+
+
+def test_forget_scrubs_direct_and_reverse_reference_metadata(
+    indexed: SearchDatabase, tmp_path: Path
+):
+    target = tmp_path / "tree" / "privado" / "secreto.txt"
+    source = tmp_path / "tree" / "docs" / "nota.md"
+    with closing(indexed.connect()) as connection:
+        target_row = connection.execute(
+            "SELECT id, name, path FROM documents WHERE path = ?", (str(target),)
+        ).fetchone()
+        source_id = connection.execute(
+            "SELECT id FROM documents WHERE path = ?", (str(source),)
+        ).fetchone()["id"]
+        connection.execute(
+            "INSERT INTO document_graph_metadata(key, value) VALUES (?, ?)",
+            (
+                f"references:{source_id}",
+                json.dumps(
+                    [
+                        target_row["id"],
+                        target_row["name"],
+                        target_row["path"],
+                        "keep.md",
+                    ]
+                ),
+            ),
+        )
+        connection.execute(
+            "INSERT INTO document_graph_metadata(key, value) VALUES (?, ?)",
+            (f"references:{target_row['id']}", json.dumps([source_id])),
+        )
+        connection.commit()
+
+    forget(indexed, target)
+
+    with closing(indexed.connect()) as connection:
+        rows = {
+            row["key"]: json.loads(row["value"])
+            for row in connection.execute(
+                "SELECT key, value FROM document_graph_metadata"
+                " WHERE key LIKE 'references:%'"
+            )
+        }
+    assert f"references:{target_row['id']}" not in rows
+    assert rows[f"references:{source_id}"] == ["keep.md"]
+    assert target.exists()
+    assert source.exists()
 
 
 def test_forget_accepts_a_name_and_reports_an_unknown_path(

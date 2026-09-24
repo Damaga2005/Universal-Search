@@ -13,6 +13,7 @@ Every operation returns a :class:`RepairResult` describing what it did, in
 counts a user can check afterwards.
 """
 
+import hashlib
 import time
 from contextlib import closing
 from dataclasses import dataclass
@@ -24,6 +25,9 @@ from universal_search.index.indexer import Indexer
 from universal_search.providers.local import read_local_content
 
 CONFIRMATION_REQUIRED = "this operation deletes data; pass confirm=True"
+# Orphan/reference cleanup is deliberately cursor-paged.  A repair may see a
+# large damaged FTS table, but its Python working set stays bounded.
+ORPHAN_CLEANUP_BATCH_SIZE = 128
 
 
 class ConfirmationRequired(RuntimeError):
@@ -77,36 +81,114 @@ def rebuild_fts(
         raise ConfirmationRequired(CONFIRMATION_REQUIRED)
     removed = re_extracted = skipped = 0
     with closing(database.connect()) as connection:
-        orphans = connection.execute(
-            "SELECT document_id FROM documents_fts AS f"
-            " WHERE NOT EXISTS (SELECT 1 FROM documents AS d"
-            " WHERE d.id = f.document_id)"
-        ).fetchall()
-        connection.executemany(
-            "DELETE FROM documents_fts WHERE document_id = ?",
-            [(row["document_id"],) for row in orphans],
+        from universal_search.intelligence.graph import (
+            MAX_TARGETED_RECORDS,
+            mark_graph_dirty,
+            scrub_reference_metadata,
         )
-        removed += len(orphans)
-        missing = connection.execute(
-            "SELECT id, path, name, source FROM documents AS d"
-            " WHERE NOT EXISTS (SELECT 1 FROM documents_fts AS f"
-            " WHERE f.document_id = d.id)"
-        ).fetchall()
-        for row in missing:
-            if row["source"] != SourceKind.LOCAL:
-                # A cloud-only document cannot be re-read from here: skip it
-                # honestly and let the health report keep saying so.
-                skipped += 1
-                continue
-            outcome = read_local_content(Path(row["path"]))
+
+        # Cursor-page both sides of the repair.  No query below materializes
+        # all damaged rows, and all batches share one transaction.
+        orphan_cursor = ""
+        while True:
+            orphans = connection.execute(
+                "SELECT f.document_id, MAX(f.name) AS name, MAX(f.path) AS path"
+                " FROM documents_fts AS f"
+                " WHERE f.document_id > ?"
+                " AND NOT EXISTS (SELECT 1 FROM documents AS d"
+                " WHERE d.id = f.document_id)"
+                " GROUP BY f.document_id"
+                " ORDER BY f.document_id LIMIT ?",
+                (orphan_cursor, ORPHAN_CLEANUP_BATCH_SIZE),
+            ).fetchall()
+            if not orphans:
+                break
+            orphan_cursor = str(orphans[-1]["document_id"])
+            orphan_ids = tuple(sorted({str(row["document_id"]) for row in orphans}))
+            aliases = {}
+            for row in orphans:
+                orphan_id = str(row["document_id"])
+                name = row["name"]
+                path = row["path"]
+                aliases[orphan_id] = (
+                    name,
+                    path,
+                    Path(str(name)).stem if name else "",
+                    Path(str(path)).stem if path else "",
+                )
+            scrub_reference_metadata(connection, orphan_ids, aliases)
+            placeholders = ",".join("?" for _ in orphan_ids)
+            params = orphan_ids
             connection.execute(
-                "INSERT INTO documents_fts(document_id,name,path,content)"
-                " VALUES (?,?,?,?)",
-                (
-                    row["id"], row["name"], row["path"], outcome.text or "",
-                ),
+                f"DELETE FROM document_graph_metadata WHERE key IN ({placeholders})",
+                tuple(f"dirty:{document_id}" for document_id in orphan_ids),
             )
-            re_extracted += 1
+            connection.execute(
+                f"DELETE FROM document_graph_edges"
+                f" WHERE source_document_id IN ({placeholders})"
+                f" OR target_document_id IN ({placeholders})",
+                params + params,
+            )
+            connection.execute(
+                f"DELETE FROM document_graph_terms WHERE document_id IN ({placeholders})",
+                params,
+            )
+            connection.execute(
+                f"DELETE FROM document_graph_nodes WHERE document_id IN ({placeholders})",
+                params,
+            )
+            connection.execute(
+                f"DELETE FROM documents_fts WHERE document_id IN ({placeholders})",
+                params,
+            )
+            removed += len(orphan_ids)
+
+        missing_cursor = ""
+        dirty_count = 0
+        while True:
+            missing = connection.execute(
+                "SELECT id, path, name, source FROM documents AS d"
+                " WHERE d.id > ?"
+                " AND NOT EXISTS (SELECT 1 FROM documents_fts AS f"
+                " WHERE f.document_id = d.id)"
+                " ORDER BY d.id LIMIT ?",
+                (missing_cursor, ORPHAN_CLEANUP_BATCH_SIZE),
+            ).fetchall()
+            if not missing:
+                break
+            missing_cursor = str(missing[-1]["id"])
+            dirty_ids: list[str] = []
+            for row in missing:
+                if row["source"] != SourceKind.LOCAL:
+                    # A cloud-only document cannot be re-read from here: skip it
+                    # honestly and let the health report keep saying so.
+                    skipped += 1
+                    continue
+                outcome = read_local_content(Path(row["path"]))
+                connection.execute(
+                    "INSERT INTO documents_fts(document_id,name,path,content)"
+                    " VALUES (?,?,?,?)",
+                    (
+                        row["id"], row["name"], row["path"], outcome.text or "",
+                    ),
+                )
+                content_hash = (
+                    hashlib.sha256(outcome.text.encode("utf-8")).hexdigest()
+                    if outcome.text is not None
+                    else None
+                )
+                connection.execute(
+                    "UPDATE documents SET content_hash = ? WHERE id = ?",
+                    (content_hash, row["id"]),
+                )
+                dirty_ids.append(str(row["id"]))
+                re_extracted += 1
+            if dirty_ids:
+                dirty_count += len(dirty_ids)
+                if dirty_count > MAX_TARGETED_RECORDS:
+                    mark_graph_dirty(connection, ["*"], "rebuild-fts")
+                else:
+                    mark_graph_dirty(connection, dirty_ids, "rebuild-fts")
         connection.commit()
     return RepairResult(
         action="rebuild-fts",
@@ -150,6 +232,18 @@ def re_extract(
             " WHERE document_id = ?",
             (target.name, str(target), outcome.text or "", document_id),
         )
+        content_hash = (
+            hashlib.sha256(outcome.text.encode("utf-8")).hexdigest()
+            if outcome.text is not None
+            else None
+        )
+        connection.execute(
+            "UPDATE documents SET content_hash = ? WHERE id = ?",
+            (content_hash, document_id),
+        )
+        from universal_search.intelligence.graph import mark_graph_dirty
+
+        mark_graph_dirty(connection, [document_id], "re-extract")
         connection.commit()
     return RepairResult(
         action="re-extract", changed=1,
