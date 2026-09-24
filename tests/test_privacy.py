@@ -54,7 +54,7 @@ def test_inventory_is_complete_and_never_leaves_the_machine():
     # Everything the application actually persists must be declared.
     assert {
         "documents", "content", "intelligence", "usage", "recents",
-        "logs", "metrics",
+        "logs", "metrics", "process_coordination",
     } <= keys
 
 
@@ -64,6 +64,55 @@ def test_inventory_report_measures_the_real_locations(indexed, tmp_path: Path):
     assert report["bytes"]["index"] > 0
     assert report["application_home"].endswith("home")
     assert len(report["items"]) == len(INVENTORY)
+
+
+def test_inventory_measures_persistent_process_coordination_files(
+    indexed,
+    tmp_path: Path,
+):
+    paths = AppPaths.discover(home=tmp_path / "home")
+    paths.ensure()
+    paths.tray_pid_file.write_text("1234", encoding="ascii")
+    paths.tray_pid_file.with_name("tray.pid.lock").write_bytes(b"\0")
+    paths.diagnostics_request_file.touch()
+    paths.lock_file.write_text("1234", encoding="ascii")
+    paths.worker_lease_file.write_bytes(b"\0")
+    paths.worker_owner_file.write_text(
+        '{"pid": 1234, "generation": "generation-a"}',
+        encoding="utf-8",
+    )
+
+    report = inventory_report(indexed, paths)
+
+    assert report["bytes"]["coordination"] > 0
+    coordination = next(
+        item for item in report["items"] if item["key"] == "process_coordination"
+    )
+    assert "pid" in coordination["what"].casefold()
+    assert "document" in coordination["what"].casefold()
+    assert "delete" in coordination["deletion"].lower()
+
+
+def test_inventory_measures_generation_scoped_coordination_files(
+    indexed,
+    tmp_path: Path,
+):
+    paths = AppPaths.discover(home=tmp_path / "home")
+    paths.ensure()
+    before = inventory_report(indexed, paths)["bytes"]["coordination"]
+    startup_claim = paths.startup_claim_file_for(1234, "generation-a")
+    startup_claim.write_text("starter", encoding="ascii")
+    startup_temp = paths.startup_claim_temporary_file_for(
+        1234,
+        "generation-crashed",
+    )
+    startup_temp.write_text("partial", encoding="ascii")
+    stop_request = paths.stop_request_file("generation-a")
+    stop_request.write_bytes(b"stop")
+
+    after = inventory_report(indexed, paths)["bytes"]["coordination"]
+
+    assert after == before + len(b"starter") + len(b"partial") + len(b"stop")
 
 
 def test_no_network_module_is_imported_by_the_application():

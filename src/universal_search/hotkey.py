@@ -255,6 +255,25 @@ def consume_show_request(paths: AppPaths) -> bool:
         return False
 
 
+def request_diagnostics(paths: AppPaths) -> bool:
+    """Ask a *live* window to show its diagnostics view."""
+    pid = read_gui_pid(paths)
+    if pid is None or not _process_alive(pid):
+        return False
+    paths.ensure()
+    paths.diagnostics_request_file.touch()
+    return True
+
+
+def consume_diagnostics_request(paths: AppPaths) -> bool:
+    """Consume the diagnostics request flag; True exactly once per request."""
+    try:
+        paths.diagnostics_request_file.unlink()
+        return True
+    except OSError:
+        return False
+
+
 def _process_alive(pid: int) -> bool:
     # Late import: background imports this module at load time.
     from universal_search.background import process_alive

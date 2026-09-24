@@ -94,6 +94,27 @@ INVENTORY: tuple[DataItem, ...] = (
         optional=True,
     ),
     DataItem(
+        key="process_coordination",
+        what=(
+            "process PIDs, startup generations, worker state/counters and request "
+            "flags; never document text or query text"
+        ),
+        where=(
+            "indexer lock/lease/owner, PID-scoped startup claims, generation-scoped "
+            "stop markers, status files, gui PID/show/diagnostics flags and tray "
+            "PID/lock files in the application home"
+        ),
+        purpose="single-instance ownership and local GUI/worker command handoff",
+        retention=(
+            "while a process owns a role; request flags are consumed and lease "
+            "sidecars may remain as one-byte diagnostic files"
+        ),
+        deletion=(
+            "stop the tray, GUI and indexer, then delete the listed coordination "
+            "files or the application home"
+        ),
+    ),
+    DataItem(
         key="logs",
         what="events, levels and paths — never document text",
         where="rotating `universal-search.log` in the application home",
@@ -148,11 +169,43 @@ def _size(path: Path) -> int:
         return 0
 
 
+PROCESS_COORDINATION_FILES = (
+    "indexer.lock",
+    "indexer.lock.lease",
+    "indexer.lock.owner",
+    "indexer.starting",
+    "indexer.starting.lease",
+    "indexer-status.json",
+    "indexer-paused.flag",
+    "indexer-stop.flag",
+    "gui.pid",
+    "gui-show.flag",
+    "gui-diagnostics.flag",
+    "tray.pid",
+    "tray.pid.lock",
+)
+
+PROCESS_COORDINATION_PATTERNS = (
+    "indexer.starting.*.claim",
+    "indexer.starting.*.tmp",
+    "indexer-stop.*.flag",
+    "indexer-stop.*.flag.*.tmp",
+)
+
+
 def inventory_report(
     database: SearchDatabase, paths: AppPaths | None = None
 ) -> dict[str, object]:
     """The declared inventory plus the measured size of each location."""
     home = paths.home if paths is not None else Path(database.path).parent
+    coordination_bytes = sum(
+        _size(home / filename) for filename in PROCESS_COORDINATION_FILES
+    )
+    coordination_bytes += sum(
+        _size(path)
+        for pattern in PROCESS_COORDINATION_PATTERNS
+        for path in home.glob(pattern)
+    )
     measured: dict[str, int] = {
         "index": _size(Path(database.path)),
         "wal": _size(Path(str(database.path) + "-wal")),
@@ -160,6 +213,7 @@ def inventory_report(
         "log": _size(home / "universal-search.log"),
         "metrics": _size(home / "metrics.jsonl"),
         "config": _size(home / "config.json"),
+        "coordination": coordination_bytes,
     }
     return {
         "items": [item.as_dict() for item in INVENTORY],

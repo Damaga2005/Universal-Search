@@ -4,6 +4,7 @@ The desktop window (phase 005) and the background indexer (phase 006) share
 this module so neither duplicates storage-location or settings logic.
 """
 
+import hashlib
 import json
 import logging
 import os
@@ -66,6 +67,26 @@ class AppPaths:
         return self.home / "indexer.lock"
 
     @property
+    def worker_lease_file(self) -> Path:
+        """Persistent sidecar whose OS lock represents worker ownership."""
+        return self.home / "indexer.lock.lease"
+
+    @property
+    def worker_owner_file(self) -> Path:
+        """PID and generation for the worker that owns ``indexer.lock``."""
+        return self.home / "indexer.lock.owner"
+
+    @property
+    def startup_claim_file(self) -> Path:
+        """One starter's generation while its child is launching."""
+        return self.home / "indexer.starting"
+
+    @property
+    def startup_lease_file(self) -> Path:
+        """Persistent OS lease serializing startup-claim recovery."""
+        return self.home / "indexer.starting.lease"
+
+    @property
     def stop_file(self) -> Path:
         return self.home / "indexer-stop.flag"
 
@@ -79,8 +100,40 @@ class AppPaths:
         """Touched by the worker to ask a live window to present itself."""
         return self.home / "gui-show.flag"
 
+    @property
+    def tray_pid_file(self) -> Path:
+        """PID of the running tray controller."""
+        return self.home / "tray.pid"
+
+    @property
+    def diagnostics_request_file(self) -> Path:
+        """Touched to ask a live window to show its diagnostics view."""
+        return self.home / "gui-diagnostics.flag"
+
     def ensure(self) -> None:
         self.home.mkdir(parents=True, exist_ok=True)
+
+
+    @staticmethod
+    def generation_filename_token(generation: str) -> str:
+        return hashlib.sha256(generation.encode("utf-8")).hexdigest()
+
+    def startup_claim_file_for(self, pid: int, generation: str) -> Path:
+        """PID-scoped claim path whose identity survives a partial write."""
+        token = self.generation_filename_token(generation)
+        return self.home / f"indexer.starting.{int(pid)}.{token}.claim"
+
+    def startup_claim_temporary_file_for(self, pid: int, generation: str) -> Path:
+        """Recoverable temporary path for an atomic startup-claim replace."""
+        final = self.startup_claim_file_for(pid, generation)
+        return final.with_suffix(".tmp")
+
+    def stop_request_file(self, generation: str | None) -> Path:
+        """Return the marker owned by exactly one worker generation."""
+        if generation is None:
+            return self.stop_file
+        token = self.generation_filename_token(generation)
+        return self.home / f"indexer-stop.{token}.flag"
 
 
 @dataclass(frozen=True, slots=True)

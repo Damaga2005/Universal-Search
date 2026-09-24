@@ -112,6 +112,19 @@ def test_status_is_atomic_complete_and_tolerant(tmp_path: Path) -> None:
     background.clear_status(paths)  # idempotent
 
 
+def test_status_retains_last_completed_pass_while_indexing(tmp_path: Path) -> None:
+    paths = AppPaths(tmp_path / "home")
+
+    background.write_status(paths, "idle", stats={"created": 2}, roots=1)
+    first = background.read_status(paths)
+    background.write_status(paths, "indexing", roots=1)
+    current = background.read_status(paths)
+
+    assert "stats" not in current
+    assert current["last_scan_at"] == first["updated_at"]
+    assert current["last_scan_stats"] == {"created": 2}
+
+
 # -- pause / stop markers ----------------------------------------------------------
 
 def test_pause_resume_and_stop_markers(tmp_path: Path) -> None:
@@ -270,6 +283,15 @@ def test_start_stop_and_no_duplicate_process(tmp_path, monkeypatch) -> None:
         assert state == "already-running", message
         assert background.read_lock_pid(paths) == first_pid
 
+        # The worker publishes a pre-scan idle state before its first pass.
+        # Do not open the test reader until the completed-pass marker exists,
+        # otherwise this test itself can win SQLite's schema lock first.
+        assert wait_until(
+            lambda: (background.read_status(paths) or {}).get("state") == "idle"
+            and "stats" in (background.read_status(paths) or {}),
+            timeout=15,
+        ), "worker did not complete its initial pass"
+
         # the child actually indexes (parent reads the same database)
         engine = SearchEngine(SearchDatabase(paths.database))
         assert wait_until(
@@ -299,6 +321,75 @@ def test_stop_when_not_running_is_not_an_error(tmp_path: Path) -> None:
     state, message = background.stop(paths)
     assert state == "not-running"
     assert "no está" in message
+
+
+def test_expected_pid_stop_rechecks_before_requesting_stop(
+    tmp_path: Path, monkeypatch
+) -> None:
+    paths = AppPaths(tmp_path / "home")
+    values = iter((111, 222))
+
+    monkeypatch.setattr(
+        background,
+        "read_lock_pid",
+        lambda _paths: next(values, 222),
+    )
+    monkeypatch.setattr(background, "process_alive", lambda _pid: True)
+    requested: list[object] = []
+    monkeypatch.setattr(
+        background,
+        "request_stop",
+        lambda _paths, *, owner: requested.append(owner),
+    )
+
+    state, message = background.stop(paths, timeout=0, expected_pid=111)
+
+    assert state == "replaced"
+    assert "reemplaz" in message
+    assert requested == []
+
+
+def test_expected_pid_stop_rechecks_before_escalating_termination(
+    tmp_path: Path, monkeypatch
+) -> None:
+    paths = AppPaths(tmp_path / "home")
+    paths.ensure()
+    old = background.WorkerOwner(111, "generation-old")
+    paths.lock_file.write_text("111", encoding="ascii")
+    paths.worker_owner_file.write_text(
+        '{"pid": 111, "generation": "generation-old"}',
+        encoding="utf-8",
+    )
+
+    def request_stop(_paths, *, owner):
+        assert owner == old
+        paths.lock_file.write_text("222", encoding="ascii")
+        paths.worker_owner_file.write_text(
+            '{"pid": 222, "generation": "generation-new"}',
+            encoding="utf-8",
+        )
+
+    opened: list[int] = []
+    terminated: list[int] = []
+    monkeypatch.setattr(background, "process_alive", lambda pid: pid in {111, 222})
+    monkeypatch.setattr(background, "request_stop", request_stop)
+    monkeypatch.setattr(
+        background,
+        "open_process_identity",
+        lambda pid: opened.append(pid) or None,
+    )
+    monkeypatch.setattr(
+        background,
+        "terminate_process_identity",
+        lambda identity: terminated.append(identity.pid),
+    )
+
+    state, message = background.stop(paths, timeout=0, expected_pid=111)
+
+    assert state == "replaced"
+    assert "reemplaz" in message
+    assert opened == [111]
+    assert terminated == []
 
 
 # -- resource limits --------------------------------------------------------------------

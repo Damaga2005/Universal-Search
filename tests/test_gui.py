@@ -441,6 +441,22 @@ def test_copy_path_recents_and_show_request(window, monkeypatch) -> None:
     hotkey.clear_gui_pid(window.service.paths)
 
 
+def test_diagnostics_request_is_consumed_and_shown(window, monkeypatch) -> None:
+    from universal_search import hotkey
+
+    hotkey.write_gui_pid(window.service.paths)
+    assert hotkey.request_diagnostics(window.service.paths) is True
+
+    shown: list[bool] = []
+    monkeypatch.setattr(window, "_show_diagnostics", lambda: shown.append(True))
+
+    window._poll_show_request()
+
+    assert shown == [True]
+    assert not window.service.paths.diagnostics_request_file.exists()
+    hotkey.clear_gui_pid(window.service.paths)
+
+
 def test_window_title_shows_the_product_version(window) -> None:
     from universal_search import __version__
 

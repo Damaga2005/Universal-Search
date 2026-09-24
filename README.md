@@ -54,7 +54,12 @@ and extractor contracts with capability-based registration, and documented
 why there is deliberately no runtime third-party plugin loading; phase 020
 added downgrade refusal, a migration ledger, consistent backups before
 destructive repairs, Windows CI with a packaged smoke test, and a
-reproducible release procedure — **515 passing tests, 1 skipped**.
+reproducible release procedure; phase 021 added an optional native Windows
+notification-area controller, an application state service, GUI show/diagnostics
+signalling and generation-aware worker ownership without adding a runtime
+dependency. Startup claims survive Windows launcher PID differences; owner-scoped
+stop markers and a held OS lease prevent replacement/PID-reuse handoff races.
+The current gate is **646 passing tests, 2 skipped**.
 
 | Fase | Entrega | Estado |
 |------|---------|--------|
@@ -78,6 +83,7 @@ reproducible release procedure — **515 passing tests, 1 skipped**.
 | 018 | Privacidad y seguridad (inventario, forget) | ✅ |
 | 019 | Arquitectura de proveedores y extensiones | ✅ |
 | 020 | Release de producción y fiabilidad (CI, migraciones, copias) | ✅ |
+| 021 | Bandeja de notificación y experiencia en segundo plano | ✅ |
 
 Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
 by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).
@@ -95,6 +101,7 @@ universal-search search "bjt type:txt after:2026-01-01"        # query language 
 universal-search search "bjt -cmos size:>10KB"                # negation + size filter (012)
 universal-search search '"ebers moll" OR "gunn effect"'      # phrase + OR (012)
 universal-search gui               # desktop window (alias: universal-search-gui)
+universal-search tray              # optional Windows notification-area controller
 
 # personal layer (all local): contexts, usage learning, hotkey, recents
 universal-search context list      # context add|remove|use|relate …
@@ -128,6 +135,15 @@ universal-search indexer stop
 universal-search indexer autostart on
 ```
 
+The tray is optional and must be started explicitly. Windows autostart still
+registers only the `indexer run` worker; it does not launch the tray. The
+tray's Settings and Diagnostics commands open the existing search window, where
+those surfaces already live. The adapter uses the Python standard library's
+`ctypes`, so this phase added no runtime dependency. The normal suite does not
+post an icon. A disposable Windows-only smoke is opt-in with
+`UNIVERSAL_SEARCH_TRAY_NATIVE_SMOKE=1`; it exercises real `NIM_ADD`, a posted
+Exit command and guaranteed `NIM_DELETE` cleanup.
+
 The CLI database defaults to `universal-search.db` (`--database <path>` to
 change). The GUI and background indexer use the per-user application home
 (`%LOCALAPPDATA%\Universal Search\index.db`, logs and status), overridable
@@ -140,7 +156,7 @@ and a content snippet; ranking is documented in `docs/RANKING.md`.
 pip install ".[build]"                       # pyinstaller
 python -m PyInstaller packaging/universal-search.spec
 # dist/UniversalSearch/UniversalSearch.exe   windowed GUI
-# dist/UniversalSearch/universal-search.exe  console CLI + background indexer
+# dist/UniversalSearch/universal-search.exe  console CLI + background indexer + optional tray
 powershell -File packaging/make-shortcut.ps1 -TargetExe "dist\UniversalSearch\UniversalSearch.exe"
 ```
 

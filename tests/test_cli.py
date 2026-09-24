@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from universal_search import cli
 from universal_search.cli import main
 
 
@@ -302,3 +303,53 @@ def test_cli_search_filters(tmp_path: Path, monkeypatch, capsys) -> None:
         )
         main()
     assert exit_info.value.code == 2
+
+
+def test_cli_tray_subcommand_dispatches(monkeypatch) -> None:
+    called = []
+    monkeypatch.setattr(
+        cli, "_tray_command", lambda args: called.append(args) or 0, raising=False
+    )
+    monkeypatch.setattr(sys, "argv", ["universal-search", "tray"])
+
+    result = cli.main()
+
+    assert result == 0
+    assert len(called) == 1
+    assert called[0].command == "tray"
+
+
+def test_cli_help_lists_tray(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(sys, "argv", ["universal-search", "--help"])
+
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main()
+
+    assert exit_info.value.code == 0
+    assert "tray" in capsys.readouterr().out
+
+
+def test_tray_command_uses_discovered_paths_and_returns_run_tray_code(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from universal_search import appconfig, tray
+
+    paths = cli.AppPaths(tmp_path / "home")
+    logging_calls = []
+    tray_calls = []
+    monkeypatch.setattr(cli.AppPaths, "discover", lambda: paths)
+    monkeypatch.setattr(
+        appconfig, "setup_logging", lambda supplied: logging_calls.append(supplied)
+    )
+    monkeypatch.setattr(
+        tray,
+        "run_tray",
+        lambda **kwargs: tray_calls.append(kwargs) or 17,
+    )
+
+    result = cli._tray_command(object())
+
+    assert result == 17
+    assert logging_calls == [paths]
+    assert tray_calls == [{"paths": paths}]
+    assert not paths.database.exists()

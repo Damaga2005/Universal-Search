@@ -13,8 +13,8 @@ def main() -> int:
     if len(sys.argv) > 1:
         from universal_search.cli import main as cli_main
 
-        cli_main()  # may raise SystemExit with the command's code
-        return 0
+        result = cli_main()  # may raise SystemExit with the command's code
+        return 0 if result is None else result
     from universal_search.gui.app import run
 
     return run()

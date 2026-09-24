@@ -1,7 +1,7 @@
 # Universal Search — Roadmap & Documentation
 
 Índice de documentación con el estado real del roadmap, fase a fase.
-El roadmap por versiones (v0.1–v0.6+) vive en [ROADMAP.md](ROADMAP.md).
+El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
 
 ## Estado por fase
 
@@ -27,18 +27,23 @@ El roadmap por versiones (v0.1–v0.6+) vive en [ROADMAP.md](ROADMAP.md).
 | 018 | Privacidad y seguridad | ✅ Completada | [018-privacy-security.md](development/018-privacy-security.md) | [informe](development/018-privacy-security-report.md) |
 | 019 | Arquitectura de proveedores y extensión | ✅ Completada | [019-provider-plugin-architecture.md](development/019-provider-plugin-architecture.md) | [informe](development/019-provider-plugin-architecture-report.md) |
 | 020 | Release de producción y fiabilidad | ✅ Completada | [020-production-release.md](development/020-production-release.md) | [informe](development/020-production-release-report.md) |
+| 021 | Bandeja de notificación y experiencia en segundo plano | ✅ Completada | [021-tray-and-background-experience.md](development/021-tray-and-background-experience.md) | [informe](development/021-tray-and-background-experience-report.md) |
 
 Verificado en la fase 010: **208 tests en verde**
 (`.venv\Scripts\python -m pytest`), E2E completo de indexador, CLI, GUI e
 instalador. Posteriormente, pasada de auditoría + optimización con
 perfilado: indexación ×16 (2000 docs 45,3s → 2,8s) y consulta media
 48,6 → 34,4 ms —
-[informe](development/optimization-report.md).
+[informe](development/optimization-report.md). La verificación más reciente,
+fase 021, deja **646 tests passed y 2 skipped**, pyflakes limpio y el paquete
+PyInstaller validado; detalles y límites en el
+[informe de la fase 021](development/021-tray-and-background-experience-report.md).
 
 ## Cómo ejecutar
 
 ```bash
 universal-search gui                   # ventana de búsqueda
+universal-search tray                  # bandeja opcional de Windows
 universal-search search "meeting notes"
 universal-search indexer start         # indexador en 2.º plano (independiente de la GUI)
 universal-search indexer status|pause|resume|stop|autostart on
@@ -52,7 +57,7 @@ Construir los ejecutables: ver «Build the Windows executables» en el
 - [ROADMAP.md](ROADMAP.md) — alcance por versiones con checkboxes.
 - [ARCHITECTURE.md](ARCHITECTURE.md) — capas (Provider → Extractor →
   Document → Indexer → FTS5 → Ranking → SearchEngine → UI) y modelo de
-  procesos GUI/indexador.
+  procesos GUI/indexador/bandeja.
 - [RANKING.md](RANKING.md) — fórmula de scoring y pesos.
 - `development/` — un prompt por fase y, para las completadas, su informe
   (qué se hizo, decisiones, dependencias, limitaciones, tests, criterios de
@@ -63,6 +68,6 @@ Construir los ejecutables: ver «Build the Windows executables» en el
 
 Cada fase se considera terminada solo cuando: todos los tests pasan (los
 anteriores incluidos), hay cobertura de tests propia, se documenta en un
-informe y se marca en `ROADMAP.md`. Las fases 001–010 siguen esa
-convención y están entregadas; el alcance futuro (indexador en bandeja,
-grafo de documentos relacionados) queda reflejado en `ROADMAP.md`.
+informe y se marca en `ROADMAP.md`. Las fases entregadas siguen esa convención.
+El alcance pendiente, desde el grafo de documentos relacionados hasta las fases
+022–030, queda reflejado en `ROADMAP.md`.

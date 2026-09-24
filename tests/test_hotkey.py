@@ -11,6 +11,7 @@ from dataclasses import replace
 
 import pytest
 
+from universal_search import hotkey
 from universal_search.appconfig import (
     MAX_RECENT_QUERIES,
     AppConfig,
@@ -232,6 +233,43 @@ def test_request_show_reaches_a_live_window_exactly_once(tmp_path) -> None:
     clear_gui_pid(paths)
     assert read_gui_pid(paths) is None
     assert not paths.gui_pid_file.exists()
+
+
+def test_tray_and_diagnostics_paths_are_in_application_home(tmp_path) -> None:
+    paths = AppPaths(tmp_path / "home")
+
+    assert paths.tray_pid_file == paths.home / "tray.pid"
+    assert paths.diagnostics_request_file == paths.home / "gui-diagnostics.flag"
+
+
+def test_request_diagnostics_requires_a_live_window(tmp_path) -> None:
+    paths = AppPaths(tmp_path / "home")
+
+    assert hotkey.request_diagnostics(paths) is False
+    assert not paths.diagnostics_request_file.exists()
+
+    write_gui_pid(paths, 999_999_999)
+    assert hotkey.request_diagnostics(paths) is False
+    assert not paths.diagnostics_request_file.exists()
+
+
+def test_request_diagnostics_reaches_a_live_window_exactly_once(tmp_path) -> None:
+    paths = AppPaths(tmp_path / "home")
+    write_gui_pid(paths)  # our own PID: definitely alive
+
+    assert hotkey.request_diagnostics(paths) is True
+    assert paths.diagnostics_request_file.exists()
+    assert hotkey.consume_diagnostics_request(paths) is True
+    assert hotkey.consume_diagnostics_request(paths) is False
+
+    clear_gui_pid(paths)
+
+
+def test_gui_services_exports_diagnostics_signal_helpers() -> None:
+    from universal_search.gui import services
+
+    assert services.request_diagnostics is hotkey.request_diagnostics
+    assert services.consume_diagnostics_request is hotkey.consume_diagnostics_request
 
 
 def test_read_gui_pid_garbage(tmp_path) -> None:

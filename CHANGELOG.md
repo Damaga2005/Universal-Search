@@ -7,6 +7,34 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 021 — Tray & background experience
+- Added the optional `universal-search tray` command and a native Windows
+  notification-area adapter implemented with standard-library `ctypes`; no new
+  runtime dependency, Windows service, cloud component or automatic tray
+  launch.
+- Added an application-level background state service with `stopped`,
+  `starting`, `indexing`, `paused`, `idle`, `error` and `stopping`. The tray
+  reads that snapshot instead of SQLite internals.
+- Tray menu: present Search / Quick Search / Settings, open the existing
+  Diagnostics view, and start, stop, pause or resume the indexer according to
+  its current state.
+- Independent worker, GUI and tray PID identities. Worker startup now uses a
+  unique generation passed to the child plus an OS-held lease; the tray claims
+  only the exact generation it presented. Stop markers, cleanup and forced
+  termination are owner-scoped, so a replacement or reused PID is never hit.
+- Meaningful-only balloons for new errors or error text, new hotkey
+  configuration problems, unexpected worker disappearance and long-pass
+  completion. User-requested lifecycle actions stay silent; startup evaluation
+  waits until the native icon is ready.
+- The notification-area adapter restores its icon on Windows `TaskbarCreated`
+  after Explorer restarts. Non-Exit command failures are bounded, retained as
+  the controller's last result and logged without exception/document text.
+- Autostart is unchanged: it still registers `indexer run`, not the tray.
+- Current quality gate: **646 passed, 2 skipped**, clean
+  pyflakes, successful PyInstaller build and frozen-package smoke. The opt-in
+  native smoke posted and deleted a real notification-area icon in the final-fix
+  verification; it is skipped by the normal suite.
+
 ### Phase 020 — Production release & reliability
 - Schema version 5: `schema_migrations` ledger (one row per applied
   version, append-only) and **downgrade refusal** — a build older than the

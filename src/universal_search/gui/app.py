@@ -274,6 +274,8 @@ class SearchWindow(tk.Tk):
         try:
             if services.consume_show_request(self.service.paths):
                 self._present()
+            if services.consume_diagnostics_request(self.service.paths):
+                self._show_diagnostics()
         except Exception:
             log.exception("could not handle show request")
         self.after(SHOW_POLL_MS, self._poll_show_request)

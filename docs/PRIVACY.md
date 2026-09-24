@@ -30,6 +30,7 @@ quedar vieja) y se muestra con `universal-search privacy show`.
 | `config.json` | preferencias, contextos, consultas recientes | configuración y menú Recientes | hasta limpiar o borrar el fichero | `recent clear` | No |
 | `universal-search.log` | eventos, niveles y rutas; **nunca texto del documento** | diagnóstico; cada mensaje se corta a 500 caracteres | 1 MB × 3 rotados | borrar el fichero | No |
 | `metrics.jsonl` | latencias, recuentos, duraciones; **sin texto de consulta** | visibilidad de rendimiento (fase 011) | compactado al pasar de 512 KB | borrar el fichero | No |
+| ficheros de coordinación de procesos | PIDs, identidades de creación, generaciones de arranque, estado/recuentos, reclamaciones atómicas y banderas por generación; **sin texto de documento ni de consulta** | instancia única y órdenes locales entre worker, GUI y bandeja | mientras un proceso sea dueño; las banderas se consumen, las reclamaciones de PID muerto se recuperan y los sidecars de lease pueden quedar como un byte | detener bandeja/GUI/indexador y borrar los ficheros de coordinación o toda la carpeta de aplicación | No |
 
 ## Modelo de amenazas (priorizado por plausibilidad)
 
@@ -40,7 +41,7 @@ quedar vieja) y se muestra con `universal-search privacy show`.
 | **Rutas maliciosas o con traviesos** | Las rutas vienen del escaneo del sistema; los nombres hostiles se indexan como texto inerte; ningún nombre se interpola en SQL | `test_privacy` (`a'b; --.md`, `../../etc/passwd`) |
 | **Symlinks / reparse points** | El escaneo **no desciende** en directorios enlazados ni indexa ficheros symlink | `test_privacy` (omitido si el SO no permite crear enlaces) |
 | **Base de datos corrupta** | Diagnóstico: `check()` la marca *fatal* sin lanzar; las reparaciones cierran conexiones antes de borrar | `test_diagnostics`, `test_privacy` |
-| **Procesos concurrentes** | WAL para lectores/escritores; bloqueo `O_EXCL` del indexador; el PID de la ventana con instancia única | `test_background`, `test_platforms` |
+| **Procesos concurrentes** | WAL para lectores/escritores; leases del SO para locks y reclamaciones; identidad PID/generación/creación; marcador de parada por generación; PID de ventana con instancia única | `test_background`, `test_worker_ownership`, `test_platforms` |
 | **Fuga por el registro** | Mensajes acotados a 500 caracteres; ninguna ruta de código registra texto de documento ni consultas | `test_privacy` (secreto + consulta privada) |
 | **Windows multiusuario** | Todo vive bajo `%LOCALAPPDATA%` del usuario; ningún dato compartido ni claves de HKLM | `test_release` |
 | **Integridad de paquetes** | Fuera del alcance de la aplicación: la verificación de firmas del instalador es responsabilidad de la cadena de distribución | ver *Limitaciones* |

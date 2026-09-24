@@ -22,7 +22,7 @@
 - [x] Windows desktop GUI
 - [x] Global hotkey
 - [x] Windows Start/Search integration
-- [ ] Tray indexer
+- [x] Tray indexer
 
 ## v0.5
 - [x] OneDrive synced-folder provider
@@ -31,7 +31,6 @@
 ## v0.6+
 - [x] University workspace/profile
 - [x] Local usage-based ranking
-- [ ] Related-document graph
 - [x] Installable Windows application
 
 ## v0.7+ (phases 011–020)
@@ -47,10 +46,24 @@
 - [x] Provider & extension architecture (019)
 - [x] Production release & reliability (020)
 
+## v0.8+ (phases 021–030)
+
+- [x] Tray & background experience (021)
+- [ ] Related-document graph (022)
+- [ ] Indexing UX & control center (023)
+- [ ] Provider expansion (024)
+- [ ] Content extraction v2 (025)
+- [ ] Local semantic search without cloud AI (026)
+- [ ] Windows shell integration (027)
+- [ ] Observability & recovery (028)
+- [ ] Release engineering & CI (029)
+- [ ] Universal Search v2 quality gate (030)
+
 ---
 
-Phases 001–010 are implemented and documented (per-phase reports in
-`docs/development/`), with 208 passing tests, plus a profiled audit &
-optimization pass (`docs/development/optimization-report.md`): indexing
-16× faster (2000 docs 45.3s → 2.8s), mean query 48.6 → 34.4 ms.
-Still open: the tray indexer and the related-document graph.
+Phases 001–021 are implemented and documented (per-phase reports in
+`docs/development/`). The phase-021 final-fix quality gate measured
+**646 passing tests, 2 skipped**, clean pyflakes, a successful
+frozen-package smoke, and an opt-in real Windows tray add/Exit/delete smoke.
+Still open:
+the related-document graph and every planned phase from 022 through 030.

@@ -11,7 +11,9 @@ from pathlib import Path
 from universal_search.appconfig import AppConfig, AppPaths, remember_query
 from universal_search.context import get_context
 from universal_search.hotkey import (
+    consume_diagnostics_request,
     consume_show_request,
+    request_diagnostics,
     write_gui_pid as register_gui_pid,
     clear_gui_pid as unregister_gui_pid,
 )
@@ -25,6 +27,7 @@ from universal_search.query import QueryError
 # talks only to the service layer.
 __all__ = [
     "SearchService",
+    "consume_diagnostics_request",
     "consume_show_request",
     "indexer_status",
     "indexer_summary",
@@ -32,6 +35,7 @@ __all__ = [
     "pause_indexer",
     "register_gui_pid",
     "reveal_in_explorer",
+    "request_diagnostics",
     "resume_indexer",
     "set_autostart",
     "start_indexer",

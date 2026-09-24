@@ -153,6 +153,11 @@ def main() -> None:
     recent_sub.add_parser("off", help="disable the recents menu")
     recent_sub.add_parser("clear", help="forget every remembered query")
 
+    # -- notification-area controller ---------------------------------------------
+    sub.add_parser(
+        "tray", help="show the Windows notification-area controller"
+    )
+
     # -- background indexer ------------------------------------------------------
     indexer = sub.add_parser("indexer", help="background indexer lifecycle")
     indexer_sub = indexer.add_subparsers(dest="indexer_command", required=True)
@@ -383,6 +388,8 @@ def main() -> None:
         from universal_search.gui.app import run
 
         raise SystemExit(run())
+    elif args.command == "tray":
+        return _tray_command(args)
     elif args.command == "indexer":
         raise SystemExit(_indexer_command(args))
     else:
@@ -916,6 +923,16 @@ def _recent_command(args) -> int:
     return 0
 
 
+def _tray_command(args) -> int:
+    """Run the notification-area controller without opening the index."""
+    from universal_search.appconfig import setup_logging
+    from universal_search.tray import run_tray
+
+    paths = AppPaths.discover()
+    setup_logging(paths)
+    return run_tray(paths=paths)
+
+
 def _indexer_command(args) -> int:
     """Presentation for the background-indexer lifecycle (logic lives elsewhere)."""
     from universal_search import background
@@ -959,4 +976,4 @@ def _indexer_command(args) -> int:
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
