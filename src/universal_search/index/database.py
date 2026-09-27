@@ -16,7 +16,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS documents (
     id TEXT PRIMARY KEY,
     source TEXT NOT NULL,
-    path TEXT NOT NULL UNIQUE,
+    path TEXT NOT NULL,
     name TEXT NOT NULL,
     extension TEXT NOT NULL,
     size INTEGER NOT NULL,
@@ -28,6 +28,16 @@ CREATE TABLE IF NOT EXISTS documents (
     availability TEXT NOT NULL DEFAULT 'available',
     indexed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Phase 024: the canonical uniqueness contract is (source, path). Two
+-- providers may own the same path (a NAS share and a local folder, a
+-- removable drive and the drive letter it replaced); the provider key is
+-- the source discriminator. A plain path index keeps the per-root
+-- deletion range scan fast.
+CREATE UNIQUE INDEX IF NOT EXISTS documents_source_path
+    ON documents(source, path);
+CREATE INDEX IF NOT EXISTS documents_path
+    ON documents(path);
 
 CREATE TABLE IF NOT EXISTS usage_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -152,6 +162,59 @@ MIGRATIONS = (
     "ALTER TABLE documents ADD COLUMN availability TEXT NOT NULL DEFAULT 'available'",
 )
 
+# Phase 024: the v6 schema made `path` alone UNIQUE. SQLite cannot drop a
+# column constraint in place, so the table is rebuilt: every row is copied
+# into a replacement table without the constraint (same column order, so
+# the copy is a plain SELECT *), the old table is dropped and the
+# replacement renamed. Forward-only, idempotent (detected by the old DDL
+# text) and lossless: existing local/onedrive rows keep their ids, and the
+# new (source, path) unique index is created alongside.
+_V7_DOCUMENTS = """
+CREATE TABLE documents_v7 (
+    id TEXT PRIMARY KEY,
+    source TEXT NOT NULL,
+    path TEXT NOT NULL,
+    name TEXT NOT NULL,
+    extension TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    created_at TEXT,
+    modified_at TEXT,
+    content_hash TEXT,
+    mtime_ns INTEGER,
+    last_seen_run INTEGER NOT NULL DEFAULT 0,
+    availability TEXT NOT NULL DEFAULT 'available',
+    indexed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+)
+"""
+
+
+def _migrate_documents_uniqueness(connection: sqlite3.Connection) -> None:
+    """v7: move the uniqueness contract from ``path`` to ``(source, path)``."""
+    row = connection.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'documents'"
+    ).fetchone()
+    if row is None or "path TEXT NOT NULL UNIQUE" not in (row["sql"] or ""):
+        return  # fresh schema or already migrated
+    connection.execute(_V7_DOCUMENTS)
+    # Column-explicit copy: a legacy table that gained its columns through
+    # ALTER TABLE has them in a different order than the replacement.
+    connection.execute(
+        "INSERT INTO documents_v7 (id, source, path, name, extension, size,"
+        " created_at, modified_at, content_hash, mtime_ns, last_seen_run,"
+        " availability, indexed_at)"
+        " SELECT id, source, path, name, extension, size, created_at,"
+        " modified_at, content_hash, mtime_ns, last_seen_run, availability,"
+        " indexed_at FROM documents"
+    )
+    connection.execute("DROP TABLE documents")
+    connection.execute("ALTER TABLE documents_v7 RENAME TO documents")
+    connection.execute(
+        "CREATE UNIQUE INDEX documents_source_path ON documents(source, path)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS documents_path ON documents(path)"
+    )
+
 # -- migration strategy ---------------------------------------------------------
 # Three safe-to-repeat mechanisms guard every connection:
 #   1. SCHEMA creates missing tables/indexes (fresh databases).
@@ -165,7 +228,7 @@ MIGRATIONS = (
 # (tests/test_release.py enforces the stamp on fresh and legacy databases).
 # Adding an object to SCHEMA also upgrades existing databases: the
 # schema-present gate sees a missing object and re-runs the idempotent DDL.
-SCHEMA_VERSION = 6  # + versioned related-document graph (022)
+SCHEMA_VERSION = 7  # + uniqueness moves from path to (source, path) (024)
 
 # Every object SCHEMA creates. When all of them already exist the idempotent
 # DDL is skipped: one indexed sqlite_master lookup replaces re-parsing the
@@ -175,6 +238,8 @@ SCHEMA_OBJECTS = (
     "usage_events",
     "usage_events_document",
     "documents_fts",
+    "documents_source_path",
+    "documents_path",
     "document_intelligence",
     "document_intelligence_language",
     "document_graph_nodes",
@@ -261,6 +326,7 @@ class SearchDatabase:
                 connection.execute(statement)
                 columns.add(column)
                 connection.commit()
+        _migrate_documents_uniqueness(connection)
         if stored != SCHEMA_VERSION:
             connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             connection.commit()

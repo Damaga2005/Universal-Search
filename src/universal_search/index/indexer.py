@@ -12,7 +12,12 @@ from universal_search.domain.document import Document, document_id_for
 from universal_search.domain.extraction import ExtractionResult
 from universal_search.index.database import SearchDatabase
 from universal_search.metrics import record_index
-from universal_search.providers.base import IgnoredPath, ScanError
+from universal_search.providers.base import (
+    CancelToken,
+    IgnoredPath,
+    ProviderError,
+    ScanError,
+)
 from universal_search.providers.ignore import IgnoreRules
 from universal_search.providers.local import read_local_content, scan_local
 from universal_search.providers.onedrive import (
@@ -46,6 +51,9 @@ class IndexStats:
     errors: int = 0
     extraction_errors: int = 0
     cloud_only: int = 0
+    # Enumeration errors a provider bounded away (beyond MAX_PROVIDER_ERRORS):
+    # surfaced here instead of being silently dropped.
+    dropped_errors: int = 0
 
     @property
     def scanned(self) -> int:
@@ -60,6 +68,7 @@ class IndexStats:
         for name in (
             "created", "updated", "unchanged", "deleted",
             "ignored", "errors", "extraction_errors", "cloud_only",
+            "dropped_errors",
         ):
             setattr(self, name, getattr(self, name) + getattr(other, name))
 
@@ -73,6 +82,7 @@ class IndexStats:
             "errors": self.errors,
             "extraction_errors": self.extraction_errors,
             "cloud_only": self.cloud_only,
+            "dropped_errors": self.dropped_errors,
         }
 
     def summary(self) -> str:
@@ -81,7 +91,8 @@ class IndexStats:
             f"unchanged={self.unchanged} deleted={self.deleted} "
             f"ignored={self.ignored} errors={self.errors} "
             f"extraction_errors={self.extraction_errors} "
-            f"cloud_only={self.cloud_only}"
+            f"cloud_only={self.cloud_only} "
+            f"dropped_errors={self.dropped_errors}"
         )
 
 
@@ -134,8 +145,12 @@ class Indexer:
 
     def upsert(self, document: Document) -> None:
         connection = self.connection()
+        # Phase 024: identity is (source, path) — the same path owned by two
+        # providers is two documents, so the previous-row lookup is scoped
+        # by source as well.
         previous = connection.execute(
-            "SELECT id FROM documents WHERE path = ?", (str(document.path),)
+            "SELECT id FROM documents WHERE path = ? AND source = ?",
+            (str(document.path), str(document.source)),
         ).fetchone()
         touched = {document.id}
         if previous is not None:
@@ -158,8 +173,8 @@ class Indexer:
         availability: str = AVAILABILITY_AVAILABLE,
     ) -> None:
         previous = connection.execute(
-            "SELECT id, name, path FROM documents WHERE path = ?",
-            (str(document.path),),
+            "SELECT id, name, path FROM documents WHERE path = ? AND source = ?",
+            (str(document.path), str(document.source)),
         ).fetchone()
         stale_ids = {document.id}
         if previous is not None:
@@ -187,7 +202,7 @@ class Indexer:
                                    created_at, modified_at, content_hash, mtime_ns,
                                    last_seen_run, availability)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(path) DO UPDATE SET
+            ON CONFLICT(source, path) DO UPDATE SET
                 id=excluded.id, source=excluded.source, name=excluded.name,
                 extension=excluded.extension, size=excluded.size,
                 created_at=excluded.created_at, modified_at=excluded.modified_at,
@@ -196,7 +211,7 @@ class Indexer:
                 availability=excluded.availability,
                 indexed_at=CURRENT_TIMESTAMP
         """, (
-            document.id, document.source.value, str(document.path), document.name,
+            document.id, str(document.source), str(document.path), document.name,
             document.extension, document.size,
             document.created_at.isoformat() if document.created_at else None,
             document.modified_at.isoformat() if document.modified_at else None,
@@ -256,6 +271,8 @@ class Indexer:
         read_content: ContentReader | None = None,
         delay: float = 0.0,
         onedrive_download_mb: float = 0.0,
+        provider=None,
+        cancel: CancelToken | None = None,
     ) -> IndexStats:
         """Reconcile everything indexed under ``root`` with the filesystem.
 
@@ -273,6 +290,18 @@ class Indexer:
 
         ``delay`` sleeps that many seconds after writing each changed file —
         a cooperative CPU/disk resource limit used by the background worker.
+
+        Without ``provider`` the pass classifies each file from its path
+        (OneDrive roots are detected), which is the phase-023 behaviour the
+        CLI, the worker and the control centre keep using. With ``provider``
+        the pass enumerates through ``provider.iter_files`` instead and every
+        file is owned by that provider (``documents.source`` is the provider
+        key), so two providers can own the same root; the deletion pass is
+        then scoped to the provider's own rows. A provider that dies
+        mid-enumeration costs only its own pass: the error is counted and
+        the deletion pass is skipped, because files after the failure point
+        were never seen and would otherwise be deleted from the index while
+        still existing on disk.
         """
         rules = rules or IgnoreRules.defaults()
         read_content = read_content or read_local_content
@@ -285,119 +314,171 @@ class Indexer:
             writes_before = connection.total_changes
             pending = 0
             graph_touched: set[str] = set()
-            for item in scan_local(root_path, rules):
-                if isinstance(item, IgnoredPath):
-                    stats.ignored += 1
-                    continue
-                if isinstance(item, ScanError):
-                    stats.errors += 1
-                    continue
-                if str(item.path) in own_files:
-                    stats.ignored += 1
-                    continue
+            enumeration_failed = False
+            items = (
+                scan_local(root_path, rules)
+                if provider is None
+                else provider.iter_files(root_path, cancel)
+            )
+            try:
+                for item in items:
+                    if isinstance(item, IgnoredPath):
+                        stats.ignored += 1
+                        continue
+                    if isinstance(item, (ProviderError, ScanError)):
+                        stats.errors += 1
+                        continue
+                    if provider is None:
+                        source_value: str = source_for_path(item.path).value
+                        availability = availability_from_attributes(item.attributes)
+                    else:
+                        source_value = str(getattr(provider, "key", ""))
+                        availability = item.availability or AVAILABILITY_AVAILABLE
+                    if str(item.path) in own_files:
+                        stats.ignored += 1
+                        continue
 
-                source = source_for_path(item.path)
-                availability = availability_from_attributes(item.attributes)
-                stored = connection.execute(
-                    "SELECT id, size, mtime_ns, content_hash, source, availability "
-                    "FROM documents WHERE path = ?",
-                    (str(item.path),),
-                ).fetchone()
-                if (
-                    stored is not None
-                    and stored["size"] == item.size
-                    and stored["mtime_ns"] == item.mtime_ns
-                    and stored["source"] == source.value
-                    and stored["availability"] == availability
-                ):
-                    stats.unchanged += 1
-                    connection.execute(
-                        "UPDATE documents SET last_seen_run = ? WHERE id = ?",
-                        (run_id, stored["id"]),
+                    if provider is None:
+                        stored = connection.execute(
+                            "SELECT id, size, mtime_ns, content_hash, source, "
+                            "availability FROM documents WHERE path = ?",
+                            (str(item.path),),
+                        ).fetchone()
+                    else:
+                        # Two providers may own the same path: scope the
+                        # lookup by source so one provider never reads or
+                        # re-extracts another provider's row.
+                        stored = connection.execute(
+                            "SELECT id, size, mtime_ns, content_hash, source, "
+                            "availability FROM documents WHERE path = ? AND source = ?",
+                            (str(item.path), source_value),
+                        ).fetchone()
+                    if (
+                        stored is not None
+                        and stored["size"] == item.size
+                        and stored["mtime_ns"] == item.mtime_ns
+                        and stored["source"] == source_value
+                        and stored["availability"] == availability
+                    ):
+                        stats.unchanged += 1
+                        connection.execute(
+                            "UPDATE documents SET last_seen_run = ? WHERE id = ?",
+                            (run_id, stored["id"]),
+                        )
+                        pending += 1
+                        if pending >= COMMIT_EVERY:
+                            self._mark_graph_dirty(connection, graph_touched)
+                            connection.commit()
+                            pending = 0
+                        continue
+
+                    content: str | None = None
+                    if allow_content_read(availability, item.size, onedrive_download_mb):
+                        try:
+                            outcome = read_content(item.path)
+                        except Exception as exc:  # a broken reader must not stop the run
+                            outcome = ExtractionResult(error=f"{type(exc).__name__}: {exc}")
+                        if outcome.error is not None:
+                            stats.extraction_errors += 1
+                        content = outcome.text
+                        if availability != AVAILABILITY_AVAILABLE and outcome.error is None:
+                            availability = AVAILABILITY_AVAILABLE  # explicit download
+                    else:
+                        # Cloud-only placeholder: metadata only. Reading it here
+                        # would silently download the file (phase 007 rule).
+                        stats.cloud_only += 1
+
+                    document = Document(
+                        id=document_id_for(source_value, item.path),
+                        source=source_value,
+                        path=item.path,
+                        name=item.path.name,
+                        extension=item.path.suffix.lower(),
+                        size=item.size,
+                        created_at=item.created_at,
+                        modified_at=item.modified_at,
+                        content=content,
+                        content_hash=hashlib.sha256(content.encode("utf-8")).hexdigest()
+                        if content is not None
+                        else None,
                     )
+                    if stored is None:
+                        self._upsert(
+                            connection, document,
+                            mtime_ns=item.mtime_ns, run_id=run_id,
+                            availability=availability,
+                        )
+                        stats.created += 1
+                        graph_touched.add(document.id)
+                    elif (
+                        content is not None
+                        and stored["content_hash"] is not None
+                        and document.content_hash == stored["content_hash"]
+                        and stored["source"] == source_value
+                    ):
+                        # Content is identical: refresh metadata without touching FTS.
+                        connection.execute(
+                            """UPDATE documents SET size = ?, mtime_ns = ?, modified_at = ?,
+                                      last_seen_run = ?, availability = ?,
+                                      indexed_at = CURRENT_TIMESTAMP
+                               WHERE id = ?""",
+                            (
+                                item.size, item.mtime_ns,
+                                item.modified_at.isoformat() if item.modified_at else None,
+                                run_id, availability, stored["id"],
+                            ),
+                        )
+                        stats.unchanged += 1
+                    else:
+                        self._upsert(
+                            connection, document,
+                            mtime_ns=item.mtime_ns, run_id=run_id,
+                            availability=availability,
+                        )
+                        stats.updated += 1
+                        graph_touched.add(document.id)
+                        if stored["id"] != document.id:
+                            graph_touched.add(str(stored["id"]))
                     pending += 1
                     if pending >= COMMIT_EVERY:
                         self._mark_graph_dirty(connection, graph_touched)
                         connection.commit()
                         pending = 0
-                    continue
+                    if delay:
+                        time.sleep(delay)
+            except Exception:
+                if provider is None:
+                    # Legacy classification path: a crash propagates exactly
+                    # as it always has — the caller (CLI, worker, control
+                    # centre) records the failure, the committed batches stay
+                    # durable and the open transaction rolls back on close.
+                    raise
+                # A provider that dies mid-enumeration (a share that hangs,
+                # a drive that was pulled) costs only its own pass. The
+                # deletion pass is skipped: files after the failure point
+                # were never seen, and deleting them would remove documents
+                # that still exist on disk.
+                log.exception("enumeration failed for root %s", root_path)
+                stats.errors += 1
+                enumeration_failed = True
 
-                content: str | None = None
-                if allow_content_read(availability, item.size, onedrive_download_mb):
-                    try:
-                        outcome = read_content(item.path)
-                    except Exception as exc:  # a broken reader must not stop the run
-                        outcome = ExtractionResult(error=f"{type(exc).__name__}: {exc}")
-                    if outcome.error is not None:
-                        stats.extraction_errors += 1
-                    content = outcome.text
-                    if availability != AVAILABILITY_AVAILABLE and outcome.error is None:
-                        availability = AVAILABILITY_AVAILABLE  # explicit download
-                else:
-                    # Cloud-only placeholder: metadata only. Reading it here
-                    # would silently download the file (phase 007 rule).
-                    stats.cloud_only += 1
+            if cancel is not None and cancel.cancelled:
+                # A cooperative cancel means the pass did not see the whole
+                # tree; treat it as incomplete so the deletion pass is
+                # skipped (it would delete rows never reached).
+                enumeration_failed = True
 
-                document = Document(
-                    id=document_id_for(source, item.path),
-                    source=source,
-                    path=item.path,
-                    name=item.path.name,
-                    extension=item.path.suffix.lower(),
-                    size=item.size,
-                    created_at=item.created_at,
-                    modified_at=item.modified_at,
-                    content=content,
-                    content_hash=hashlib.sha256(content.encode("utf-8")).hexdigest()
-                    if content is not None
-                    else None,
+            total_errors = getattr(provider, "_enumeration_errors", None)
+            if total_errors is not None and total_errors > stats.errors:
+                # The provider bounded its error report; surface the errors
+                # it dropped instead of silently discarding them.
+                stats.dropped_errors += total_errors - stats.errors
+
+            if not enumeration_failed:
+                self._delete_missing(
+                    connection, root_path, run_id, stats,
+                    source=None if provider is None else str(getattr(provider, "key", "")),
                 )
-                if stored is None:
-                    self._upsert(
-                        connection, document,
-                        mtime_ns=item.mtime_ns, run_id=run_id,
-                        availability=availability,
-                    )
-                    stats.created += 1
-                    graph_touched.add(document.id)
-                elif (
-                    content is not None
-                    and stored["content_hash"] is not None
-                    and document.content_hash == stored["content_hash"]
-                    and stored["source"] == source.value
-                ):
-                    # Content is identical: refresh metadata without touching FTS.
-                    connection.execute(
-                        """UPDATE documents SET size = ?, mtime_ns = ?, modified_at = ?,
-                                  last_seen_run = ?, availability = ?,
-                                  indexed_at = CURRENT_TIMESTAMP
-                           WHERE id = ?""",
-                        (
-                            item.size, item.mtime_ns,
-                            item.modified_at.isoformat() if item.modified_at else None,
-                            run_id, availability, stored["id"],
-                        ),
-                    )
-                    stats.unchanged += 1
-                else:
-                    self._upsert(
-                        connection, document,
-                        mtime_ns=item.mtime_ns, run_id=run_id,
-                        availability=availability,
-                    )
-                    stats.updated += 1
-                    graph_touched.add(document.id)
-                    if stored["id"] != document.id:
-                        graph_touched.add(str(stored["id"]))
-                pending += 1
-                if pending >= COMMIT_EVERY:
-                    self._mark_graph_dirty(connection, graph_touched)
-                    connection.commit()
-                    pending = 0
-                if delay:
-                    time.sleep(delay)
-
-            self._delete_missing(connection, root_path, run_id, stats)
             self._mark_graph_dirty(connection, graph_touched)
             connection.commit()
             db_writes = connection.total_changes - writes_before
@@ -406,17 +487,73 @@ class Indexer:
         record_index(time.perf_counter() - started, stats.as_dict(), db_writes)
         return stats
 
+    def index_sources(
+        self,
+        sources,
+        *,
+        rules: IgnoreRules | None = None,
+        read_content: ContentReader | None = None,
+        delay: float = 0.0,
+        onedrive_download_mb: float = 0.0,
+        cancel: CancelToken | None = None,
+    ) -> IndexStats:
+        """Index several ``(provider, root)`` pairs with failure isolation.
+
+        Each pair is one reconciliation pass with its own bounded
+        transactions; a provider that raises costs only its own pass (the
+        error is counted and the next provider is still indexed), and a
+        cancelled token stops the loop between providers.
+        """
+        totals = IndexStats()
+        for provider, root in sources:
+            if cancel is not None and cancel.cancelled:
+                break
+            try:
+                totals.merge(
+                    self.index_root(
+                        root,
+                        rules=rules,
+                        read_content=read_content,
+                        delay=delay,
+                        onedrive_download_mb=onedrive_download_mb,
+                        provider=provider,
+                        cancel=cancel,
+                    )
+                )
+            except Exception:
+                log.exception(
+                    "provider %s failed on %s",
+                    getattr(provider, "key", provider),
+                    root,
+                )
+                totals.errors += 1
+        return totals
+
     @staticmethod
-    def _delete_missing(connection, root_path: Path, run_id: int, stats: IndexStats) -> None:
+    def _delete_missing(
+        connection,
+        root_path: Path,
+        run_id: int,
+        stats: IndexStats,
+        source: str | None = None,
+    ) -> None:
         root_text = str(root_path)
-        # Range predicates can use the UNIQUE index on path. The path range
-        # covers every source: a path belongs to exactly one source, so
-        # classification changes can never leave orphan rows behind.
-        stale = connection.execute(
-            """SELECT id FROM documents
-               WHERE path > ? AND path < ? AND last_seen_run < ?""",
-            (root_text + os.sep, root_text + "\uffff", run_id),
-        ).fetchall()
+        if source is None:
+            # Legacy classification: a path belongs to exactly one source,
+            # so the path range covers every row under the root.
+            stale = connection.execute(
+                """SELECT id FROM documents
+                   WHERE path > ? AND path < ? AND last_seen_run < ?""",
+                (root_text + os.sep, root_text + "\uffff", run_id),
+            ).fetchall()
+        else:
+            # Phase 024: two providers may own the same path, so the range
+            # is scoped to this provider's own rows.
+            stale = connection.execute(
+                """SELECT id FROM documents
+                   WHERE source = ? AND path > ? AND path < ? AND last_seen_run < ?""",
+                (source, root_text + os.sep, root_text + "\uffff", run_id),
+            ).fetchall()
         for row in stale:
             Indexer._delete(connection, row["id"])
         stats.deleted += len(stale)

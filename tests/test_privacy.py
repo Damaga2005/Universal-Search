@@ -21,6 +21,7 @@ from universal_search.index.indexer import Indexer
 from universal_search.index.search import SearchEngine
 from universal_search.intelligence import analyze, rebuild
 from universal_search.privacy import INVENTORY, forget, inventory_report
+from universal_search.providers.base import ProviderFile
 
 
 def build(root: Path) -> SearchDatabase:
@@ -237,6 +238,64 @@ def test_forget_accepts_a_name_and_reports_an_unknown_path(
     assert forget(indexed, "secreto.txt").total >= 1
     empty = forget(indexed, tmp_path / "nunca" / "indexado.txt")
     assert empty.total == 0
+
+
+class _TwoProviderDoc:
+    """Minimal provider over one real file, to index the same path twice."""
+
+    def __init__(self, key: str, path: Path) -> None:
+        self.key = key
+        self.version = "1.0"
+        self.interface_version = 2
+        self.capabilities = frozenset({"enumerate", "metadata", "identity"})
+        self._path = path
+
+    def available(self) -> bool:
+        return True
+
+    def iter_files(self, root: Path, cancel=None):
+        stat = self._path.stat()
+        yield ProviderFile(
+            provider=self.key,
+            path=self._path,
+            size=stat.st_size,
+            mtime_ns=stat.st_mtime_ns,
+            created_at=None,
+            modified_at=None,
+        )
+
+
+def test_forget_removes_every_provider_copy_of_a_path(tmp_path: Path):
+    """Two providers owning the same path: forget must remove both copies.
+
+    Phase 024 allows two providers to own the same path. A path-only
+    forget() would delete one row and leave the other searchable — a
+    privacy leak. forget() must delete every row for the path and all
+    derived data.
+    """
+    from universal_search.privacy import forget
+
+    shared = tmp_path / "shared"
+    real = shared / "nota.md"
+    real.parent.mkdir(parents=True)
+    real.write_text("contenido privado", encoding="utf-8")
+    database = SearchDatabase(tmp_path / "index.db")
+    indexer = Indexer(database)
+    indexer.index_root(shared, provider=_TwoProviderDoc("fake-a", real))
+    indexer.index_root(shared, provider=_TwoProviderDoc("fake-b", real))
+
+    result = forget(database, real)
+
+    assert result.documents == 2
+    assert result.search_rows == 2
+    assert SearchEngine(database).search("privado") == []
+    with database.connect() as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM documents"
+        ).fetchone()[0] == 0
+        assert connection.execute(
+            "SELECT COUNT(*) FROM documents_fts"
+        ).fetchone()[0] == 0
 
 
 def test_full_deletion_and_rebuild_keeps_the_application_usable(

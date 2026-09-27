@@ -12,11 +12,18 @@ lives in the UI.
   `ignore.py`) plus `onedrive.py` (phase 007): synced OneDrive folders run
   through the same pipeline labelled `onedrive`, and `OneDriveProvider`
   enumerates cloud-only placeholders with availability state — no network
-  I/O, content reads gated by `onedrive_download_max_mb`. Both declare their
-  capabilities and register in `registry.py` (spec 019), which is the only
-  place a new source has to appear: `SearchEngine`, `ranking.py` and the
-  GUI never learn which provider produced a document. OneDrive is a *layer*
-  over the local scanner (Windows attributes), not a second scanner.
+  I/O, content reads gated by `onedrive_download_max_mb`. Phase 024
+  formalised the contract: streaming `iter_files` with bounded errors and a
+  cancel token, a nine-member capability vocabulary, interface-version
+  negotiation in the registry, and provider-namespaced identity — the
+  canonical uniqueness contract is `(source, path)`, so two providers may
+  own the same path. `network.py` and `removable.py` add NAS/removable
+  sources as mounted-path providers only (UNC/mapped share or drive letter;
+  no network client, root containment validated, disconnected states
+  reported as errors). All declare their capabilities and register in
+  `registry.py` (spec 019): `SearchEngine`, `ranking.py` and the GUI never
+  learn which provider produced a document. OneDrive is a *layer* over the
+  local scanner (Windows attributes), not a second scanner.
   `universal-search extensions` prints the registry; the full contract and
   the deliberate absence of runtime plugins are in `docs/EXTENDING.md`.
 - **Extractors** (`universal_search/extractors/`): extension-keyed registry
@@ -31,7 +38,12 @@ lives in the UI.
   - `indexer.py` — reconciliation: skip when size + `mtime_ns` (+ source +
     availability) unchanged, batched transactions (`COMMIT_EVERY = 200`)
     over a single reused connection (WAL), deletes reconciled per root,
-    optional `delay` between writes as a cooperative resource limit.
+    optional `delay` between writes as a cooperative resource limit. Phase
+    024: `index_root(..., provider=)` enumerates through the provider and
+    stores the provider key as `documents.source`; `index_sources` isolates
+    per-provider failures (a provider that dies mid-enumeration costs only
+    its own pass and never triggers the deletion pass); deletion is scoped to
+    the provider's own rows.
   - `database.py` — SQLite metadata + FTS5 (`unicode61`); per-connection
     pragmas (WAL, `synchronous=NORMAL`, 16 MB page cache, 256 MB mmap) and
     a schema-present gate so reconnects skip DDL (migrations still run).

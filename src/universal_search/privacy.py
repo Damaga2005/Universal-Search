@@ -257,55 +257,69 @@ def forget(database: SearchDatabase, path: Path | str) -> ForgetResult:
     target = str(path)
     connection = database.connect()
     try:
-        row = connection.execute(
+        # Phase 024: two providers may own the same path, so a path can have
+        # several rows. forget() must remove every one of them — leaving a
+        # duplicate provider copy searchable would be a privacy leak.
+        rows = connection.execute(
             "SELECT id, name, path FROM documents WHERE path = ?", (target,)
-        ).fetchone()
-        if row is None:
-            row = connection.execute(
-                "SELECT id, name, path FROM documents WHERE name = ?",
+        ).fetchall()
+        if not rows:
+            # Bare-name fallback (what people paste from a listing): bounded
+            # to a single row, as before.
+            rows = connection.execute(
+                "SELECT id, name, path FROM documents WHERE name = ?"
+                " ORDER BY path LIMIT 1",
                 (Path(target).name,),
-            ).fetchone()
-        if row is None:
+            ).fetchall()
+        if not rows:
             return ForgetResult(target, 0, 0, 0, 0)
-        document_id = row["id"]
-        search_rows = connection.execute(
-            "DELETE FROM documents_fts WHERE document_id = ?", (document_id,)
-        ).rowcount
-        derived_rows = connection.execute(
-            "DELETE FROM document_intelligence WHERE document_id = ?",
-            (document_id,),
-        ).rowcount
-        # Phase 022 graph rows are derived from the same document and must
-        # not survive a privacy-forget operation.  Keep them out of the
-        # historical ``derived_rows`` count so the phase-018 API stays stable.
-        connection.execute(
-            "DELETE FROM document_graph_edges WHERE source_document_id = ?"
-            " OR target_document_id = ?",
-            (document_id, document_id),
-        )
-        connection.execute(
-            "DELETE FROM document_graph_terms WHERE document_id = ?", (document_id,)
-        )
-        connection.execute(
-            "DELETE FROM document_graph_nodes WHERE document_id = ?", (document_id,)
-        )
-        from universal_search.intelligence.graph import scrub_reference_metadata
+        documents = 0
+        search_rows = 0
+        derived_rows = 0
+        usage_rows = 0
+        for row in rows:
+            document_id = row["id"]
+            search_rows += connection.execute(
+                "DELETE FROM documents_fts WHERE document_id = ?", (document_id,)
+            ).rowcount
+            derived_rows += connection.execute(
+                "DELETE FROM document_intelligence WHERE document_id = ?",
+                (document_id,),
+            ).rowcount
+            # Phase 022 graph rows are derived from the same document and
+            # must not survive a privacy-forget operation.  Keep them out of
+            # the historical ``derived_rows`` count so the phase-018 API
+            # stays stable.
+            connection.execute(
+                "DELETE FROM document_graph_edges WHERE source_document_id = ?"
+                " OR target_document_id = ?",
+                (document_id, document_id),
+            )
+            connection.execute(
+                "DELETE FROM document_graph_terms WHERE document_id = ?",
+                (document_id,),
+            )
+            connection.execute(
+                "DELETE FROM document_graph_nodes WHERE document_id = ?",
+                (document_id,),
+            )
+            from universal_search.intelligence.graph import scrub_reference_metadata
 
-        scrub_reference_metadata(
-            connection,
-            [document_id],
-            {document_id: (row["name"], row["path"])},
-        )
-        connection.execute(
-            "DELETE FROM document_graph_metadata WHERE key = ?",
-            (f"dirty:{document_id}",),
-        )
-        usage_rows = connection.execute(
-            "DELETE FROM usage_events WHERE document_id = ?", (document_id,)
-        ).rowcount
-        documents = connection.execute(
-            "DELETE FROM documents WHERE id = ?", (document_id,)
-        ).rowcount
+            scrub_reference_metadata(
+                connection,
+                [document_id],
+                {document_id: (row["name"], row["path"])},
+            )
+            connection.execute(
+                "DELETE FROM document_graph_metadata WHERE key = ?",
+                (f"dirty:{document_id}",),
+            )
+            usage_rows += connection.execute(
+                "DELETE FROM usage_events WHERE document_id = ?", (document_id,)
+            ).rowcount
+            documents += connection.execute(
+                "DELETE FROM documents WHERE id = ?", (document_id,)
+            ).rowcount
         connection.commit()
     finally:
         connection.close()

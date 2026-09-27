@@ -8,6 +8,11 @@ from pathlib import Path
 class SourceKind(StrEnum):
     LOCAL = "local"
     ONEDRIVE = "onedrive"
+    # Phase 024: mounted-path providers. The member value equals the
+    # provider key, which is the canonical source discriminator and the
+    # namespace of the stable identity.
+    NETWORK = "network"
+    REMOVABLE = "removable"
     OTHER = "other"
 
 

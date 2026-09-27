@@ -18,7 +18,9 @@ from universal_search.providers.base import (
     ProviderRegistry,
 )
 from universal_search.providers.local import LocalProvider
+from universal_search.providers.network import NetworkProvider
 from universal_search.providers.onedrive import OneDriveProvider
+from universal_search.providers.removable import RemovableProvider
 
 REGISTRY = ProviderRegistry()
 
@@ -36,6 +38,16 @@ def register_builtins(registry: ProviderRegistry | None = None) -> ProviderRegis
             OneDriveProvider(),
             kind="cloud",
             detail="OneDrive placeholders; content only when allowed",
+        )
+        target.register(
+            NetworkProvider(),
+            kind="network",
+            detail="NAS/share as a mounted filesystem; configured roots only",
+        )
+        target.register(
+            RemovableProvider(),
+            kind="removable",
+            detail="removable media as a mounted filesystem; configured roots only",
         )
     return target
 

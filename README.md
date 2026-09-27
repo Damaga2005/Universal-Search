@@ -63,7 +63,7 @@ phase 022 added a versioned, bounded local relationship graph with explainable
 signals, incremental maintenance and a small related-documents list in the GUI;
 phase 023 adds a separate indexing control center with typed source actions,
 health/storage/derived-data state and explicit safety confirmations. The
-current gate is **695 passing tests, 2 skipped**.
+phase 024 formalised the provider contract (streaming `iter_files`, bounded errors, cancellation, capability/interface negotiation), made the provider key the canonical source discriminator with a `(source, path)` uniqueness migration, and added mounted-path NAS/removable providers plus mixed-provider indexing with per-provider failure isolation. The current gate is **765 passing tests, 3 skipped**.
 
 | Fase | Entrega | Estado |
 |------|---------|--------|
@@ -90,6 +90,7 @@ current gate is **695 passing tests, 2 skipped**.
 | 021 | Bandeja de notificación y experiencia en segundo plano | ✅ |
 | 022 | Grafo local de documentos relacionados | ✅ |
 | 023 | UX de indexación y centro de control | ✅ |
+| 024 | Expansión de proveedores (NAS/extraíble, identidad `(source, path)`) | ✅ |
 
 Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
 by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).

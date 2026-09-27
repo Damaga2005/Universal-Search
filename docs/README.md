@@ -30,6 +30,7 @@ El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
 | 021 | Bandeja de notificación y experiencia en segundo plano | ✅ Completada | [021-tray-and-background-experience.md](development/021-tray-and-background-experience.md) | [informe](development/021-tray-and-background-experience-report.md) |
 | 022 | Grafo local de documentos relacionados | ✅ Completada | [022-related-document-graph.md](development/022-related-document-graph.md) | [informe](development/022-related-document-graph-report.md) |
 | 023 | UX de indexación y centro de control | ✅ Completada | [023-indexing-ux-and-control.md](development/023-indexing-ux-and-control.md) | [informe](development/023-indexing-ux-and-control-report.md) |
+| 024 | Expansión de proveedores (NAS/extraíble, identidad `(source, path)`) | ✅ Completada | [024-provider-expansion.md](development/024-provider-expansion.md) | [informe](development/024-provider-expansion-report.md) |
 
 Verificado en la fase 010: **208 tests en verde**
 (`.venv\Scripts\python -m pytest`), E2E completo de indexador, CLI, GUI e

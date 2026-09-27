@@ -1,12 +1,20 @@
 import hashlib
 from pathlib import Path
 
-from universal_search.domain.document import Document, SourceKind
+import pytest
+
+from universal_search.domain.document import Document, SourceKind, document_id_for
 from universal_search.index.database import SearchDatabase
 from universal_search.index.indexer import Indexer
 from universal_search.index.search import SearchEngine
-from universal_search.providers.base import DocumentProvider
-from universal_search.providers.local import discover_local
+from universal_search.providers.base import (
+    AVAILABILITY_AVAILABLE,
+    CancelToken,
+    DocumentProvider,
+    ProviderError,
+    ProviderFile,
+)
+from universal_search.providers.local import LocalProvider, discover_local
 
 
 def test_discover_local_builds_documents(tmp_path: Path) -> None:
@@ -104,3 +112,77 @@ def test_custom_provider_documents_are_searchable(tmp_path: Path) -> None:
     assert len(results) == 1
     assert results[0].source == "other"
     assert results[0].name == "agenda.md"
+
+
+# -- phase 024: the streaming provider contract ----------------------------------
+
+
+def test_local_provider_iter_files_yields_namespaced_files(tmp_path: Path) -> None:
+    nested = tmp_path / "projects"
+    nested.mkdir()
+    file = nested / "note.md"
+    file.write_text("oscilloscope calibration", encoding="utf-8")
+
+    items = [
+        item for item in LocalProvider().iter_files(tmp_path)
+        if isinstance(item, ProviderFile)
+    ]
+
+    assert len(items) == 1
+    (item,) = items
+    assert item.provider == "local"
+    assert item.path == file.resolve()
+    assert item.size == file.stat().st_size
+    assert item.availability == AVAILABILITY_AVAILABLE
+    assert item.document_id == document_id_for("local", file.resolve())
+
+
+def test_local_provider_iter_files_reports_unscannable_roots(tmp_path: Path) -> None:
+    target = tmp_path / "not-a-directory.md"
+    target.write_text("soy un fichero", encoding="utf-8")
+
+    items = list(LocalProvider().iter_files(target))
+
+    assert len(items) == 1
+    (error,) = items
+    assert isinstance(error, ProviderError)
+    assert error.provider == "local"
+    assert error.path == target.resolve()
+
+
+def test_local_provider_iter_files_stops_at_cancel_token(tmp_path: Path) -> None:
+    for number in range(20):
+        (tmp_path / f"f{number:02d}.md").write_text(f"contenido {number}", encoding="utf-8")
+    token = CancelToken()
+
+    iterator = LocalProvider().iter_files(tmp_path, token)
+    next(iterator)
+    token.cancel()
+    with pytest.raises(StopIteration):
+        next(iterator)
+
+
+def test_local_provider_iter_files_skips_ignored_paths(tmp_path: Path) -> None:
+    from universal_search.providers.base import IgnoredPath
+
+    (tmp_path / "keep.md").write_text("contenido util", encoding="utf-8")
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "secreto.md").write_text("contenido oculto", encoding="utf-8")
+
+    files = [
+        item for item in LocalProvider().iter_files(tmp_path)
+        if isinstance(item, ProviderFile)
+    ]
+    ignored = [
+        item for item in LocalProvider().iter_files(tmp_path)
+        if isinstance(item, IgnoredPath)
+    ]
+
+    assert [item.path.name for item in files] == ["keep.md"]
+    assert [item.path.name for item in ignored] == [".git"]
+
+
+def test_local_provider_satisfies_the_provider_protocol() -> None:
+    from universal_search.providers.base import Provider
+
+    assert isinstance(LocalProvider(), Provider)

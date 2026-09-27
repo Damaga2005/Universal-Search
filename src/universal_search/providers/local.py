@@ -1,6 +1,6 @@
 import hashlib
 import os
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -12,11 +12,19 @@ from universal_search.providers.base import (
     CHANGE_DETECTION,
     CONTENT,
     ENUMERATE,
+    ERRORS,
     IDENTITY,
+    INTERFACE_VERSION,
     METADATA,
+    MAX_PROVIDER_ERRORS,
+    STREAMING,
+    CancelToken,
     FileEntry,
     IgnoredPath,
+    ProviderError,
+    ProviderFile,
     ScanError,
+    availability_from_attributes,
 )
 from universal_search.providers.ignore import IgnoreRules
 
@@ -28,22 +36,69 @@ class LocalProvider:
     uses it directly and has for every phase); this class is the formal
     face of the same implementation, so the registry can describe it
     without the rest of the application having to know which is which.
+
+    Phase 024 adds the streaming :meth:`iter_files` contract: metadata
+    namespaced by ``key = "local"``, bounded error reporting and a
+    cooperative cancel token, on top of the same scanner that has always
+    been used (symlinks are never followed, the root is resolved, and
+    unreadable entries are reported instead of aborting the scan).
     """
 
     key = "local"
-    version = "1.0"
+    version = "1.1"
+    interface_version = INTERFACE_VERSION
     capabilities = frozenset(
-        {ENUMERATE, METADATA, CONTENT, CHANGE_DETECTION, AVAILABILITY, IDENTITY}
+        {
+            ENUMERATE, METADATA, CONTENT, CHANGE_DETECTION, AVAILABILITY,
+            IDENTITY, ERRORS, STREAMING,
+        }
     )
 
     def __init__(self, rules: IgnoreRules | None = None) -> None:
         self.rules = rules
+        # Total enumeration errors seen in the last pass (including the ones
+        # bounded away); read by the indexer to surface dropped errors.
+        self._enumeration_errors = 0
 
     def available(self) -> bool:
         return True
 
     def discover(self, root: Path) -> Iterable[Document]:
         return discover_local(root, self.rules)
+
+    def iter_files(
+        self, root: Path, cancel: CancelToken | None = None
+    ) -> Iterator[ProviderFile | ProviderError | IgnoredPath]:
+        """Streaming enumeration of ``root`` with the same policy as the indexer.
+
+        Yields :class:`ProviderFile` metadata for every discovered file,
+        :class:`IgnoredPath` for rule-skipped entries (so callers can count
+        them) and at most ``MAX_PROVIDER_ERRORS`` :class:`ProviderError`
+        entries; the scan never aborts on an unreadable file or directory.
+        """
+        errors = 0
+        for item in scan_local(root, self.rules):
+            if cancel is not None and cancel.cancelled:
+                return
+            if isinstance(item, IgnoredPath):
+                yield item
+                continue
+            if isinstance(item, ScanError):
+                errors += 1
+                self._enumeration_errors = errors
+                if errors <= MAX_PROVIDER_ERRORS:
+                    yield ProviderError(self.key, item.path, item.message)
+                continue
+            yield ProviderFile(
+                provider=self.key,
+                path=item.path,
+                size=item.size,
+                mtime_ns=item.mtime_ns,
+                created_at=item.created_at,
+                modified_at=item.modified_at,
+                availability=availability_from_attributes(item.attributes),
+                attributes=item.attributes,
+            )
 
 
 def read_local_content(path: Path) -> ExtractionResult:

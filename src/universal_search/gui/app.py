@@ -33,7 +33,7 @@ DEBOUNCE_MS = 150
 RESULT_POLL_MS = 40
 DEFAULT_LIMIT = 50
 SHOW_POLL_MS = 250
-SOURCE_FILTER_VALUES = ("(todas)", "local", "onedrive")
+SOURCE_FILTER_VALUES = ("(todas)", "local", "onedrive", "network", "removable")
 TYPE_FILTER_VALUES = ("(todos)", "pdf", "docx", "xlsx", "pptx", "md", "txt")
 
 TYPE_LABELS = {

@@ -29,13 +29,20 @@ el núcleo**.
 
 ```python
 class MiProvider:
-    key = "mi-nas"              # identificador estable
+    key = "mi-nas"              # identificador estable = discriminador de source
     version = "1.0"             # versión del provider, no del contrato
+    interface_version = 2       # versión del contrato (opcional en legacy)
     capabilities = frozenset({ENUMERATE, METADATA, IDENTITY, CHANGE_DETECTION})
 
     def available(self) -> bool: ...
-    def discover(self, root: Path) -> Iterable[Document]: ...
+    def iter_files(self, root: Path, cancel: CancelToken | None = None) -> Iterator[ProviderFile | ProviderError | IgnoredPath]: ...
 ```
+
+El contrato de fase 024 es **streaming**: `iter_files` produce
+`ProviderFile` (metadatos + disponibilidad + identidad nombrespaciada), one
+`ProviderError` por entrada que no pudo examinar (acotado a
+`MAX_PROVIDER_ERRORS = 100`) e `IgnoredPath` para las reglas de
+exclusión. `discover()` (contrato legacy) sigue aceptándose en el registro.
 
 Capacidades declaradas (`providers/base.py`):
 
@@ -47,6 +54,9 @@ Capacidades declaradas (`providers/base.py`):
 | `change_detection` | Permite decidir si algo cambió por tamaño/mtime |
 | `availability` | Distingue local, solo-nube e indisponible |
 | `identity` | Aporta una identidad estable y única |
+| `errors` | Informa errores por entrada de forma acotada |
+| `watch` | Notificaciones de cambios (reservada; ningún provider la declara aún) |
+| `streaming` | Enumeración constante en memoria, elemento a elemento |
 
 Reglas del registro (`ProviderRegistry`):
 
@@ -54,6 +64,8 @@ Reglas del registro (`ProviderRegistry`):
   funciona.
 - Capacidades desconocidas se rechazan: una errata no se convierte en
   "sin capacidad" silenciosamente.
+- Un provider que declara `interface_version` incompatible se rechaza; uno
+  que no lo declara (legacy) se acepta.
 - Un provider que falla al responder `available()` se informa como
   **no disponible**, con el motivo. La excepción no sube al indexador.
 - `infos()` es la vista inspeccionable; `universal-search extensions` la
@@ -72,25 +84,35 @@ fichero (un PNG no se interpreta como UTF-8).
 
 ## Identidad
 
-`documents.path` es UNIQUE: el índice se indexa por ruta absoluta, así
-que
+El contrato de unicidad canónico es **`(source, path)`** (migración de
+esquema v6 → v7, aditiva y sin pérdida): el índice se indexa por proveedor
+**y** ruta absoluta, así que
 
 - un fichero que un proveedor de nube sincroniza en una carpeta local es
   **un** documento, no dos (y su `source` se deriva de la ruta);
 - la identidad (`document_id_for(source, path)`) es estable entre
   ejecuciones y entre máquinas para la misma ruta y el mismo origen;
-- dos fuentes con la misma ruta no pueden coexistir, y eso es intencionado.
+- **dos proveedores pueden poseer la misma ruta** (un recurso NAS y una
+  carpeta local, un disco extraíble y la letra que reemplazó): cada uno es
+  un documento distinto con su propio `source` (la clave del proveedor), y
+  la reconciliación de uno no borra las filas del otro.
 
 ## Proveedores incluidos
 
 | Provider | Capacidades | Nota |
 |---|---|---|
-| `local` | todas | Metadatos antes que contenido; no sigue symlinks |
-| `onedrive` | `enumerate`, `metadata`, `availability`, `identity`, `change_detection` | **No** declara `content`: leer un marcador descargaría el fichero |
+| `local` | todas menos `watch` | Metadatos antes que contenido; no sigue symlinks |
+| `onedrive` | `enumerate`, `metadata`, `availability`, `identity`, `change_detection`, `errors`, `streaming` | **No** declara `content`: leer un marcador descargaría el fichero |
+| `network` | `enumerate`, `metadata`, `content`, `identity`, `change_detection`, `availability`, `errors`, `streaming` | NAS/recurso como sistema de ficheros montado (UNC o letra mapeada); solo raíces configuradas |
+| `removable` | igual que `network` | Medios extraíbles (USB/SD) montados; disponibilidad más estricta |
 
 OneDrive es una *capa* sobre el escáner local (atributos de Windows +
 disponibilidad), no un escáner paralelo: por eso no duplica la lógica de
-recorrido.
+recorrido. `network` y `removable` comparten una base (`MountedPathProvider`)
+sobre el mismo escáner: sin cliente de red, protocolos ni credenciales — el
+sistema operativo ya expone el recurso como una carpeta local, y la política
+de reparse/symlinks del escáner se respeta (la raíz se resuelve y los
+directorios enlazados no se recorren).
 
 ## Añadir una fuente (NAS, disco extraíble, otra nube)
 
@@ -98,13 +120,17 @@ recorrido.
 2. Regístrala en `providers/registry.py` (o en el registro de tu proceso).
 3. Si la fuente es un sistema de ficheros montado (NAS, USB), basta un
    provider `enumerate`/`metadata` sobre la ruta: el extractor y el
-   ranking no cambian.
+   ranking no cambian. `NetworkProvider` y `RemovableProvider` ya son eso:
+   configúralos con las raíces montadas y el indexador los respeta.
 4. Si necesitas contenido, delega en los extractores existentes: no
    escribas un lector de formato.
 
 Lo que **no** hay que tocar: `SearchEngine`, `ranking.py`, la GUI, la
 base de datos. Un test lo verifica (el motor y el ranking no importan
-providers).
+providers). El indexador sí conoce providers: `index_root(root, provider=…)`
+enumera a través de `provider.iter_files` y guarda la clave del provider como
+`documents.source`, con aislamiento de fallos por provider en
+`index_sources`.
 
 ## Añadir un formato
 

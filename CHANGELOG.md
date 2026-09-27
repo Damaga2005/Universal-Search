@@ -7,6 +7,28 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 024 — Provider expansion
+- Formalized the provider contract: streaming `iter_files` with bounded
+  error reporting (`MAX_PROVIDER_ERRORS`), a cooperative `CancelToken`, a
+  nine-member capability vocabulary (adding `errors`, `watch`, `streaming`)
+  and interface-version negotiation in `ProviderRegistry.register`.
+- Made the provider key the canonical source discriminator: the uniqueness
+  contract is now `(source, path)` via a safe additive schema migration
+  (v6 → v7, lossless table rebuild), so two providers may own the same path
+  without changing search or ranking semantics. `SourceKind` gains `network`
+  and `removable`; the query language, CLI and GUI source filters accept
+  them.
+- Added `NetworkProvider` (NAS/share) and `RemovableProvider` (USB/SD) as
+  mounted-path providers only — standard-library filesystem access,
+  configured roots with containment validation, disconnected states
+  reported as errors, no network client or credential handling.
+- Integrated mixed-provider indexing: `index_root(..., provider=)` and
+  `index_sources(...)` with per-provider failure isolation; a provider that
+  dies mid-enumeration costs only its own pass and never triggers the
+  deletion pass; deletion is scoped to the provider's own rows.
+- Phase 024 quality gate: **765 passed, 3 skipped**, clean pyflakes; exact
+  commands, measured behavior and limitations are in the phase report.
+
 ### Phase 023 — Indexing UX & control center
 - Added a separate, asynchronous control-center window for configured sources,
   provider availability, counts and supported types, scan/pending state,

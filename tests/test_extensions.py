@@ -22,6 +22,7 @@ from universal_search.providers.base import (
     ENUMERATE,
     IDENTITY,
     METADATA,
+    WATCH,
     ProviderRegistry,
 )
 
@@ -76,15 +77,23 @@ class NotAProvider:
 def test_builtin_providers_are_registered_and_inspectable():
     infos = provider_registry.infos()
     keys = {info.key for info in infos}
-    assert {"local", "onedrive"} <= keys
+    assert {"local", "onedrive", "network", "removable"} <= keys
     local = next(info for info in infos if info.key == "local")
     assert local.available is True
-    assert set(local.capabilities) == set(CAPABILITIES)
+    # Every built-in provider claims the capabilities it implements;
+    # `watch` is in the vocabulary but no built-in provider claims it yet
+    # (change notifications are a worker concern, not a provider method).
+    assert set(local.capabilities) == set(CAPABILITIES) - {WATCH}
     onedrive = next(info for info in infos if info.key == "onedrive")
     # OneDrive deliberately does not claim content: reading a placeholder
     # would download it.
     assert CONTENT not in onedrive.capabilities
     assert "onedrive" in onedrive.detail or onedrive.detail
+    # The mounted-path providers own no roots by default, so they report
+    # unavailable instead of looking like indexable sources.
+    for key in ("network", "removable"):
+        info = next(item for item in infos if item.key == key)
+        assert info.available is False
 
 
 def test_registration_is_idempotent():
@@ -177,14 +186,15 @@ def test_a_new_provider_needs_no_core_rewrite():
 
 # -- identities ----------------------------------------------------------------
 
-def test_identity_is_stable_and_paths_are_unique(tmp_path: Path):
-    """Identity rules the index really has (spec 019).
+def test_identity_is_stable_and_source_path_is_unique(tmp_path: Path):
+    """Identity rules the index really has (spec 019, phase 024 contract).
 
-    ``documents.path`` is UNIQUE: the index is keyed by absolute path, so
-    a file that a cloud provider syncs into a local folder is **one**
-    document, not two. Two different sources for the same path would be
-    rejected by the schema, and the source is derived from the path
-    itself (``source_for_path``) rather than stored twice.
+    The canonical uniqueness contract is ``(source, path)``: the provider
+    key is the source discriminator, so two providers may own the same
+    path (a NAS share and a local folder, a removable drive and the drive
+    letter it replaced) while one provider can never store the same path
+    twice. The stable identity ``document_id_for(source, path)`` is
+    namespaced by provider key.
     """
     from universal_search.index.database import SearchDatabase
     from universal_search.providers.onedrive import source_for_path
@@ -192,8 +202,7 @@ def test_identity_is_stable_and_paths_are_unique(tmp_path: Path):
     path = tmp_path / "notas.md"
     local = document_id_for(SourceKind.LOCAL, path)
     assert local == document_id_for(SourceKind.LOCAL, path)
-    # A cloud source would produce a different id, but it can never be
-    # stored for the same path — and the index derives the source itself.
+    # A different provider produces a different id for the same path.
     assert document_id_for(SourceKind.ONEDRIVE, path) != local
     assert source_for_path(path) == SourceKind.LOCAL
 
@@ -203,14 +212,21 @@ def test_identity_is_stable_and_paths_are_unique(tmp_path: Path):
             " VALUES (?,?,?,?,?,?)",
             (local, "local", str(path), "notas.md", ".md", 10),
         )
+        # Phase 024: another provider may own the same path.
+        connection.execute(
+            "INSERT INTO documents(id,source,path,name,extension,size)"
+            " VALUES (?,?,?,?,?,?)",
+            (
+                document_id_for(SourceKind.NETWORK, path), "network",
+                str(path), "notas.md", ".md", 10,
+            ),
+        )
+        # But the canonical (source, path) pair is still unique.
         with pytest.raises(sqlite3.IntegrityError):
             connection.execute(
                 "INSERT INTO documents(id,source,path,name,extension,size)"
                 " VALUES (?,?,?,?,?,?)",
-                (
-                    document_id_for(SourceKind.ONEDRIVE, path), "onedrive",
-                    str(path), "notas.md", ".md", 10,
-                ),
+                (local, "local", str(path), "notas.md", ".md", 10),
             )
 
 

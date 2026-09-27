@@ -35,30 +35,54 @@ from universal_search.domain.document import SourceKind
 from universal_search.domain.extraction import ExtractionResult
 from universal_search.providers.base import (
     AVAILABILITY,
+    AVAILABILITY_AVAILABLE,
+    AVAILABILITY_CLOUD_ONLY,
+    AVAILABILITY_UNAVAILABLE,
     CHANGE_DETECTION,
+    CLOUD_MASK,
     ENUMERATE,
+    ERRORS,
+    FILE_ATTRIBUTE_OFFLINE,
+    FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS,
+    FILE_ATTRIBUTE_RECALL_ON_OPEN,
     IDENTITY,
+    INTERFACE_VERSION,
+    MAX_PROVIDER_ERRORS,
     METADATA,
+    STREAMING,
+    CancelToken,
     FileEntry,
     IgnoredPath,
+    ProviderError,
+    ProviderFile,
     ScanError,
+    availability_from_attributes,
 )
 from universal_search.providers.ignore import IgnoreRules
 from universal_search.providers.local import read_local_content, scan_local
 
-# os.stat_result.st_file_attributes bits (Windows file attributes).
-FILE_ATTRIBUTE_OFFLINE = 0x1000
-FILE_ATTRIBUTE_RECALL_ON_OPEN = 0x00040000
-FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS = 0x00400000
-CLOUD_MASK = (
-    FILE_ATTRIBUTE_OFFLINE
-    | FILE_ATTRIBUTE_RECALL_ON_OPEN
-    | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS
-)
-
-AVAILABILITY_AVAILABLE = "available"
-AVAILABILITY_CLOUD_ONLY = "cloud_only"
-AVAILABILITY_UNAVAILABLE = "unavailable"
+# The availability constants and the Windows attribute bits are imported
+# from providers/base.py above, which keeps this module's public names
+# (onedrive.AVAILABILITY_CLOUD_ONLY, od.FILE_ATTRIBUTE_OFFLINE, …)
+# working for existing callers. __all__ marks them as intentional
+# re-exports for pyflakes.
+__all__ = [
+    "AVAILABILITY_AVAILABLE",
+    "AVAILABILITY_CLOUD_ONLY",
+    "AVAILABILITY_UNAVAILABLE",
+    "CLOUD_MASK",
+    "FILE_ATTRIBUTE_OFFLINE",
+    "FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS",
+    "FILE_ATTRIBUTE_RECALL_ON_OPEN",
+    "OneDriveFile",
+    "OneDriveProvider",
+    "allow_content_read",
+    "availability_from_attributes",
+    "availability_of",
+    "is_onedrive_path",
+    "onedrive_roots",
+    "source_for_path",
+]
 
 ENV_VARS = ("OneDrive", "OneDriveConsumer", "OneDriveCommercial")
 
@@ -124,22 +148,6 @@ def source_for_path(path: Path | str) -> SourceKind:
     )
 
 
-def availability_from_attributes(attributes: int | None) -> str:
-    """Map Windows file attributes to an availability state.
-
-    Placeholder attributes mean the file is a cloud-only entry: reading it
-    would trigger a download, so callers must treat it as metadata-only
-    unless the user explicitly opted in.
-    """
-    if attributes is None:
-        return AVAILABILITY_AVAILABLE
-    return (
-        AVAILABILITY_CLOUD_ONLY
-        if attributes & CLOUD_MASK
-        else AVAILABILITY_AVAILABLE
-    )
-
-
 def availability_of(path: Path | str) -> str:
     """Current availability of one path (``unavailable`` when it cannot be stat'ed)."""
     try:
@@ -175,22 +183,26 @@ class OneDriveFile:
     size: int
     availability: str
     modified_at: datetime | None
+    mtime_ns: int = 0
 
 
 class OneDriveProvider:
     """Phase B provider: discover OneDrive files including cloud-only ones.
 
-    It satisfies :class:`universal_search.providers.base.DocumentProvider`
-    and exposes metadata plus availability without touching content.
+    It satisfies :class:`universal_search.providers.base.Provider` and
+    exposes metadata plus availability without touching content.
 
-    Declared capabilities (spec 019): enumeration, metadata, availability
-    and identity come from the filesystem attributes; **content is
-    optional** and only read when the caller explicitly allows a
-    download, so a cloud-only placeholder is never fetched by surprise.
+    Declared capabilities (spec 019, formalized in phase 024): enumeration,
+    metadata, availability and identity come from the filesystem
+    attributes; **content is optional** and only read when the caller
+    explicitly allows a download, so a cloud-only placeholder is never
+    fetched by surprise. Phase 024 adds bounded error reporting and
+    streaming enumeration.
     """
 
     key = "onedrive"
-    version = "1.0"
+    version = "1.1"
+    interface_version = INTERFACE_VERSION
     capabilities = frozenset(
         {
             ENUMERATE,
@@ -198,6 +210,8 @@ class OneDriveProvider:
             AVAILABILITY,
             IDENTITY,
             CHANGE_DETECTION,
+            ERRORS,
+            STREAMING,
         }
     )
 
@@ -208,6 +222,9 @@ class OneDriveProvider:
     ) -> None:
         self.rules = rules
         self.download_max_mb = download_max_mb
+        # Total enumeration errors seen in the last pass (including the ones
+        # bounded away); read by the indexer to surface dropped errors.
+        self._enumeration_errors = 0
 
     def available(self) -> bool:
         """True when at least one OneDrive root is configured on this PC."""
@@ -223,9 +240,43 @@ class OneDriveProvider:
                     size=item.size,
                     availability=availability_from_attributes(item.attributes),
                     modified_at=item.modified_at,
+                    mtime_ns=item.mtime_ns,
                 )
             else:
                 yield item
+
+    def iter_files(
+        self, root: Path, cancel: CancelToken | None = None
+    ) -> Iterator[ProviderFile | ProviderError | IgnoredPath]:
+        """Streaming enumeration of a OneDrive root.
+
+        Availability comes from the Windows attributes (cloud-only
+        placeholders are reported as ``cloud_only``); errors are reported
+        as :class:`ProviderError`, bounded by the shared cap.
+        """
+        errors = 0
+        for item in self.discover(root):
+            if cancel is not None and cancel.cancelled:
+                return
+            if isinstance(item, IgnoredPath):
+                yield item
+                continue
+            if isinstance(item, ScanError):
+                errors += 1
+                self._enumeration_errors = errors
+                if errors <= MAX_PROVIDER_ERRORS:
+                    yield ProviderError(self.key, item.path, item.message)
+                continue
+            yield ProviderFile(
+                provider=self.key,
+                path=item.path,
+                size=item.size,
+                mtime_ns=item.mtime_ns,
+                created_at=None,
+                modified_at=item.modified_at,
+                availability=item.availability,
+                attributes=None,
+            )
 
     def read_content(self, entry: OneDriveFile) -> ExtractionResult:
         """Explicit, controlled content access for one file.

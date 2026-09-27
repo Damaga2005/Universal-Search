@@ -51,7 +51,7 @@
 - [x] Tray & background experience (021)
 - [x] Related-document graph (022)
 - [x] Indexing UX & control center (023)
-- [ ] Provider expansion (024)
+- [x] Provider expansion (024)
 - [ ] Content extraction v2 (025)
 - [ ] Local semantic search without cloud AI (026)
 - [ ] Windows shell integration (027)
@@ -61,8 +61,9 @@
 
 ---
 
-Phases 001–023 are implemented and documented (per-phase reports in
-`docs/development/`). The phase-023 quality gate measured **695 passing tests,
-2 skipped**, clean pyflakes, explicit source/index/derived-data safety scopes
-and a separate asynchronous control-center window. Still open: the planned
-phases from 024 through 030.
+Phases 001–024 are implemented and documented (per-phase reports in
+`docs/development/`). The phase-024 quality gate measured **765 passing tests,
+3 skipped**, clean pyflakes, a formalized provider contract with
+provider-namespaced `(source, path)` identity, mounted-path NAS/removable
+providers and mixed-provider indexing with per-provider failure isolation.
+Still open: the planned phases from 025 through 030.

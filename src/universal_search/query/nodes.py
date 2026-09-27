@@ -10,11 +10,12 @@ user text (every value is a bound parameter).
 from dataclasses import dataclass
 
 # Field routing (spec 012): `name`/`path` query FTS columns; everything
-# else is a SQL-level filter. `source` values are the provider kinds.
+# else is a SQL-level filter. `source` values are the provider keys
+# (phase 024: `network` and `removable` joined `local`/`onedrive`/`other`).
 TEXT_FIELDS = frozenset({"name", "path"})
 FILTER_FIELDS = frozenset({"type", "source", "after", "before", "size"})
 KNOWN_FIELDS = TEXT_FIELDS | FILTER_FIELDS
-SOURCE_KINDS = ("local", "onedrive", "other")
+SOURCE_KINDS = ("local", "onedrive", "network", "removable", "other")
 
 
 @dataclass(frozen=True, slots=True)

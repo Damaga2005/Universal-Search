@@ -52,7 +52,8 @@ def main() -> None:
         "--explain", action="store_true", help="show the scoring breakdown"
     )
     search.add_argument(
-        "--source", choices=("local", "onedrive"), default=None,
+        "--source", choices=("local", "onedrive", "network", "removable"),
+        default=None,
         help="only results from this source",
     )
     search.add_argument(
