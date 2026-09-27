@@ -541,6 +541,89 @@ def test_diagnostics_request_is_consumed_and_shown(window, monkeypatch) -> None:
     hotkey.clear_gui_pid(window.service.paths)
 
 
+def test_control_center_is_a_separate_operational_window(window) -> None:
+    # The search menu remains small; the operational surface is opened from
+    # the diagnostics menu as its own Toplevel.
+    from universal_search.gui import app as gui_app
+
+    assert callable(gui_app.SearchWindow._show_control_center)
+
+    window._show_control_center()
+    control_center = window.control_center_window
+    try:
+        assert control_center is not None
+        assert control_center.title() == "Centro de control de indexación"
+        assert control_center is not window
+    finally:
+        control_center.close()
+        window.control_center_window = None
+
+
+def test_control_center_tree_row_matches_declared_columns(window) -> None:
+    source = window.service.paths.home / "gui-control-source"
+    source.mkdir(parents=True, exist_ok=True)
+    (source / "note.md").write_text("BJT notes", encoding="utf-8")
+    window.service.save_config(
+        replace(window.service.config, roots=(str(source),))
+    )
+    window._show_control_center()
+    control_center = window.control_center_window
+    try:
+        assert control_center.pump(2.0)
+        children = control_center.sources_tree.get_children()
+        assert children
+        values = control_center.sources_tree.item(children[0], "values")
+        columns = control_center.sources_tree["columns"]
+        assert len(values) == len(columns)
+        assert values[0] in {"Al día", "Con errores", "No accesible", "Pendiente"}
+        assert str(source) not in values
+    finally:
+        control_center.close()
+        window.control_center_window = None
+
+
+def test_superseded_control_action_refreshes_snapshot(window) -> None:
+    from universal_search.gui.control_center import ActionResult
+
+    window._show_control_center()
+    control_center = window.control_center_window
+    try:
+        assert control_center.pump(2.0)
+        snapshot_calls: list[bool] = []
+        original_snapshot = control_center.service.snapshot
+
+        def observed_snapshot():
+            snapshot_calls.append(True)
+            return original_snapshot()
+
+        control_center.service.snapshot = observed_snapshot
+        control_center._generation = 2
+        control_center._inflight = 1
+        control_center._queue.put(
+            (1, "action", ActionResult(action="test", message="stale"), None)
+        )
+        control_center._poll()
+        assert control_center.pump(2.0)
+        assert snapshot_calls
+    finally:
+        control_center.close()
+        window.control_center_window = None
+
+
+def test_main_window_routes_full_rebuild_to_control_center(window, monkeypatch) -> None:
+    monkeypatch.setattr(
+        window.service,
+        "rebuild_index",
+        lambda **kwargs: pytest.fail("main window performed a synchronous rebuild"),
+    )
+
+    window._rebuild_index()
+
+    assert window.control_center_window is not None
+    window.control_center_window.close()
+    window.control_center_window = None
+
+
 def test_window_title_shows_the_product_version(window) -> None:
     from universal_search import __version__
 

@@ -7,6 +7,23 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 023 — Indexing UX & control center
+- Added a separate, asynchronous control-center window for configured sources,
+  provider availability, counts and supported types, scan/pending state,
+  failures and inaccessible roots, exclusions, health, derived-data state and
+  measured storage.
+- Added typed `ControlCenterService` actions for source add/remove, safe rescan,
+  retry, pause/resume and FTS/derived/relationship/full rebuilds. Mutating
+  actions fail closed as busy when another action is already running.
+- Made the safety boundary explicit in every result: configuration,
+  indexed records, derived data and physical files are separate scopes.
+  Ordinary source removal never unlinks a user file; indexed-row removal is
+  opt-in, and FTS/relationship/full rebuilds require confirmation.
+- Added `control-center.json` operational state and privacy inventory coverage;
+  it contains bounded counters and sanitized failure text only.
+- Phase 023 quality gate: **695 passed, 2 skipped**, clean pyflakes; exact
+  commands, measured behavior and limitations are in the phase report.
+
 ### Phase 022 — Related-document graph
 - Added a versioned local graph of document nodes, bounded term postings and
   explainable relationship edges. Candidate generation uses inverted terms,

@@ -50,7 +50,7 @@
 
 - [x] Tray & background experience (021)
 - [x] Related-document graph (022)
-- [ ] Indexing UX & control center (023)
+- [x] Indexing UX & control center (023)
 - [ ] Provider expansion (024)
 - [ ] Content extraction v2 (025)
 - [ ] Local semantic search without cloud AI (026)
@@ -61,7 +61,8 @@
 
 ---
 
-Phases 001–022 are implemented and documented (per-phase reports in
-`docs/development/`). The phase-022 quality gate measured **681 passing tests,
-2 skipped**, clean pyflakes, bounded graph candidates and local evidence-based
-related results. Still open: the planned phases from 023 through 030.
+Phases 001–023 are implemented and documented (per-phase reports in
+`docs/development/`). The phase-023 quality gate measured **695 passing tests,
+2 skipped**, clean pyflakes, explicit source/index/derived-data safety scopes
+and a separate asynchronous control-center window. Still open: the planned
+phases from 024 through 030.

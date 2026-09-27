@@ -60,8 +60,10 @@ signalling and generation-aware worker ownership without adding a runtime
 dependency. Startup claims survive Windows launcher PID differences; owner-scoped
 stop markers and a held OS lease prevent replacement/PID-reuse handoff races;
 phase 022 added a versioned, bounded local relationship graph with explainable
-signals, incremental maintenance and a small related-documents list in the GUI.
-The current gate is **681 passing tests, 2 skipped**.
+signals, incremental maintenance and a small related-documents list in the GUI;
+phase 023 adds a separate indexing control center with typed source actions,
+health/storage/derived-data state and explicit safety confirmations. The
+current gate is **695 passing tests, 2 skipped**.
 
 | Fase | Entrega | Estado |
 |------|---------|--------|
@@ -87,6 +89,7 @@ The current gate is **681 passing tests, 2 skipped**.
 | 020 | Release de producción y fiabilidad (CI, migraciones, copias) | ✅ |
 | 021 | Bandeja de notificación y experiencia en segundo plano | ✅ |
 | 022 | Grafo local de documentos relacionados | ✅ |
+| 023 | UX de indexación y centro de control | ✅ |
 
 Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
 by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).
@@ -142,6 +145,14 @@ The related-document graph is derived, local and optional. Rebuild it with
 `intelligence rebuild`; open the ranked evidence list from the GUI's
 Diagnostic menu. It never changes normal search ranking, and all graph rows
 can be removed with `intelligence clear`.
+
+Phase 023 keeps search uncluttered: open **Diagnostic → Centro de control de
+indexación** for configured sources, provider availability, counts, scan and
+failure state, storage, exclusions, health and derived-data maintenance. Add
+or remove a source there without deleting the user's files; indexed rows are
+removed only when that separate option is explicitly selected. FTS,
+relationship and full-index rebuilds have separate confirmations and never
+delete physical source files.
 
 The tray is optional and must be started explicitly. Windows autostart still
 registers only the `indexer run` worker; it does not launch the tray. The

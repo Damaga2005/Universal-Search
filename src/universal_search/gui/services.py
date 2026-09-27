@@ -10,7 +10,7 @@ from contextlib import closing
 from pathlib import Path
 
 from universal_search.appconfig import AppConfig, AppPaths, remember_query
-from universal_search.context import get_context
+from universal_search.context import configured_roots, get_context
 from universal_search.hotkey import (
     consume_diagnostics_request,
     consume_show_request,
@@ -22,14 +22,31 @@ from universal_search.index.database import SearchDatabase
 from universal_search.index.search import SearchEngine, SearchResult
 from universal_search.metrics import set_sink
 from universal_search.query import QueryError
+from universal_search.gui.control_center import (
+    ActionResult,
+    ControlCenterService,
+    ControlSnapshot,
+    DerivedSnapshot,
+    SourceFailure,
+    SourceSnapshot,
+    StorageSnapshot,
+)
 
 # Public API: everything the window (and tests) may reach through this
 # module. The hotkey pid/show helpers are re-exports on purpose — the UI
 # talks only to the service layer.
 __all__ = [
+    "ActionResult",
+    "ControlCenterService",
+    "ControlSnapshot",
+    "DerivedSnapshot",
     "SearchService",
+    "SourceFailure",
+    "SourceSnapshot",
+    "StorageSnapshot",
     "consume_diagnostics_request",
     "consume_show_request",
+    "control_center_service",
     "indexer_status",
     "indexer_summary",
     "open_path",
@@ -201,7 +218,9 @@ class SearchService:
         from universal_search.diagnostics import rebuild_all
 
         return rebuild_all(
-            self.engine.database, list(self.config.roots), confirm=confirm
+            self.engine.database,
+            [Path(root) for root in configured_roots(self.config)],
+            confirm=confirm,
         )
 
     def record_open(self, document_id: str, query: str) -> None:
@@ -238,6 +257,22 @@ class SearchService:
     def save_config(self, config: AppConfig) -> None:
         config.save(self.paths)
         self.config = config
+
+    def control_center(self) -> ControlCenterService:
+        """Return the operational service backed by this search service."""
+        return ControlCenterService(service=self)
+
+    def control_snapshot(self) -> ControlSnapshot:
+        """Read the current control-center state without constructing Tk."""
+        return self.control_center().snapshot()
+
+
+def control_center_service(
+    paths: AppPaths | None = None,
+    database_path: Path | str | None = None,
+) -> ControlCenterService:
+    """Construct the operational service without involving Tk."""
+    return ControlCenterService(paths=paths, database_path=database_path)
 
 
 def open_path(path: Path | str) -> None:

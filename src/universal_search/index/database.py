@@ -214,13 +214,21 @@ class SearchDatabase:
 
     def connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path)
-        connection.row_factory = sqlite3.Row
-        for pragma in _PER_CONNECTION_PRAGMAS:
-            connection.execute(pragma)
-        if not self._schema_present(connection):
-            connection.executescript(SCHEMA)
-        self._migrate(connection)
-        return connection
+        try:
+            connection.row_factory = sqlite3.Row
+            for pragma in _PER_CONNECTION_PRAGMAS:
+                connection.execute(pragma)
+            if not self._schema_present(connection):
+                connection.executescript(SCHEMA)
+            self._migrate(connection)
+            return connection
+        except BaseException:
+            # A corrupt file can fail during PRAGMA/schema setup before the
+            # connection is returned to the caller.  Close it here or Windows
+            # will still hold the application-owned file when recovery tries to
+            # quarantine it.
+            connection.close()
+            raise
 
     @staticmethod
     def _schema_present(connection: sqlite3.Connection) -> bool:

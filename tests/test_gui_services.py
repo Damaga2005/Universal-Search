@@ -30,6 +30,8 @@ def test_app_paths_honour_environment_override(monkeypatch, tmp_path: Path) -> N
         paths.lock_file.name,
     }
     assert len(names) == 6  # every runtime artifact has its own file
+    assert paths.control_state_file.name == "control-center.json"
+    assert paths.control_center_file == paths.control_state_file
 
 
 def test_default_home_uses_localappdata(monkeypatch) -> None:

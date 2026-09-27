@@ -80,13 +80,15 @@ lives in the UI.
   only graph lookup; `SearchEngine` and ranking never read these tables.
   Derived data only: **search never reads it**, deleting it costs nothing, and
   document similarity is computed without the ranking formula.
-- **Diagnostics** (`universal_search/diagnostics/`, spec 015): read-only by
-  default — `stats.py` (`collect`: counts, sizes, schema, worker state),
-  `health.py` (`check`: twelve checks, `ok`/`warning`/`fatal`) and
-  `repair.py` (five operations; the destructive ones raise
-  `ConfirmationRequired` unless `confirm=True`). Reports read metadata
-  only, never document content, and every connection is closed
-  deterministically because Windows will not delete a locked database.
+- **Diagnostics** (`universal_search/diagnostics/`, specs 015 and 023): read-only
+  by default — `stats.py` (`collect`: counts, sizes, schema, worker state;
+  `collect_sources`/`collect_derived`/`collect_storage` for the control
+  center), `health.py` (`check`: twelve checks, `ok`/`warning`/`fatal`) and
+  `repair.py` (maintenance plus `remove_indexed_source`, which deletes only
+  indexed/derived rows and never a source path). Destructive operations raise
+  or return an explicit confirmation result. Reports read metadata only,
+  never document content, and every connection is closed deterministically
+  because Windows will not delete a locked database.
 - **Platform** (`universal_search/platforms/`, specs 016 and 021): the seam
   between the platform-independent core and Windows. `Platform` declares the
   operations (open, reveal, autostart, notify); `WindowsPlatform` implements
@@ -109,18 +111,21 @@ lives in the UI.
   - `cli.py` — `index | search | gui | tray | onedrive | context | usage
     | hotkey | recent | indexer | intelligence | diagnose | privacy …`
     (diagnostics and control) plus `--version`.
-  - `gui/` — Tk window (`app.py`, view only) + service layer (`services.py`,
-    testable without Tk). `appconfig.py` provides paths/config/logging.
-    The service turns a `QueryError` into `last_query_error` so the window
-    shows the reason instead of a bare empty list. Searches run on a
-    worker thread and are delivered through a queue that the Tk main loop
-    drains, with a generation number so a stale answer can never replace a
-    newer one. `theme.py` owns every colour and font size, `rows.py` the
-    result-line format (both pure, both testable without a display). The
-    service also owns related-document lookup; the window presents a small
-    ranked evidence list from the existing Diagnostic menu rather than a
-    graph visualization. Related work uses a worker/queue/generation path so
-    a first graph rebuild cannot freeze Tk.
+  - `gui/` — Tk search window (`app.py`, view only) + service layer
+    (`services.py`, testable without Tk) + the separate `control_center.py`
+    operational window. `appconfig.py` provides paths/config/logging and a
+    small `control-center.json` sidecar for scan counters and sanitized
+    failures. The service turns a `QueryError` into `last_query_error` so
+    the window shows the reason instead of a bare empty list. Searches and
+    control-center snapshots/actions run on worker threads and are delivered
+    through generation-aware queues; the Tk main loop only renders. The
+    control center reuses `BackgroundService`, provider metadata,
+    diagnostics, `Indexer`, intelligence and graph stores. It labels the
+    safety scope of every result (`indexed_records`, `derived_data` or
+    `configuration`) and never calls `unlink` on a source path. The main
+    search window remains a small query surface; sources, health, storage,
+    failures and maintenance live in the separate window. `theme.py` owns
+    every colour and font size, `rows.py` the result-line format.
   - `hotkey.py` — global shortcut server (phase 009), hosted by the worker.
     A hotkey that cannot be registered is reported in the worker status
     file, so a dead shortcut is visible instead of silent. The window is
@@ -139,7 +144,10 @@ lives in the UI.
 
 ## Process model (GUI + indexer + optional tray)
 
-The GUI, worker and optional tray are **independent per-user processes**.
+The GUI search window, worker and optional tray are **independent per-user
+processes**. The control center is a same-process `Toplevel` over the same
+service objects; it is not a second worker and acquires no source-file
+ownership.
 Closing the search window never stops indexing, and exiting the tray does not
 stop a worker that it did not start. They coordinate through files in the
 per-user application home (`%LOCALAPPDATA%\Universal Search`, overridable with
@@ -158,6 +166,7 @@ per-user application home (`%LOCALAPPDATA%\Universal Search`, overridable with
     gui.pid                  live GUI singleton identity
     gui-show.flag            present Search/Settings/Quick Search
     gui-diagnostics.flag     present the existing Diagnostics view
+    control-center.json      scan counters and sanitized source failures
     tray.pid                 last tray PID, retained for diagnostics
     tray.pid.lock            OS-backed exclusive tray ownership
 

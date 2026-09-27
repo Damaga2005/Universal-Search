@@ -110,6 +110,22 @@ class AppPaths:
         """Touched to ask a live window to show its diagnostics view."""
         return self.home / "gui-diagnostics.flag"
 
+    @property
+    def control_state_file(self) -> Path:
+        """Small local operational state for the indexing control center.
+
+        The file contains paths, counters and sanitized failure messages only;
+        it never contains document text or query text.  Keeping it separate
+        from ``config.json`` means a failed scan can be reported without
+        making a malformed user configuration look like a scan result.
+        """
+        return self.home / "control-center.json"
+
+    @property
+    def control_center_file(self) -> Path:
+        """Compatibility alias for callers that use the shorter name."""
+        return self.control_state_file
+
     def ensure(self) -> None:
         self.home.mkdir(parents=True, exist_ok=True)
 

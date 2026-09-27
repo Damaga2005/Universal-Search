@@ -31,6 +31,7 @@ quedar vieja) y se muestra con `universal-search privacy show`.
 | `config.json` | preferencias, contextos, consultas recientes | configuración y menú Recientes | hasta limpiar o borrar el fichero | `recent clear` | No |
 | `universal-search.log` | eventos, niveles y rutas; **nunca texto del documento** | diagnóstico; cada mensaje se corta a 500 caracteres | 1 MB × 3 rotados | borrar el fichero | No |
 | `metrics.jsonl` | latencias, recuentos, duraciones; **sin texto de consulta** | visibilidad de rendimiento (fase 011) | compactado al pasar de 512 KB | borrar el fichero | No |
+| `control-center.json` | rutas de fuentes, recuentos de exploración y mensajes de fallo acotados; **sin texto de documento ni de consulta** | conservar el estado operativo entre reinicios (fase 023) | hasta la siguiente exploración o al borrar la carpeta de aplicación | borrar `control-center.json` | No |
 | ficheros de coordinación de procesos | PIDs, identidades de creación, generaciones de arranque, estado/recuentos, reclamaciones atómicas y banderas por generación; **sin texto de documento ni de consulta** | instancia única y órdenes locales entre worker, GUI y bandeja | mientras un proceso sea dueño; las banderas se consumen, las reclamaciones de PID muerto se recuperan y los sidecars de lease pueden quedar como un byte | detener bandeja/GUI/indexador y borrar los ficheros de coordinación o toda la carpeta de aplicación | No |
 
 ## Modelo de amenazas (priorizado por plausibilidad)
@@ -72,6 +73,10 @@ universal-search usage off                     # desactiva el aprendizaje
 universal-search intelligence clear             # borra lo derivado
 universal-search diagnose repair all --root … --yes   # borra todo y reindexa
 ```
+
+El centro de control de la fase 023 permite quitar una fuente sin borrar sus
+archivos. La eliminación de registros indexados es una opción separada y las
+reconstrucciones destructivas requieren confirmación explícita.
 
 ## Limitaciones
 

@@ -57,7 +57,7 @@ def test_inventory_is_complete_and_never_leaves_the_machine():
     # Everything the application actually persists must be declared.
     assert {
         "documents", "content", "intelligence", "relationship_graph", "usage",
-        "recents", "logs", "metrics", "process_coordination",
+        "recents", "control_state", "logs", "metrics", "process_coordination",
     } <= keys
 
 

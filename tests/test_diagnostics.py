@@ -8,6 +8,7 @@ without an explicit confirmation, in the API and in the CLI.
 import hashlib
 import json
 import sys
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,12 @@ from universal_search.diagnostics import (
     rebuild_intelligence,
     re_extract,
     reconcile,
+    remove_indexed_source,
+)
+from universal_search.diagnostics.stats import (
+    collect_derived,
+    collect_sources,
+    collect_storage,
 )
 from universal_search.diagnostics.repair import ORPHAN_CLEANUP_BATCH_SIZE
 from universal_search.index.database import SCHEMA_VERSION, SearchDatabase
@@ -377,6 +384,44 @@ def test_full_rebuild_drops_everything_and_reindexes(
     statistics = collect(indexed)
     assert statistics.documents == 3
     assert [r.name for r in SearchEngine(indexed).search("bjt")] != []
+
+
+def test_control_center_source_storage_and_derived_stats(indexed: SearchDatabase):
+    tree = indexed.path.parent / "tree"
+    rebuild_intelligence_rows(indexed)
+    sources = collect_sources(indexed, (tree,))
+    storage = collect_storage(indexed)
+    derived = collect_derived(indexed)
+
+    assert sources[0].documents == 3
+    assert dict(sources[0].by_type)[".md"] == 2
+    assert sources[0].accessible is True
+    assert storage.total_bytes > 0
+    assert derived.intelligence_rows == 3
+    assert derived.graph_current is True
+
+
+def test_remove_indexed_source_removes_rows_but_never_source_files(
+    indexed: SearchDatabase, tmp_path: Path
+):
+    rebuild_intelligence_rows(indexed)
+    tree = tmp_path / "tree"
+    target = tree / "uno.md"
+    source_before = target.read_text(encoding="utf-8")
+    result = remove_indexed_source(indexed, tree)
+
+    assert result.documents == 3
+    assert result.physical_files == 0
+    assert target.exists()
+    assert target.read_text(encoding="utf-8") == source_before
+    assert collect(indexed).documents == 0
+    with closing(indexed.connect()) as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM document_intelligence"
+        ).fetchone()[0] == 0
+        assert connection.execute(
+            "SELECT COUNT(*) FROM document_graph_metadata WHERE key LIKE 'dirty:%'"
+        ).fetchone()[0] == 0
 
 
 # -- CLI -----------------------------------------------------------------------

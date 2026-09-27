@@ -127,6 +127,15 @@ INVENTORY: tuple[DataItem, ...] = (
         ),
     ),
     DataItem(
+        key="control_state",
+        what="source paths, scan counters and sanitized failure messages; never document text or query text",
+        where="`control-center.json` in the application home",
+        purpose="resume the operational control-center view after a restart",
+        retention="until the next successful scan or the application home is deleted",
+        deletion="delete `control-center.json` (the index and source files are unaffected)",
+        optional=True,
+    ),
+    DataItem(
         key="logs",
         what="events, levels and paths — never document text",
         where="rotating `universal-search.log` in the application home",
@@ -225,6 +234,7 @@ def inventory_report(
         "log": _size(home / "universal-search.log"),
         "metrics": _size(home / "metrics.jsonl"),
         "config": _size(home / "config.json"),
+        "control_state": _size(home / "control-center.json"),
         "coordination": coordination_bytes,
     }
     return {

@@ -223,6 +223,13 @@ class Indexer:
         scrub_reference_metadata(connection, [document_id], aliases)
         Indexer._mark_graph_dirty(connection, {document_id})
         connection.execute("DELETE FROM documents_fts WHERE document_id = ?", (document_id,))
+        # Derived document intelligence follows the canonical document.  Keeping
+        # it after a source removal leaves a stale privacy/control-center row
+        # and makes derived counts disagree with the index.
+        connection.execute(
+            "DELETE FROM document_intelligence WHERE document_id = ?",
+            (document_id,),
+        )
         # Graph rows are derived and must disappear with their canonical
         # document.  The explicit deletes keep cleanup correct for legacy
         # databases created before graph foreign keys/triggers existed.

@@ -12,7 +12,7 @@ import threading
 import time
 import tkinter as tk
 from dataclasses import replace
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, ttk
 
 from universal_search import __version__
 from universal_search.context import load_contexts
@@ -61,6 +61,7 @@ class SearchWindow(tk.Tk):
         self._related_inflight = 0
         self._related_poll: str | None = None
         self.related_window: tk.Toplevel | None = None
+        self.control_center_window: object | None = None
         self.closed = False
 
         # Theme and scaling resolved once, from configuration (spec 017).
@@ -154,9 +155,6 @@ class SearchWindow(tk.Tk):
         menu = tk.Menu(self)
         file_menu = tk.Menu(menu, tearoff=0)
         file_menu.add_command(
-            label="Añadir carpeta a indexar…", command=self._add_root
-        )
-        file_menu.add_command(
             label="Copiar ruta del resultado (Ctrl+C)", command=self._copy_path
         )
         file_menu.add_separator()
@@ -192,12 +190,10 @@ class SearchWindow(tk.Tk):
             label="Estado del índice", command=self._show_diagnostics
         )
         diagnose_menu.add_command(
-            label="Documentos relacionados...", command=self._show_related
+            label="Centro de control de indexación...", command=self._show_control_center
         )
-        diagnose_menu.add_separator()
         diagnose_menu.add_command(
-            label="Reconstruir índice completo…",
-            command=self._rebuild_index,
+            label="Documentos relacionados...", command=self._show_related
         )
         menu.add_cascade(label="Diagnóstico", menu=diagnose_menu)
         self.config(menu=menu)
@@ -553,7 +549,28 @@ class SearchWindow(tk.Tk):
     def _set_status(self, text: str) -> None:
         self.status_var.set(text)
 
-    # -- diagnostics (spec 015) -------------------------------------------------
+    # -- diagnostics and control center (phases 015/023) ----------------------
+
+    def _show_control_center(self) -> None:
+        """Open the separate operational window without crowding search."""
+        existing = self.control_center_window
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift()
+                    existing.focus_force()
+                    return
+            except (tk.TclError, RuntimeError, AttributeError):
+                pass
+        from universal_search.gui.control_center import (
+            ControlCenterService,
+            ControlCenterWindow,
+        )
+
+        self.control_center_window = ControlCenterWindow(
+            self,
+            service=ControlCenterService(service=self.service),
+        )
 
     def _show_diagnostics(self) -> None:
         """Read-only health report in a window of its own."""
@@ -670,22 +687,11 @@ class SearchWindow(tk.Tk):
         self._set_status(f"{len(related)} documento(s) relacionado(s)")
 
     def _rebuild_index(self) -> None:
-        """Full rebuild, behind an explicit confirmation (never implied)."""
-        if not messagebox.askyesno(
-            "Reconstruir índice",
-            "Se borrará el índice actual y se reconstruirá desde cero.\n"
-            "¿Continuar?",
-            parent=self,
-        ):
-            self._set_status("Reconstrucción cancelada")
-            return
-        try:
-            result = self.service.rebuild_index(confirm=True)
-        except Exception:
-            log.exception("index rebuild failed")
-            self._set_status("La reconstrucción falló — consulta el registro")
-            return
-        self._set_status(f"Índice reconstruido: {result.detail}")
+        """Compatibility route: maintenance belongs to the control center."""
+        # Kept as a private compatibility hook for older integrations, but it
+        # never performs a synchronous database operation on the Tk thread.
+        self._show_control_center()
+        self._set_status("Usa el centro de control para reconstruir el índice")
 
     # -- selection and preview -------------------------------------------------
 
@@ -801,10 +807,14 @@ class SearchWindow(tk.Tk):
         chosen = filedialog.askdirectory(title="Carpeta a indexar")
         if not chosen:
             return
-        roots = self.service.config.roots
-        if chosen not in roots:
-            self.service.save_config(replace(self.service.config, roots=roots + (chosen,)))
-        self._set_status(f"Carpeta añadida: {chosen}")
+        try:
+            result = self.service.control_center().add_source(chosen)
+        except Exception:
+            log.exception("could not add source through control center")
+            self._set_status("No se pudo añadir la carpeta — consulta el registro")
+            return
+        self.service.reload_config()
+        self._set_status(result.message)
 
     def _on_close(self, _event=None) -> None:
         # Closing the window never touches the indexer: it is a separate

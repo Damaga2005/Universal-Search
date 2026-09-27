@@ -8,6 +8,7 @@ nothing reads document content — counts, sizes and metadata only.
 
 from contextlib import closing
 from dataclasses import dataclass, replace
+import os
 from pathlib import Path
 
 from universal_search import __version__, metrics
@@ -206,3 +207,369 @@ def collect(
             lock_pid=background.read_lock_pid(paths),
         )
     return snapshot
+
+
+# -- control-center snapshots -------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class SourceStatistics:
+    """Bounded metadata for one configured source root.
+
+    The object intentionally contains no document text.  Counts are aggregate
+    values and ``stale_documents`` is an existence check over the rows that
+    belong to this root; the control center can therefore explain why a
+    source looks stale without opening a file.
+    """
+
+    path: str
+    documents: int = 0
+    indexed_bytes: int = 0
+    by_type: tuple[tuple[str, int], ...] = ()
+    by_source: tuple[tuple[str, int], ...] = ()
+    stale_documents: int = 0
+    accessible: bool = True
+    available: bool = True
+    error: str | None = None
+
+    @property
+    def count(self) -> int:
+        return self.documents
+
+    @property
+    def supported_types(self) -> tuple[tuple[str, int], ...]:
+        return self.by_type
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "path": self.path,
+            "documents": self.documents,
+            "count": self.documents,
+            "indexed_bytes": self.indexed_bytes,
+            "by_type": dict(self.by_type),
+            "by_source": dict(self.by_source),
+            "supported_types": dict(self.by_type),
+            "stale_documents": self.stale_documents,
+            "accessible": self.accessible,
+            "available": self.available,
+            "error": self.error,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class DerivedStatistics:
+    """Version/state summary for optional derived layers."""
+
+    intelligence_rows: int = 0
+    intelligence_version: int | None = None
+    graph_nodes: int = 0
+    graph_edges: int = 0
+    graph_terms: int = 0
+    graph_metadata: int = 0
+    graph_version: int | None = None
+    graph_preprocessing_version: int | None = None
+    graph_current: bool = False
+    dirty: int = 0
+    error: str | None = None
+
+    @property
+    def relationships(self) -> int:
+        return self.graph_edges
+
+    @property
+    def ready(self) -> bool:
+        return self.error is None and self.graph_current and self.dirty == 0
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "intelligence_rows": self.intelligence_rows,
+            "intelligence_version": self.intelligence_version,
+            "graph_nodes": self.graph_nodes,
+            "graph_edges": self.graph_edges,
+            "graph_terms": self.graph_terms,
+            "graph_metadata": self.graph_metadata,
+            "graph_version": self.graph_version,
+            "graph_preprocessing_version": self.graph_preprocessing_version,
+            "graph_current": self.graph_current,
+            "dirty": self.dirty,
+            "ready": self.ready,
+            "error": self.error,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class StorageStatistics:
+    """Measured bytes for the index and nearby local operational files."""
+
+    database_bytes: int = 0
+    wal_bytes: int = 0
+    shm_bytes: int = 0
+    application_files: int = 0
+    source_files: int = 0
+    config_bytes: int = 0
+    log_bytes: int = 0
+    metrics_bytes: int = 0
+    control_state_bytes: int = 0
+    error: str | None = None
+
+    @property
+    def total_bytes(self) -> int:
+        return self.database_bytes + self.wal_bytes + self.shm_bytes
+
+    @property
+    def application_bytes(self) -> int:
+        return (
+            self.total_bytes
+            + self.config_bytes
+            + self.log_bytes
+            + self.metrics_bytes
+            + self.control_state_bytes
+        )
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "database": self.database_bytes,
+            "wal": self.wal_bytes,
+            "shm": self.shm_bytes,
+            "total": self.total_bytes,
+            "application_files": self.application_files,
+            "source_files": self.source_files,
+            "config": self.config_bytes,
+            "log": self.log_bytes,
+            "metrics": self.metrics_bytes,
+            "control_state": self.control_state_bytes,
+            "application": self.application_bytes,
+            "error": self.error,
+        }
+
+
+def _normalised_path(value: str | Path) -> str:
+    text = os.path.normcase(os.path.abspath(os.fspath(value)))
+    return text.rstrip("\\/") or os.path.sep
+
+
+def _under(path: str, root: str) -> bool:
+    candidate = _normalised_path(path)
+    base = _normalised_path(root)
+    try:
+        return os.path.commonpath((candidate, base)) == base
+    except (ValueError, OSError):
+        return False
+
+
+def collect_sources(
+    database: SearchDatabase,
+    roots: tuple[str | Path, ...] | list[str | Path],
+    *,
+    stale_limit: int | None = None,
+) -> tuple[SourceStatistics, ...]:
+    """Collect per-source counts without opening or reading document content.
+
+    A root that is missing or unreadable is represented as an inaccessible
+    source; a damaged database is represented by zero counts plus ``error``
+    rather than an exception.  ``stale_limit`` is an optional safety valve
+    for callers that only need a sample; the control center leaves it unset so
+    its displayed source count is exact for the rows in the index.
+    """
+    selected: list[tuple[str, str]] = []
+    seen_keys: set[str] = set()
+    for raw_root in roots:
+        display = str(raw_root)
+        key = _normalised_path(display)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        selected.append((display, key))
+    if not selected:
+        return ()
+    rows: list[tuple[str, int, str, str]] = []
+    database_error: str | None = None
+    if Path(database.path).exists():
+        try:
+            with closing(database.connect()) as connection:
+                rows = [
+                    (
+                        str(row["path"]),
+                        int(row["size"] or 0),
+                        str(row["extension"] or ""),
+                        str(row["source"] or ""),
+                    )
+                    for row in connection.execute(
+                        "SELECT path, size, extension, source FROM documents"
+                    )
+                ]
+        except Exception as exc:
+            database_error = f"{type(exc).__name__}: {exc}"
+            rows = []
+    # A document belongs to the most-specific configured root.  This keeps a
+    # configured parent from double-counting a configured child and gives
+    # source removal the same ownership rule as the presentation layer.
+    owned: dict[str, list[tuple[str, int, str, str]]] = {
+        key: [] for _display, key in selected
+    }
+    for row in rows:
+        candidates = [key for _display, key in selected if _under(row[0], key)]
+        if candidates:
+            owner = max(candidates, key=lambda value: (len(value), value))
+            owned[owner].append(row)
+    result: list[SourceStatistics] = []
+    for root, root_key in selected:
+        root_path = Path(root)
+        accessible = True
+        error = database_error
+        try:
+            exists = root_path.exists()
+            is_directory = root_path.is_dir()
+        except OSError as exc:
+            exists = False
+            is_directory = False
+            error = f"{type(exc).__name__}: {exc}"
+        if not exists or not is_directory:
+            accessible = False
+            error = error or "la carpeta no existe o no es accesible"
+        matches = owned[root_key]
+        stale_rows = matches
+        if stale_limit is not None:
+            stale_rows = matches[: max(0, int(stale_limit))]
+        by_type: dict[str, int] = {}
+        by_source: dict[str, int] = {}
+        stale = 0
+        indexed_bytes = 0
+        for path, size, extension, source in matches:
+            indexed_bytes += max(0, size)
+            by_type[extension or "(none)"] = by_type.get(extension or "(none)", 0) + 1
+            by_source[source or "(none)"] = by_source.get(source or "(none)", 0) + 1
+        for path, _size, _extension, _source in stale_rows:
+            try:
+                if not os.path.exists(path):
+                    stale += 1
+            except OSError:
+                stale += 1
+        result.append(
+            SourceStatistics(
+                path=str(root),
+                documents=len(matches),
+                indexed_bytes=indexed_bytes,
+                by_type=tuple(
+                    sorted(by_type.items(), key=lambda item: (-item[1], item[0]))
+                ),
+                by_source=tuple(
+                    sorted(by_source.items(), key=lambda item: (-item[1], item[0]))
+                ),
+                stale_documents=stale,
+                accessible=accessible,
+                available=accessible,
+                error=error,
+            )
+        )
+    return tuple(result)
+
+
+def collect_derived(database: SearchDatabase) -> DerivedStatistics:
+    """Read the optional intelligence/graph state without repairing it."""
+    from universal_search.intelligence.graph import (
+        GRAPH_PREPROCESSING_VERSION,
+        GRAPH_SCHEMA_VERSION,
+    )
+
+    values = DerivedStatistics()
+    if not Path(database.path).exists():
+        return values
+    try:
+        with closing(database.connect()) as connection:
+            intelligence = connection.execute(
+                "SELECT COUNT(*), MIN(version), MAX(version) FROM document_intelligence"
+            ).fetchone()
+            graph_nodes = int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM document_graph_nodes"
+                ).fetchone()[0]
+            )
+            graph_edges = int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM document_graph_edges"
+                ).fetchone()[0]
+            )
+            graph_terms = int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM document_graph_terms"
+                ).fetchone()[0]
+            )
+            metadata_rows = connection.execute(
+                "SELECT key, value FROM document_graph_metadata"
+            ).fetchall()
+            metadata = {str(row["key"]): str(row["value"]) for row in metadata_rows}
+            dirty = int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM document_graph_metadata WHERE key LIKE 'dirty:%'"
+                ).fetchone()[0]
+            )
+    except Exception as exc:
+        return DerivedStatistics(error=f"{type(exc).__name__}: {exc}")
+    try:
+        graph_version = int(metadata["version"]) if "version" in metadata else None
+    except (TypeError, ValueError):
+        graph_version = None
+    try:
+        graph_preprocessing_version = (
+            int(metadata["preprocessing_version"])
+            if "preprocessing_version" in metadata
+            else None
+        )
+    except (TypeError, ValueError):
+        graph_preprocessing_version = None
+    intelligence_min = intelligence[1]
+    intelligence_max = intelligence[2]
+    return DerivedStatistics(
+        intelligence_rows=int(intelligence[0] or 0),
+        intelligence_version=(
+            int(intelligence_min)
+            if intelligence_min is not None and intelligence_max == intelligence_min
+            else None
+        ),
+        graph_nodes=graph_nodes,
+        graph_edges=graph_edges,
+        graph_terms=graph_terms,
+        graph_metadata=len(metadata),
+        graph_version=graph_version,
+        graph_preprocessing_version=graph_preprocessing_version,
+        graph_current=(
+            graph_version == GRAPH_SCHEMA_VERSION
+            and graph_preprocessing_version == GRAPH_PREPROCESSING_VERSION
+            and dirty == 0
+        ),
+        dirty=dirty,
+    )
+
+
+def _file_size(path: Path) -> int:
+    try:
+        return path.stat().st_size
+    except OSError:
+        return 0
+
+
+def collect_storage(
+    database: SearchDatabase, paths: AppPaths | None = None
+) -> StorageStatistics:
+    """Measure index/application storage without reading file contents."""
+    try:
+        sizes = database.sizes()
+    except Exception as exc:
+        return StorageStatistics(error=f"{type(exc).__name__}: {exc}")
+    home = paths.home if paths is not None else Path(database.path).parent
+    return StorageStatistics(
+        database_bytes=int(sizes.get("database", 0)),
+        wal_bytes=int(sizes.get("wal", 0)),
+        shm_bytes=int(sizes.get("shm", 0)),
+        application_files=sum(
+            1
+            for candidate in (Path(database.path), Path(str(database.path) + "-wal"), Path(str(database.path) + "-shm"))
+            if candidate.exists()
+        ),
+        source_files=0,
+        config_bytes=_file_size(home / "config.json"),
+        log_bytes=_file_size(home / "universal-search.log"),
+        metrics_bytes=_file_size(home / "metrics.jsonl"),
+        control_state_bytes=_file_size(home / "control-center.json"),
+    )

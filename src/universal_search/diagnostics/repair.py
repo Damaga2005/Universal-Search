@@ -14,13 +14,14 @@ counts a user can check afterwards.
 """
 
 import hashlib
+import sqlite3
 import time
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 
 from universal_search.domain.document import SourceKind, document_id_for
-from universal_search.index.database import SearchDatabase
+from universal_search.index.database import SearchDatabase, UnsupportedSchemaVersion
 from universal_search.index.indexer import Indexer
 from universal_search.providers.local import read_local_content
 
@@ -44,12 +45,20 @@ class RepairResult:
     changed: int
     detail: str
     skipped: int = 0
+    application_files: int = 0
+    source_files: int = 0
+
+    @property
+    def physical_files(self) -> int:
+        return self.source_files
 
     def as_dict(self) -> dict[str, object]:
         return {
             "action": self.action,
             "changed": self.changed,
             "skipped": self.skipped,
+            "application_files": self.application_files,
+            "source_files": self.source_files,
             "detail": self.detail,
         }
 
@@ -292,26 +301,61 @@ def rebuild_all(
     if not confirm:
         raise ConfirmationRequired(CONFIRMATION_REQUIRED)
     path = Path(database.path)
-    backup_path = database.backup(backup) if backup is not None else None
-    # Explicit close: sqlite3's `with connection` commits but does not
-    # close, and Windows refuses to delete a file that is still open.
-    connection = database.connect()
-    try:
-        counts = {
-            "documents": int(
-                connection.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
-            ),
-            "fts": int(
-                connection.execute("SELECT COUNT(*) FROM documents_fts").fetchone()[0]
-            ),
-            "intelligence": int(
-                connection.execute(
-                    "SELECT COUNT(*) FROM document_intelligence"
-                ).fetchone()[0]
-            ),
-        }
-    finally:
-        connection.close()
+    application_files = 0
+    quarantined: list[Path] = []
+    corrupt = False
+    counts = {"documents": 0, "fts": 0, "intelligence": 0}
+    # Probe and close before any destructive step.  A corrupt SQLite file is
+    # application-owned state, not a source file; quarantine it as a whole
+    # (including WAL/SHM) before opening a fresh database for counting/rebuild.
+    if path.exists():
+        connection = None
+        try:
+            connection = database.connect()
+            counts = {
+                "documents": int(
+                    connection.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+                ),
+                "fts": int(
+                    connection.execute("SELECT COUNT(*) FROM documents_fts").fetchone()[0]
+                ),
+                "intelligence": int(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM document_intelligence"
+                    ).fetchone()[0]
+                ),
+            }
+        except UnsupportedSchemaVersion:
+            raise
+        except sqlite3.DatabaseError:
+            corrupt = True
+        except (OSError, ValueError):
+            raise
+        finally:
+            if connection is not None:
+                connection.close()
+    if corrupt:
+        stamp = time.time_ns()
+        for suffix in ("", "-wal", "-shm"):
+            candidate = Path(str(path) + suffix)
+            if not candidate.exists():
+                continue
+            quarantine = candidate.with_name(
+                f"{candidate.name}.corrupt-{stamp}"
+            )
+            try:
+                candidate.replace(quarantine)
+            except PermissionError as exc:
+                raise RepairBlocked(
+                    f"{candidate.name} is in use — close the window and stop "
+                    "the indexer, then run the rebuild again"
+                ) from exc
+            quarantined.append(quarantine)
+            application_files += 1
+        counts = {"documents": 0, "fts": 0, "intelligence": 0}
+    backup_path = None
+    if backup is not None and not corrupt:
+        backup_path = database.backup(backup)
     # Close every connection by dropping the file itself: WAL and SHM go
     # with it, which is the only way to guarantee a clean rebuild.
     dropped = counts["documents"]
@@ -322,6 +366,7 @@ def rebuild_all(
         for attempt in range(5):
             try:
                 candidate.unlink()
+                application_files += 1
                 break
             except PermissionError:
                 if attempt == 4:
@@ -349,5 +394,188 @@ def rebuild_all(
                 if backup_path is not None
                 else " (no backup taken)"
             )
+            + (
+                f"; quarantined {len(quarantined)} corrupt application file(s)"
+                if quarantined
+                else ""
+            )
         ),
+        application_files=application_files,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class SourceRemovalResult:
+    """Rows removed while stopping one source; physical files are untouched."""
+
+    path: str
+    documents: int = 0
+    search_rows: int = 0
+    derived_rows: int = 0
+    graph_rows: int = 0
+    usage_rows: int = 0
+    application_files: int = 0
+
+    @property
+    def source_files(self) -> int:
+        return 0
+
+    @property
+    def changed(self) -> int:
+        return (
+            self.documents
+            + self.search_rows
+            + self.derived_rows
+            + self.graph_rows
+            + self.usage_rows
+        )
+
+    @property
+    def indexed_records(self) -> int:
+        return self.documents
+
+    @property
+    def physical_files(self) -> int:
+        return 0
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "path": self.path,
+            "documents": self.documents,
+            "search_rows": self.search_rows,
+            "derived_rows": self.derived_rows,
+            "graph_rows": self.graph_rows,
+            "usage_rows": self.usage_rows,
+            "application_files": self.application_files,
+            "source_files": self.source_files,
+            "changed": self.changed,
+            "indexed_records": self.indexed_records,
+            "physical_files": 0,
+        }
+
+
+def _path_below(path: str, root: str) -> bool:
+    """Portable, case-normalized containment check for stored source paths."""
+    import os
+
+    try:
+        candidate = os.path.normcase(os.path.abspath(os.fspath(path)))
+        base = os.path.normcase(os.path.abspath(os.fspath(root)))
+        return os.path.commonpath((candidate, base)) == base
+    except (TypeError, ValueError, OSError):
+        return False
+
+
+def _root_key(value: Path | str) -> str:
+    import os
+
+    return os.path.normcase(os.path.abspath(os.fspath(value))).rstrip("\\/")
+
+
+def remove_indexed_source(
+    database: SearchDatabase,
+    root: Path | str,
+    *,
+    configured_roots: tuple[Path | str, ...] | list[Path | str] | None = None,
+) -> SourceRemovalResult:
+    """Delete canonical and derived rows below ``root`` in one transaction.
+
+    This is deliberately an indexed-data operation, not a filesystem delete.
+    No path under ``root`` is passed to ``unlink``; the caller can safely use
+    this for a user's documents.  Graph metadata is scrubbed through the same
+    Indexer deletion primitive used by reconciliation.
+    """
+    target = str(root)
+    target_key = _root_key(target)
+    root_specs: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for candidate in (target, *(configured_roots or ())):
+        key = _root_key(candidate)
+        if key not in seen:
+            seen.add(key)
+            root_specs.append((str(candidate), key))
+    if not Path(database.path).exists():
+        return SourceRemovalResult(target)
+    connection = database.connect()
+    try:
+        rows = connection.execute(
+            "SELECT id, path FROM documents"
+        ).fetchall()
+        selected: list[tuple[str, str]] = []
+        for row in rows:
+            row_path = str(row["path"])
+            candidates = [
+                key for _display, key in root_specs if _path_below(row_path, key)
+            ]
+            if not candidates:
+                continue
+            owner = max(candidates, key=lambda value: (len(value), value))
+            if owner == target_key:
+                selected.append((str(row["id"]), row_path))
+        search_rows = 0
+        derived_rows = 0
+        graph_rows = 0
+        usage_rows = 0
+        for document_id, _path in selected:
+            search_rows += int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM documents_fts WHERE document_id = ?",
+                    (document_id,),
+                ).fetchone()[0]
+            )
+            derived_rows += int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM document_intelligence WHERE document_id = ?",
+                    (document_id,),
+                ).fetchone()[0]
+            )
+            graph_rows += int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM document_graph_edges WHERE"
+                    " source_document_id = ? OR target_document_id = ?",
+                    (document_id, document_id),
+                ).fetchone()[0]
+            )
+            graph_rows += int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM document_graph_terms WHERE document_id = ?",
+                    (document_id,),
+                ).fetchone()[0]
+            )
+            graph_rows += int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM document_graph_nodes WHERE document_id = ?",
+                    (document_id,),
+                ).fetchone()[0]
+            )
+            usage_rows += int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM usage_events WHERE document_id = ?",
+                    (document_id,),
+                ).fetchone()[0]
+            )
+        for document_id, _path in selected:
+            # Reuse the FK-safe canonical deletion path, including direct and
+            # reverse graph-reference cleanup.  It never touches the source.
+            Indexer._delete(connection, document_id)
+            connection.execute(
+                "DELETE FROM document_graph_metadata WHERE key = ?",
+                (f"dirty:{document_id}",),
+            )
+            connection.execute(
+                "DELETE FROM usage_events WHERE document_id = ?", (document_id,)
+            )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    return SourceRemovalResult(
+        path=target,
+        documents=len(selected),
+        search_rows=search_rows,
+        derived_rows=derived_rows,
+        graph_rows=graph_rows,
+        usage_rows=usage_rows,
     )

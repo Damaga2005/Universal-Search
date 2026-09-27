@@ -29,6 +29,7 @@ El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
 | 020 | Release de producción y fiabilidad | ✅ Completada | [020-production-release.md](development/020-production-release.md) | [informe](development/020-production-release-report.md) |
 | 021 | Bandeja de notificación y experiencia en segundo plano | ✅ Completada | [021-tray-and-background-experience.md](development/021-tray-and-background-experience.md) | [informe](development/021-tray-and-background-experience-report.md) |
 | 022 | Grafo local de documentos relacionados | ✅ Completada | [022-related-document-graph.md](development/022-related-document-graph.md) | [informe](development/022-related-document-graph-report.md) |
+| 023 | UX de indexación y centro de control | ✅ Completada | [023-indexing-ux-and-control.md](development/023-indexing-ux-and-control.md) | [informe](development/023-indexing-ux-and-control-report.md) |
 
 Verificado en la fase 010: **208 tests en verde**
 (`.venv\Scripts\python -m pytest`), E2E completo de indexador, CLI, GUI e
@@ -36,9 +37,9 @@ instalador. Posteriormente, pasada de auditoría + optimización con
 perfilado: indexación ×16 (2000 docs 45,3s → 2,8s) y consulta media
 48,6 → 34,4 ms —
 [informe](development/optimization-report.md). La verificación más reciente,
-fase 022, deja **681 tests passed y 2 skipped**, pyflakes limpio y un grafo
-local acotado; detalles y límites en el
-[informe de la fase 022](development/022-related-document-graph-report.md).
+fase 023, deja **695 tests passed y 2 skipped**, pyflakes limpio y un centro
+de control con acciones tipadas; detalles y límites en el
+[informe de la fase 023](development/023-indexing-ux-and-control-report.md).
 
 ## Cómo ejecutar
 
@@ -70,5 +71,5 @@ Construir los ejecutables: ver «Build the Windows executables» en el
 Cada fase se considera terminada solo cuando: todos los tests pasan (los
 anteriores incluidos), hay cobertura de tests propia, se documenta en un
 informe y se marca en `ROADMAP.md`. Las fases entregadas siguen esa convención.
-El alcance pendiente desde la fase 023 hasta la 030 queda reflejado en
+El alcance pendiente desde la fase 024 hasta la 030 queda reflejado en
 `ROADMAP.md`.
