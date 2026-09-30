@@ -121,6 +121,20 @@ universal-search diagnose recover orphan-derived
 documentos, ni texto de consultas, ni credenciales. Adjuntarlo a un reporte es
 seguro por construcción, no por confianza.
 
+## 6 ter. Puerta de calidad v2 (fase 030)
+
+```bash
+python -m evaluation.gate      # 13 invariantes locales, salida 0/1
+```
+
+Es la pregunta "¿puede este árbol llamarse Universal Search v2?" con
+evidencia: presupuesto de dependencias, ausencia de red o modelos en el
+paquete, camino de datos independiente de la plataforma, puntos de contacto
+Win32 declarados con su motivo, inventario de privacidad completo, repairs que
+no tocan ficheros del usuario (prueba de comportamiento, no un regex),
+versionado con fuente única, y documentación que coincide con el código. Va
+antes del `PyInstaller` en la lista, y también en CI.
+
 ## 7. Lista de release (reproducible)
 
 1. [ ] Bajar de versión en `__init__.py`, `packaging/version_file.txt` e
@@ -128,7 +142,8 @@ seguro por construcción, no por confianza.
 2. [ ] Añadir las entradas de la versión a `CHANGELOG.md`.
 3. [ ] `python -m pytest tests -q` en verde.
 4. [ ] `python -m pyflakes src tests benchmarks evaluation` sin salida.
-5. [ ] `python -m benchmarks --profile 1000` y anotar los números.
+5. [ ] `python -m evaluation.gate` → `VERDICT: PASS` (13/13).
+6. [ ] `python -m benchmarks --profile 1000` y anotar los números.
 6. [ ] `python -m evaluation` y confirmar que el baseline sigue igual
       (si cambia, el cambio se justifica en el informe de la fase).
 6 bis. [ ] `python -m pytest tests/test_semantic_search.py tests/test_evaluation.py`

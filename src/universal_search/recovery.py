@@ -7,6 +7,7 @@ never deletes a source file.
 
 from __future__ import annotations
 
+from contextlib import closing
 from dataclasses import dataclass
 
 from universal_search.appconfig import AppPaths
@@ -96,7 +97,7 @@ def _stale_coordination(paths: AppPaths) -> RecoveryResult:
 
 def _orphan_derived(paths: AppPaths) -> RecoveryResult:
     database = SearchDatabase(paths.database)
-    with database.connect() as connection:
+    with closing(database.connect()) as connection:
         removed = 0
         for table, column in (
             ("document_semantic_terms", "document_id"),
@@ -118,7 +119,7 @@ def _orphan_derived(paths: AppPaths) -> RecoveryResult:
 
 def _dirty_derived(paths: AppPaths) -> RecoveryResult:
     database = SearchDatabase(paths.database)
-    with database.connect() as connection:
+    with closing(database.connect()) as connection:
         connection.execute(
             "INSERT INTO document_semantic_metadata(key, value) VALUES('dirty','1')"
             " ON CONFLICT(key) DO UPDATE SET value='1', updated_at=CURRENT_TIMESTAMP"
@@ -136,7 +137,7 @@ def _dirty_derived(paths: AppPaths) -> RecoveryResult:
 
 def _reset_derived(paths: AppPaths) -> RecoveryResult:
     database = SearchDatabase(paths.database)
-    with database.connect() as connection:
+    with closing(database.connect()) as connection:
         removed = 0
         for table in (
             "document_semantic_terms",

@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+from contextlib import closing
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -140,17 +141,17 @@ def self_test(paths: AppPaths | None = None) -> SelfTestReport:
     checks: list[CheckResult] = []
 
     def database_check() -> str:
-        with database.connect() as connection:
+        with closing(database.connect()) as connection:
             value = connection.execute("SELECT count(*) FROM documents").fetchone()[0]
         return f"readable, documents={value}"
 
     def fts_check() -> str:
-        with database.connect() as connection:
+        with closing(database.connect()) as connection:
             value = connection.execute("SELECT count(*) FROM documents_fts").fetchone()[0]
         return f"readable, rows={value}"
 
     def schema_check() -> str:
-        with database.connect() as connection:
+        with closing(database.connect()) as connection:
             value = connection.execute("PRAGMA user_version").fetchone()[0]
         return f"version={value}, app={SCHEMA_VERSION}"
 

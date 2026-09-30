@@ -781,12 +781,6 @@ def autostart_command() -> str:
     return f'"{sys.executable}" -m universal_search.cli indexer run'
 
 
-def _registry():
-    import winreg
-
-    return winreg
-
-
 def set_autostart(enabled: bool, registry=None) -> None:
     """Register/unregister the Run-key entry through the platform adapter."""
     from universal_search.platforms.windows import set_autostart as platform_set

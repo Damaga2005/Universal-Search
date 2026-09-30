@@ -57,15 +57,22 @@
 - [x] Windows shell integration (027)
 - [x] Observability & recovery (028)
 - [x] Release engineering & CI (029)
-- [ ] Universal Search v2 quality gate (030)
+- [x] Universal Search v2 quality gate (030)
 
 ---
 
-Phases 001–029 are implemented and documented (per-phase reports in
-`docs/development/`). The phase-029 quality gate measured **891 passing tests,
-3 skipped**, clean pyflakes, a green packaged smoke over both real
+Phases 001–030 are implemented and documented (per-phase reports in
+`docs/development/`). The v2 quality gate is an executable instrument, not a
+promise: `python -m evaluation.gate` runs thirteen local invariants —
+dependency budget, no network or model imports, a platform-independent data
+path, declared Windows touchpoints, a complete privacy inventory, repairs that
+provably never touch a user's files, single-sourced versioning, and
+documentation that matches the code. The phase-030 gate measured **916
+passing tests, 3 skipped** over 919 collected, clean pyflakes, a green packaged
+smoke over both real
 executables, and a re-measured semantic layer (hybrid failure R@5 0.762,
 exact-match correctness 1.0, no top-1 regression, nonsense queries still
 empty) after the packaged smoke exposed and fixed a zero-idf degeneracy and an
-exact-token precision gate. The CI gates are themselves asserted by
-`tests/test_ci_gates.py`. Still open: phase 030, the v2 quality gate.
+exact-token precision gate.
+
+Current test count: 919 tests collected (916 passed, 3 skipped).

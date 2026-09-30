@@ -72,6 +72,12 @@ jobs:
       - name: Release contract (CI gates, version pinning, dependency budget)
         run: python -m pytest tests/test_ci_gates.py -q
 
+      # Phase 030: the v2 gate is a command, and CI runs it like any other
+      # gate. It re-reads the tree it is shipped with, so a stale count or an
+      # undeclared table fails the build instead of the next release.
+      - name: Universal Search v2 quality gate
+        run: python -m evaluation.gate
+
   core-portability:
     name: platform-independent core (probe, non-gating)
     runs-on: ubuntu-latest

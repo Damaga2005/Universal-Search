@@ -157,7 +157,10 @@ lives in the UI.
   `continue-on-error` on a job that blocks, a missing runner, or a new
   third-party runtime dependency. `pyproject.toml` is the single source for
   the dependency budget: `pypdf` and `watchdog` at runtime, `pyinstaller`
-  only in the optional `build` extra.
+  only in the optional `build` extra. `evaluation/gate.py` is the executable
+  form of every project-wide claim above: run it with
+  `python -m evaluation.gate`. It is gated by `tests/test_v2_gate.py`,
+  including negative tests that assert each check can still fail.
 - **Presentation**:
   - `cli.py` — `index | search | gui | tray | onedrive | context | usage
     | hotkey | recent | indexer | intelligence | diagnose | privacy …`

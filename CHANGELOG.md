@@ -7,7 +7,30 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
-### Phase 029 — Release engineering and CI
+### Phase 030 - Universal Search v2 quality gate
+- Added `evaluation/gate.py`, runnable as `python -m evaluation.gate`: thirteen
+  local invariants that answer one question with evidence. Dependency budget
+  (exactly `pypdf` and `watchdog` at runtime), no socket/HTTP/model import in
+  the shipped package, a platform-independent data path, every Windows
+  touchpoint declared with a reason, a complete privacy inventory for all 12
+  tables, single-sourced versioning, no stray `breakpoint`/`pdb`, every phase
+  documented, changelog coverage, documented counts equal to what pytest
+  collects, and a closed roadmap.
+- One of those checks is behavioural rather than textual: it indexes a real
+  tree, runs all four recovery cases plus `privacy forget` and two destructive
+  diagnostic repairs, and verifies every user file is byte-identical
+  afterwards. A regex cannot tell an application-data `unlink` from a user's
+  document; this can.
+- `tests/test_v2_gate.py` gates the gate, including negative tests that break
+  a temporary tree and assert each check can still say no.
+- Found and fixed while writing it: `recovery.py` and `observability.py` used
+  `with connection`, which commits but never closes; on Windows the database
+  stayed locked after a repair. Both now close deterministically, and dead
+  `winreg` code in `background.py` is gone.
+- Phase 030 gate: **916 passed, 3 skipped**, clean pyflakes, `python -m
+  evaluation.gate` → `VERDICT: PASS` (13/13).
+
+### Phase 029 - Release engineering and CI
 - Made the release gates a verified contract: `tests/test_ci_gates.py` fails
   when a gating job tolerates failure, when a mandatory gate disappears from
   the workflow, when the workflow is not read-only/serialized, or when a third

@@ -36,6 +36,7 @@ El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
 | 027 | Integración con el shell de Windows | ✅ Completada | [027-windows-shell-integration.md](development/027-windows-shell-integration.md) | [informe](development/027-windows-shell-integration-report.md) |
 | 028 | Observabilidad y recuperación local | ✅ Completada | [028-observability-and-recovery.md](development/028-observability-and-recovery.md) | [informe](development/028-observability-and-recovery-report.md) |
 | 029 | Release engineering y CI (puertas verificadas) | ✅ Completada | [029-release-engineering-and-ci.md](development/029-release-engineering-and-ci.md) | [informe](development/029-release-engineering-and-ci-report.md) |
+| 030 | Puerta de calidad v2 (gate ejecutable) | ✅ Completada | [030-universal-search-v2-quality-gate.md](development/030-universal-search-v2-quality-gate.md) | [informe](development/030-v2-quality-gate-report.md) |
 
 Verificado en la fase 010: **208 tests en verde**
 (`.venv\Scripts\python -m pytest`), E2E completo de indexador, CLI, GUI e
@@ -43,13 +44,15 @@ instalador. Posteriormente, pasada de auditoría + optimización con
 perfilado: indexación ×16 (2000 docs 45,3s → 2,8s) y consulta media
 48,6 → 34,4 ms —
 [informe](development/optimization-report.md). La verificación más reciente,
-fase 029, deja **891 tests passed y 3 skipped**, pyflakes limpio, una capa
+fase 030, deja **916 tests passed y 3 skipped**, pyflakes limpio, una capa
 semántica local opcional medida, protección de privacidad para sus vectores,
 comandos open/reveal, DPI por monitor, el verbo Explorer per-user reversible,
 autodiagnóstico, paquete de soporte declarado, recuperación con casos
-nombrados y puertas de CI verificadas por test; el humo del paquete detectó y
-midió el arreglo del idf semántico; detalles y límites en el
-[informe de la fase 029](development/029-release-engineering-and-ci-report.md).
+nombrados, puertas de CI verificadas por test y un gate v2 ejecutable de 13
+invariantes (`python -m evaluation.gate`); detalles y límites en el
+[informe de la fase 030](development/030-v2-quality-gate-report.md).
+
+Current test count: 919 tests collected (916 passed, 3 skipped).
 
 ## Cómo ejecutar
 

@@ -123,6 +123,8 @@ def test_quality_job_runs_every_mandatory_gate(jobs: dict[str, str]) -> None:
         "tests/test_ci_gates.py",
     ):
         assert suite in body, f"{suite} is not gated in CI"
+    # The v2 gate is a command, not a pytest module: CI must run it directly.
+    assert "python -m evaluation.gate" in body
 
 
 def test_package_job_builds_and_smokes_the_real_executables(jobs: dict[str, str]) -> None:
