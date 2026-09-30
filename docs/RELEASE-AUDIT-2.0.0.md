@@ -347,16 +347,38 @@ negativo: un campo llamado `document_text` o `snippet` debe salir redactado.
 
 | Artefacto | Estado | Veredicto |
 |---|---|---|
-| `universal-search.exe` (CLI + indexer + tray + diagnósticos) | construido y verificado | PASS |
-| `UniversalSearch.exe` (GUI) | construido y verificado | PASS |
+| `UniversalSearch-2.0.0-win-x64.zip` (17,9 MB, 956 entradas) | **el artefacto de la release**: bundle one-dir completo | PASS |
+| `universal-search.exe` (CLI + indexer + tray + diagnósticos) | dentro del bundle | PASS |
+| `UniversalSearch.exe` (GUI) | dentro del bundle | PASS |
 | `packaging/install.ps1` | ejecutado y verificado | PASS |
 | `packaging/uninstall.ps1` | ejecutado y verificado | PASS |
 | `packaging/explorer-search.ps1` | ejecutado por el instalador; retirado por el desinstalador | PASS |
 | `packaging/installer.iss` | versionado a 2.0.0, **no compilado** (Inno Setup ausente) | SKIP — no validado |
-| `SHA256SUMS.txt` | generado | PASS |
+| `SHA256SUMS.txt` | generado, con el bundle y los dos ejecutables | PASS |
 | `docs/RELEASE-NOTES-2.0.0.md` | escrito | PASS |
 | `CHANGELOG.md` | `[Unreleased]` → `[2.0.0] - 2026-09-30` | PASS |
 | `docs/manifest-2.0.0.json` | manifiesto reproducible | PASS |
+
+**Defecto de publicación encontrado y corregido (importante)**. La primera
+subida adjuntó los dos `.exe` sueltos. Al **descargar y ejecutar** el binario
+publicado, falló:
+
+```
+[PYI-8:ERROR] Failed to load Python DLL '...\_internal\python314.dll'
+```
+
+La causa es que el build de PyInstaller es **one-dir**: los ejecutables
+necesitan el directorio `_internal/` hermano (27,1 MB, 956 ficheros). Lo que
+estaba publicado **no era utilizable**. Corrección aplicada:
+
+1. Se empaquetó el árbol completo en `UniversalSearch-2.0.0-win-x64.zip`
+   (17,9 MB comprimidos).
+2. Se **verificó extrayendo el zip** en un directorio limpio: `--version`,
+   `index`, `search`, `diagnose self-test` y la GUI funcionan.
+3. Se subió el zip, se actualizó `SHA256SUMS.txt` y se **eliminaron los dos
+   `.exe` sueltos** del release, que invitaban a una instalación rota.
+4. Los hashes publicados se verificaron descargándolos de vuelta desde GitHub:
+   coinciden con los binarios auditados.
 
 **Firma digital: NO.** No hay certificado de firma disponible; los
 ejecutables se publican sin firmar. Declarado explícitamente en el manifiesto,
@@ -366,8 +388,9 @@ en las notas y en el README.
 
 | Artefacto | Bytes | SHA-256 |
 |---|---|---|
-| `universal-search.exe` | 3 968 243 | `5A38886DCBB99068DAF9B55F2D05518C52DD90602F02B383CF1E441A47D85C9A` |
-| `UniversalSearch.exe` | 3 963 123 | `A1712F625966DAB1A652B36EDF020BA31ED4FBF2FEF5EA12232D9BAC841F909F` |
+| `UniversalSearch-2.0.0-win-x64.zip` (**el artefacto**) | 18 764 288 | `8077275C7CE854C5924C6BEE2E71C55E596805DBFDC196A9A2C04E6A32E12409` |
+| `universal-search.exe` (dentro del bundle) | 3 968 243 | `5A38886DCBB99068DAF9B55F2D05518C52DD90602F02B383CF1E441A47D85C9A` |
+| `UniversalSearch.exe` (dentro del bundle) | 3 963 123 | `A1712F625966DAB1A652B36EDF020BA31ED4FBF2FEF5EA12232D9BAC841F909F` |
 
 ## P. Limitaciones
 
@@ -407,8 +430,60 @@ manifiesto. Ninguna se exagera:
 
 ## R. Estado remoto
 
-_(se completa tras el push; ver el commit de cierre)_
+| Comprobación | Comando | Resultado | Veredicto |
+|---|---|---|---|
+| Push | `git push origin main` | `a8cc2b7..9ca85c2  main -> main`, exit 0 | PASS |
+| Árbol antes del push | `git status --porcelain` | vacío | PASS |
+| Divergencia | `git rev-list --left-right --count origin/main...HEAD` | **`0	0`** | PASS |
+| Contenido en el remoto | `git ls-tree -r --name-only origin/main` | 217 ficheros; implementación 011–030, `semantic/`, `observability.py`, `recovery.py`, `evaluation/gate.py`, CI, notas, informe y manifiesto | PASS |
+| Versión en el remoto | `git show origin/main:src/universal_search/__init__.py` | `__version__ = "2.0.0"` | PASS |
+| Tag | `git tag -a v2.0.0` + `git push origin v2.0.0` | tag anotado en `9ca85c2`, `0` commits entre el tag y HEAD | PASS |
+| CI | `.github/workflows/ci.yml` | se ejecuta en cada push a `main` | PASS (resultado en GitHub Actions) |
 
 ## S. Release publicada
 
-_(se completa tras el push; ver el commit de cierre)_
+**Publicada**: <https://github.com/Damaga2005/Universal-Search/releases/tag/v2.0.0>
+
+| Campo | Valor |
+|---|---|
+| Nombre | Universal Search 2.0.0 |
+| Tag | `v2.0.0` |
+| Estado | publicada, no borrador, no prerelease |
+| Publicada | 2026-09-30T14:32:42Z |
+| Artefactos | `UniversalSearch-2.0.0-win-x64.zip` (18 739 229 B), `SHA256SUMS.txt`, `manifest-2.0.0.json`, `RELEASE-NOTES-2.0.0.md`, `RELEASE-AUDIT-2.0.0.md` |
+| Verificación de lo publicado | los hashes se descargaron de vuelta desde GitHub y coinciden con los binarios auditados; el zip extraído ejecuta CLI, GUI, indexado, búsqueda y `diagnose self-test` |
+
+### Corrección aplicada tras la primera publicación
+
+La primera subida adjuntaba los dos `.exe` sueltos. Al ejecutarlos **no
+arrancaban** (`PYI-8: Failed to load Python DLL`), porque el build es
+*one-dir*. Se detectó **descargando el artefacto y ejecutándolo**, que es
+justo para lo que existe una auditoría. Se sustituyó por el bundle completo
+verificado y se eliminaron los ejecutables sueltos para que nadie repita la
+instalación rota. Detalle en la sección N.
+
+### Criterio final
+
+| Condición | Estado |
+|---|---|
+| Árbol limpio | PASS |
+| Tests completos en verde | PASS — 931 passed, 3 skipped (934 collected) |
+| Quality Gate 13/13 | PASS |
+| pyflakes limpio | PASS |
+| Benchmark sin regresión inaceptable | PASS — sin regresión demostrable; +12 % de índice atribuido a las tablas derivadas |
+| Build reproducible | PASS — build limpio desde cero, 74,1 s |
+| Smoke real correcto | PASS — 13/13 sobre los `.exe` |
+| Instalación validada | PASS — `install.ps1` con rutas por defecto |
+| Desinstalación validada | PASS — programa, acceso y verbo fuera; datos y documentos intactos |
+| Migración validada | PASS — 5 → 9 real con datos conservados; downgrade rechazado; test de esquema 3.x |
+| Seguridad revisada | PASS — 2 defectos de privacidad encontrados y corregidos |
+| Privacidad revisada | PASS — `forget` borra derivados; logs sin texto de consulta |
+| Documentación sincronizada | PASS — conteos, versión y limitaciones coherentes y verificadas por el gate |
+| Versión coherente | PASS — 2.0.0 en 8 fuentes |
+| Artefactos con hashes | PASS — SHA-256 verificados descargando |
+| Push realizado y remoto sincronizado | PASS — `0 0` |
+| Release publicada | PASS — <https://github.com/Damaga2005/Universal-Search/releases/tag/v2.0.0> |
+
+**Veredicto: COMPLETADA**, con las salvedades declaradas en la sección P
+(las más relevantes: sin firmas, sin revisión independiente de 026–030,
+instalador Inno no validado, CI solo en 3.12 y benchmark sin equipo en reposo).

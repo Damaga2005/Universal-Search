@@ -24,14 +24,20 @@
   ],
   "artifacts": [
     {
-      "name": "universal-search.exe",
+      "name": "UniversalSearch-2.0.0-win-x64.zip",
+      "role": "the release artefact: complete one-dir bundle (CLI + GUI + runtime)",
+      "bytes": 18739229,
+      "sha256": "8077275C7CE854C5924C6BEE2E71C55E596805DBFDC196A9A2C04E6A32E12409"
+    },
+    {
+      "name": "universal-search.exe (inside the bundle)",
       "role": "CLI, indexer, tray, diagnostics (console)",
       "bytes": 3968243,
       "sha256": "5A38886DCBB99068DAF9B55F2D05518C52DD90602F02B383CF1E441A47D85C9A",
       "version_resource": "2.0.0"
     },
     {
-      "name": "UniversalSearch.exe",
+      "name": "UniversalSearch.exe (inside the bundle)",
       "role": "GUI (windowed)",
       "bytes": 3963123,
       "sha256": "A1712F625966DAB1A652B36EDF020BA31ED4FBF2FEF5EA12232D9BAC841F909F",
@@ -96,5 +102,21 @@
     "Manual upgrade only; no auto-updater; index is not synchronised between machines."
   ],
   "manifest_note": "This manifest was generated before the release commit and finalised in the following commit, which also adds docs/RELEASE-AUDIT-2.0.0.md. The release tag points at that closing commit.",
-  "audit_report": "docs/RELEASE-AUDIT-2.0.0.md"
+  "audit_report": "docs/RELEASE-AUDIT-2.0.0.md",
+  "packaging": {
+    "layout": "one-dir (PyInstaller COLLECT): both .exe files require the sibling _internal/ directory",
+    "distributable": "UniversalSearch-2.0.0-win-x64.zip",
+    "distributable_bytes": 18739229,
+    "distributable_sha256": "8077275C7CE854C5924C6BEE2E71C55E596805DBFDC196A9A2C04E6A32E12409",
+    "contents": "universal-search.exe, UniversalSearch.exe, _internal/ (956 files, 27.1 MiB)",
+    "verified": "extracted to a clean directory: --version, index, search, diagnose self-test and the GUI all work",
+    "installer_uses": "install.ps1 -SourceDir expects this directory layout"
+  },
+  "audit_findings": [
+    "The GUI logged the raw query text on search failure, contradicting the declared privacy contract. Fixed and asserted by tests/test_release_privacy_contract.py.",
+    "The event redactor did not cover field names such as snippet or document_text. Fixed and asserted.",
+    ".gitignore did not cover *.db, *.log, *.jsonl, .env or temp files. Fixed; verified that no tracked file became ignored.",
+    "Four documents embedded the author absolute temp path. Replaced with %TEMP%.",
+    "The first upload attached the two .exe files on their own; a one-dir build does not run without _internal/. Verified by downloading, replaced with the complete bundle, and the bare .exe assets were deleted."
+  ]
 }

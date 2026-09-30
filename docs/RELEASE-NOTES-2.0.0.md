@@ -97,6 +97,16 @@ cabecera de 64 KiB, binarios disfrazados).
 - `python -m evaluation.gate`: trece invariantes ejecutables, incluido un
   smoke real de los dos ejecutables congelados.
 
+## Cómo instalarlo
+
+1. Descargue **`UniversalSearch-2.0.0-win-x64.zip`** de la sección Assets.
+2. Extráigalo donde quiera (por ejemplo `%LOCALAPPDATA%\Programs`).
+3. **No mueva los `.exe` fuera de la carpeta**: el build incluye el runtime
+   completo en `_internal/`, y los ejecutables no arrancan sin él.
+4. Para instalarlo con acceso directo y verbo de Explorer, ejecute
+   `install.ps1` sobre la carpeta extraída:
+   `powershell -ExecutionPolicy Bypass -File packaging/install.ps1 -SourceDir <carpeta extraida>`
+
 ## Privacidad (018, 028)
 
 - Nada sale del equipo. El inventario de privacidad declara cada tabla y cada
@@ -125,7 +135,10 @@ cabecera de 64 KiB, binarios disfrazados).
 5. **`hotkey.py` es la excepción declarada** a la regla de "nada de Win32 en
    el núcleo", porque `RegisterHotKey` no tiene equivalente portable. No forma
    parte del camino de datos.
-6. **Sin firma digital.** Los ejecutables se publican sin firmar.
+6. **Sin firma digital, y el build no es de un solo archivo.** Los ejecutables
+   se publican **sin firmar** dentro de UniversalSearch-2.0.0-win-x64.zip.
+   El build de PyInstaller es *one-dir*: los .exe no arrancan sin la carpeta
+   _internal/ que los acompaña, asi que hay que extraer el zip completo.
 7. **Sin autoactualizador.** La actualización es manual, por decisión.
 8. **El índice es local.** No se sincroniza entre máquinas.
 9. **Sin revisión independiente en las fases 026–030.** El servidor de
