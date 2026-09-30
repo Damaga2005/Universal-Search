@@ -48,6 +48,10 @@ class Platform:
         """True when the application is registered to start with Windows."""
         raise NotImplementedError
 
+    def set_dpi_awareness(self) -> bool:
+        """Make the process DPI aware; False when unsupported/unavailable."""
+        return False
+
     def notify(self, title: str, message: str, *, critical: bool = False) -> bool:
         """Tell the user something. False when nothing was shown.
 

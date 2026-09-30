@@ -54,7 +54,7 @@
 - [x] Provider expansion (024)
 - [x] Content extraction v2 (025)
 - [x] Local semantic search without cloud AI (026)
-- [ ] Windows shell integration (027)
+- [x] Windows shell integration (027)
 - [ ] Observability & recovery (028)
 - [ ] Release engineering & CI (029)
 - [ ] Universal Search v2 quality gate (030)
@@ -62,7 +62,7 @@
 ---
 
 Phases 001–026 are implemented and documented (per-phase reports in
-`docs/development/`). The phase-026 quality gate measured **852 passing tests,
+`docs/development/`). The phase-027 quality gate measured **859 passing tests,
 3 skipped**, clean pyflakes, a measured lexical baseline (MRR 0.833, exact-match
 correctness 1.0) and an optional, dependency-free, fallback-only local
 semantic layer that cleared a priori evidence gates (hybrid MRR 0.944). Still

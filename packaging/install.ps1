@@ -32,6 +32,9 @@ param(
     # Skip the Start Menu shortcut (useful for silent/test installs)
     [switch]$NoStartMenu,
 
+    # Skip the per-user Explorer "Search with Universal Search" verb
+    [switch]$NoExplorer,
+
     # Register the background indexer to start with Windows
     [switch]$Autostart
 )
@@ -97,6 +100,22 @@ if (-not $NoStartMenu) {
     $shortcuts += (Join-Path $StartMenuPath "Universal Search.lnk")
 }
 
+# --- per-user Explorer integration (reversible, no administrator rights) -----
+$explorerIntegration = $false
+if (-not $NoExplorer) {
+    $previousEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $explorerCommand = '"' + $cliExe + '" search "%1"'
+        & (Join-Path $PSScriptRoot "explorer-search.ps1") -Command $explorerCommand
+        $explorerIntegration = $true
+    } catch {
+        Write-Warning "Could not register the Explorer action; the application still works without it."
+        $explorerIntegration = $false
+    }
+    $ErrorActionPreference = $previousEAP
+}
+
 # --- optional background-indexer autostart (uses the app's own command) -------
 $backgroundWorker = $false
 if ($Autostart) {
@@ -129,6 +148,7 @@ $manifest = [ordered]@{
     dataDir          = $dataDir
     files            = @($files)
     shortcuts        = @($shortcuts)
+    explorerIntegration = [bool]$explorerIntegration
     backgroundWorker = [bool]$backgroundWorker
     upgraded         = [bool]$previous
 }

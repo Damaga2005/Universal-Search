@@ -123,7 +123,7 @@ lives in the UI.
   because Windows will not delete a locked database.
 - **Platform** (`universal_search/platforms/`, specs 016 and 021): the seam
   between the platform-independent core and Windows. `Platform` declares the
-  operations (open, reveal, autostart, notify); `WindowsPlatform` implements
+  operations (open, reveal, autostart, DPI awareness, notify); `WindowsPlatform` implements
   them with every OS touchpoint injectable (`startfile`, `popen`, `winreg`,
   `user32`); `NullPlatform` answers honestly elsewhere. `worker.py` owns the
   worker's standard-library OS lease and generation-safe process handle. The
@@ -131,7 +131,9 @@ lives in the UI.
   adapter owns the hidden `ctypes` window, `Shell_NotifyIconW`, Explorer-restart
   recovery, menu, tooltip, balloon, timer and cleanup, while its DLL handles are
   injectable for deterministic tests. The core imports no platform
-  implementation directly, so the suite runs and passes on any OS. On Windows,
+  implementation directly, so the suite runs and passes on any OS. Phase 027
+  adds per-monitor DPI awareness before Tk creates a window and keeps the
+  per-user Explorer verb inside installer/uninstaller scripts. On Windows,
   `worker.py` also queries the process creation FILETIME from the same handle used
   for termination; Linux uses a pidfd when the runtime exposes one.
 - **Privacy** (`universal_search/privacy.py`, spec 018): the data inventory

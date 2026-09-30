@@ -197,7 +197,11 @@ def test_install_reinstall_uninstall_roundtrip(tmp_path, fake_dist) -> None:
 
     # 1) fresh install: files, shortcut and manifest in place
     run_powershell(
-        install, SourceDir=fake_dist, InstallDir=install_dir, StartMenuPath=menu_dir
+        install,
+        SourceDir=fake_dist,
+        InstallDir=install_dir,
+        StartMenuPath=menu_dir,
+        NoExplorer="true",
     )
     assert (install_dir / "UniversalSearch.exe").exists()
     assert (install_dir / "universal-search.exe").exists()
@@ -213,6 +217,7 @@ def test_install_reinstall_uninstall_roundtrip(tmp_path, fake_dist) -> None:
     assert any(name.endswith("runtime.bin") for name in manifest["files"])
     assert manifest["shortcuts"] == [str(shortcut)]
     assert manifest["backgroundWorker"] is False  # no -Autostart in this test
+    assert manifest["explorerIntegration"] is False  # -NoExplorer in this test
     assert manifest["upgraded"] is False
     # application files and user data are distinct locations
     assert Path(manifest["dataDir"]) != install_dir
@@ -220,7 +225,11 @@ def test_install_reinstall_uninstall_roundtrip(tmp_path, fake_dist) -> None:
 
     # 2) upgrade: re-running over an existing install is detected and safe
     upgraded = run_powershell(
-        install, SourceDir=fake_dist, InstallDir=install_dir, StartMenuPath=menu_dir
+        install,
+        SourceDir=fake_dist,
+        InstallDir=install_dir,
+        StartMenuPath=menu_dir,
+        NoExplorer="true",
     )
     assert "Existing installation detected" in upgraded.stdout
     manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
@@ -249,6 +258,7 @@ def test_uninstall_purges_data_only_with_the_explicit_flag(tmp_path, fake_dist) 
         SourceDir=fake_dist,
         InstallDir=install_dir,
         StartMenuPath=menu_dir,
+        NoExplorer="true",
     )
     run_powershell(
         PACKAGING / "uninstall.ps1",

@@ -7,6 +7,17 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 027 — Windows shell integration
+- Added `universal-search open PATH` and `universal-search reveal PATH`, both
+  delegating to the platform adapter and failing with an actionable code.
+- Added per-monitor DPI awareness (`SetProcessDpiAwarenessContext`, with the
+  legacy `SetProcessDPIAware` fallback) before Tk creates a window.
+- `install.ps1` now registers the reversible per-user Explorer verb and records
+  it in the install manifest; `uninstall.ps1 -Remove` removes exactly that verb.
+  `-NoExplorer` keeps test/silent installs free of HKCU writes.
+- No administrator privileges, new dependencies or duplicated core logic.
+- Phase 027 quality gate: **859 passed, 3 skipped**, clean pyflakes.
+
 ### Phase 026 — Evidence-first local semantic search
 - Extended the fixed evaluation corpus (20 → 27 documents, 13 → 18 labelled
   queries) with the failure classes a semantic layer must fix: a BJT

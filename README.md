@@ -66,7 +66,7 @@ phase 022 added a versioned, bounded local relationship graph with explainable
 signals, incremental maintenance and a small related-documents list in the GUI;
 phase 023 adds a separate indexing control center with typed source actions,
 health/storage/derived-data state and explicit safety confirmations. The
-phase 024 formalised the provider contract (streaming `iter_files`, bounded errors, cancellation, capability/interface negotiation), made the provider key the canonical source discriminator with a `(source, path)` uniqueness migration, and added mounted-path NAS/removable providers plus mixed-provider indexing with per-provider failure isolation. The current gate is **852 passing tests, 3 skipped**.
+phase 024 formalised the provider contract (streaming `iter_files`, bounded errors, cancellation, capability/interface negotiation), made the provider key the canonical source discriminator with a `(source, path)` uniqueness migration, and added mounted-path NAS/removable providers plus mixed-provider indexing with per-provider failure isolation. Phase 025 added a versioned extraction contract with bounded PDF/Office resources and visible truncation diagnostics. Phase 026 measured a fixed lexical baseline and shipped a dependency-free, versioned n-gram fallback only where the evidence gate justified it; phase 027 added DPI awareness, `open`/`reveal` commands and reversible per-user Explorer integration. The current gate is **859 passing tests, 3 skipped**.
 
 | Fase | Entrega | Estado |
 |------|---------|--------|
@@ -96,6 +96,7 @@ phase 024 formalised the provider contract (streaming `iter_files`, bounded erro
 | 024 | Expansión de proveedores (NAS/extraíble, identidad `(source, path)`) | ✅ |
 | 025 | Extracción de contenido v2 (contrato versionado, límites, diagnósticos) | ✅ |
 | 026 | Búsqueda semántica local con evidencia primero (capa opcional sin dependencias) | ✅ |
+| 027 | Integración con el shell de Windows (DPI, Explorer, open/reveal) | ✅ |
 
 Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
 by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).
@@ -114,6 +115,8 @@ universal-search search "bjt -cmos size:>10KB"                # negation + size 
 universal-search search '"ebers moll" OR "gunn effect"'      # phrase + OR (012)
 universal-search gui               # desktop window (alias: universal-search-gui)
 universal-search tray              # optional Windows notification-area controller
+universal-search open C:\Users\me\notes.pdf   # open with the default app (027)
+universal-search reveal C:\Users\me\notes.pdf # show in its folder (027)
 
 # personal layer (all local): contexts, usage learning, hotkey, recents
 universal-search context list      # context add|remove|use|relate …

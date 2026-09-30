@@ -114,6 +114,37 @@ class WindowsPlatform(Platform):
         self._require("autostart")
         return autostart_enabled(registry=self._registry)
 
+    # -- display ---------------------------------------------------------------
+
+    def set_dpi_awareness(self) -> bool:
+        """Enable per-monitor DPI awareness before any window is created.
+
+        Windows 10 1703+ exposes the v2 context; older builds fall back to
+        the system-DPI call. The GUI invokes this once at startup so Tk
+        geometry and the user scale are computed against real pixels.
+        """
+        if not self.available():
+            return False
+        user32 = self._user32
+        if user32 is None:
+            try:  # pragma: no cover - exercised on Windows only
+                import ctypes
+
+                user32 = ctypes.windll.user32
+            except Exception:
+                return False
+        try:  # pragma: no cover - fakes cover the protocol
+            import ctypes
+
+            modern = getattr(user32, "SetProcessDpiAwarenessContext", None)
+            if modern is not None and modern(ctypes.c_void_p(-4)):
+                return True
+            legacy = getattr(user32, "SetProcessDPIAware", None)
+            return bool(legacy and legacy())
+        except Exception:
+            log.exception("could not enable DPI awareness")
+            return False
+
     # -- notifications ---------------------------------------------------------
 
     def notify(self, title: str, message: str, *, critical: bool = False) -> bool:

@@ -30,5 +30,8 @@ class NullPlatform(Platform):
     def autostart_enabled(self) -> bool:
         return False
 
+    def set_dpi_awareness(self) -> bool:
+        return False
+
     def notify(self, title: str, message: str, *, critical: bool = False) -> bool:
         return False

@@ -848,6 +848,13 @@ def run() -> int:
 
     setup_logging()
     log.info("Universal Search GUI starting")
+    # DPI awareness must be set before Tk creates any HWND (phase 027).
+    from universal_search.platforms import get_platform
+
+    try:
+        get_platform().set_dpi_awareness()
+    except Exception:
+        log.exception("could not enable DPI awareness")
     paths = AppPaths.discover()
     existing = read_gui_pid(paths)
     if existing is not None and existing != os.getpid():

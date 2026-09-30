@@ -71,6 +71,18 @@ if ($manifest -and $manifest.backgroundWorker) {
 Get-Process -Name "UniversalSearch" -ErrorAction SilentlyContinue |
     Stop-Process -Force -ErrorAction SilentlyContinue
 
+# --- remove the per-user Explorer verb recorded by the installer -------------
+$removeExplorer = $true
+if ($manifest -and $null -ne $manifest.explorerIntegration) {
+    $removeExplorer = [bool]$manifest.explorerIntegration
+}
+if ($removeExplorer) {
+    $previousEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try { & (Join-Path $PSScriptRoot "explorer-search.ps1") -Remove } catch { }
+    $ErrorActionPreference = $previousEAP
+}
+
 # --- delete exactly the application files -------------------------------------
 $foreign = @()
 if ($manifest -and $manifest.files) {

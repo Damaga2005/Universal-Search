@@ -65,6 +65,10 @@ def main() -> None:
         help="disable the local semantic fallback (lexical search only)",
     )
     sub.add_parser("gui", help="launch the desktop search window")
+    open_command = sub.add_parser("open", help="open a file or folder with its default app")
+    open_command.add_argument("path", type=Path)
+    reveal_command = sub.add_parser("reveal", help="show a file in its containing folder")
+    reveal_command.add_argument("path", type=Path)
     extensions = sub.add_parser(
         "extensions", help="registered providers and extractors (inspectable)"
     )
@@ -393,6 +397,20 @@ def main() -> None:
         from universal_search.gui.app import run
 
         raise SystemExit(run())
+    elif args.command in {"open", "reveal"}:
+        from universal_search.platforms import get_platform
+        from universal_search.platforms.base import PlatformError
+
+        platform = get_platform()
+        try:
+            if args.command == "open":
+                platform.open_path(args.path)
+            else:
+                platform.reveal(args.path)
+        except PlatformError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            raise SystemExit(1) from None
+        return 0
     elif args.command == "tray":
         return _tray_command(args)
     elif args.command == "indexer":
