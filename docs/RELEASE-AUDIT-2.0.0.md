@@ -437,7 +437,15 @@ manifiesto. Ninguna se exagera:
 | Divergencia | `git rev-list --left-right --count origin/main...HEAD` | **`0	0`** | PASS |
 | Contenido en el remoto | `git ls-tree -r --name-only origin/main` | 217 ficheros; implementación 011–030, `semantic/`, `observability.py`, `recovery.py`, `evaluation/gate.py`, CI, notas, informe y manifiesto | PASS |
 | Versión en el remoto | `git show origin/main:src/universal_search/__init__.py` | `__version__ = "2.0.0"` | PASS |
-| Tag | `git tag -a v2.0.0` + `git push origin v2.0.0` | tag anotado en `9ca85c2`, `0` commits entre el tag y HEAD | PASS |
+| Tag | `git tag -a v2.0.0` + `git push origin v2.0.0` | tag anotado en `9ca85c2`, `0` commits entre el tag y el commit que lo creó | PASS |
+
+**Nota sobre el tag**: `v2.0.0` apunta a `9ca85c2`, el commit que cierra la
+release (notas, manifiesto e informe de auditoría). El commit posterior
+`a4e99b3` añade las secciones R y S de este informe, que solo existen porque el
+push y la publicación ocurren después de la auditoría. El tag **no** se movió a
+la fuerza: reetiquetar un tag ya publicado es una operación destructiva en un
+remoto y el contenido está disponible igualmente como asset de la release
+(`RELEASE-AUDIT-2.0.0.md` actualizado).
 | CI | `.github/workflows/ci.yml` | se ejecuta en cada push a `main` | PASS (resultado en GitHub Actions) |
 
 ## S. Release publicada
