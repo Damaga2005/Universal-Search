@@ -375,7 +375,16 @@ class SearchWindow(tk.Tk):
             except QueryError as exc:
                 self._results_queue.put((generation, [], str(exc), None))
             except Exception as exc:  # pragma: no cover - defensive
-                log.exception("search failed for %r", query)
+                # The typed query never reaches the log: `events.jsonl`
+                # redacts query fields and the support bundle declares it
+                # carries no query text, so writing it here would make the
+                # product contradict its own privacy contract. The length is
+                # enough to tell "empty" from "typo" in a bug report.
+                log.exception(
+                    "search failed (query of %d characters, %s)",
+                    len(query),
+                    type(exc).__name__,
+                )
                 self._results_queue.put((generation, [], None, f"{type(exc).__name__}: {exc}"))
 
         threading.Thread(target=work, name="search", daemon=True).start()

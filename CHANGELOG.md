@@ -5,7 +5,18 @@ All notable changes to Universal Search. The format follows
 `src/universal_search/__init__.py::__version__`, single-sourced into the
 PyInstaller resource and the installer (enforced by `test_release.py`).
 
-## [Unreleased]
+## [2.0.0] - 2026-09-30
+
+Major release covering phases 011-030. Version 1.0.0 shipped phases 001-010 on
+a schema-3 index with a single-purpose CLI; this release moves the index to
+schema 9, adds a background worker with its own lifecycle, a notification-area
+controller, a control centre, a document graph, an optional local semantic
+fallback, a Windows shell integration, observability with named recovery
+cases, and a verified CI plus an executable v2 quality gate.
+
+Upgrade: installing 2.0.0 over 1.0.0 migrates the existing index in place
+(schema 3 to 9, additive migrations only). Downgrades are refused on purpose:
+an older build will not touch a newer index.
 
 ### Phase 030 - Universal Search v2 quality gate
 - Added `evaluation/gate.py`, runnable as `python -m evaluation.gate`: thirteen

@@ -68,7 +68,35 @@ phase 023 adds a separate indexing control center with typed source actions,
 health/storage/derived-data state and explicit safety confirmations. The
 phase 024 formalised the provider contract (streaming `iter_files`, bounded errors, cancellation, capability/interface negotiation), made the provider key the canonical source discriminator with a `(source, path)` uniqueness migration, and added mounted-path NAS/removable providers plus mixed-provider indexing with per-provider failure isolation. Phase 025 added a versioned extraction contract with bounded PDF/Office resources and visible truncation diagnostics. Phase 026 measured a fixed lexical baseline and shipped a dependency-free, versioned n-gram fallback only where the evidence gate justified it; phase 027 added DPI awareness, `open`/`reveal` commands and reversible per-user Explorer integration. Phase 028 added bounded redacted JSON events, a seven-area `diagnose self-test`, a support bundle that declares what it does not contain, and four named recovery cases that never touch source files. Phase 029 made the CI gates a verified contract and the packaged smoke a real gate; that smoke found and fixed a semantic-layer defect (a zero idf on a one-document index, and a precision gate that rejected morphological variants), re-measured with no metric regression. Phase 030 closed the line with an executable gate: `python -m evaluation.gate` runs thirteen local invariants, including a behavioural proof that no repair can touch a user's files.
 
-Current test count: 919 tests collected (916 passed, 3 skipped).
+Current test count: 934 tests collected (931 passed, 3 skipped).
+
+## Known limitations
+
+Read this before expecting more than the program does.
+
+- **No learned semantic embeddings.** The semantic layer (phase 026) is a
+  local character n-gram TF-IDF fallback, not a trained embedding model. It
+  catches morphological variants, accent-folded overlaps and partial term
+  overlap. Pure synonyms with no shared surface form (`BJT` vs
+  `transistor de union bipolar`) stay out of reach: that would need a model
+  download, a runtime dependency and a license.
+- **The semantic layer is optional and local.** It only runs when the lexical
+  engine returns nothing, it never reorders a result, and
+  `search --no-semantic` turns it off entirely.
+- **No external APIs, no cloud AI, no telemetry.** Nothing about your
+  documents or your queries leaves the machine. The dependency budget is
+  `pypdf` and `watchdog`; `python -m evaluation.gate` fails if a third one
+  appears.
+- **CI gates Python 3.12 only.** The local development environment is 3.14;
+  the gating workflow has not been run on 3.13 or 3.14.
+- **Windows only.** The core is platform-independent and the Ubuntu job is a
+  non-gating probe, but the GUI, the registry, the global hotkey and the
+  installer are Windows by design. `hotkey.py` is the one declared exception
+  to the "no Win32 in the core" rule, because `RegisterHotKey` has no
+  portable equivalent.
+- **No digital signature.** The executables ship unsigned.
+- **No auto-updater.** Upgrades are manual by decision, not by omission.
+- **The index is local to one machine.** It is not synchronised anywhere.
 
 | Fase | Entrega | Estado |
 |------|---------|--------|
@@ -110,7 +138,7 @@ by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ```bash
 pip install -e .
-universal-search --version         # universal-search 1.0.0
+universal-search --version         # universal-search 2.0.0
 python -m evaluation.gate          # the v2 quality gate (13 invariants)
 universal-search diagnose self-test # same checks, from the installed app
 universal-search index C:\Users\me\Documents

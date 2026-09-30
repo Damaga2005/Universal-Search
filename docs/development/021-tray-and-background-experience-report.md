@@ -275,7 +275,7 @@ Ejecutado en Windows 11 build 26200, Python 3.14.6, el 2026-09-24.
 | Suite focalizada de propiedad | `.venv\Scripts\python -m pytest tests\test_worker_ownership.py -q -o addopts=` | **29 passed in 2.57 s** |
 | Análisis estático | `.venv\Scripts\python -m pyflakes src tests benchmarks evaluation` | código 0, sin salida |
 | Build exacto | `.venv\Scripts\python -m PyInstaller packaging\universal-search.spec --noconfirm --clean` | **Build complete** con PyInstaller 6.22.3 |
-| Humo congelado existente | `.venv\Scripts\python C:\Users\dmart\AppData\Local\Temp\opencode\smoke020.py dist\UniversalSearch` | 14 invocaciones con códigos esperados y `SMOKE TEST OK` |
+| Humo congelado existente | `.venv\Scripts\python %TEMP%\opencode\smoke020.py dist\UniversalSearch` | 14 invocaciones con códigos esperados y `SMOKE TEST OK` |
 | Ciclo worker congelado | `UNIVERSAL_SEARCH_HOME=< temporal> dist\UniversalSearch\universal-search.exe indexer start/status/stop` | códigos 0/0/0; PID 14628 observado, detenido y temporales eliminados |
 | Ayuda del comando nuevo | `dist\UniversalSearch\universal-search.exe tray --help` | código 0; muestra `usage: universal-search tray [-h]` |
 | Smoke nativo visible opt-in | `UNIVERSAL_SEARCH_TRAY_NATIVE_SMOKE=1 .venv\Scripts\python -m pytest tests\test_windows_tray.py::test_windows_tray_native_add_command_exit_and_delete_smoke -o addopts= -q` | **1 passed in 0.08 s**; NIM_ADD, comando Exit, NIM_DELETE |

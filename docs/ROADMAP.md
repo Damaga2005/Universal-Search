@@ -75,4 +75,4 @@ exact-match correctness 1.0, no top-1 regression, nonsense queries still
 empty) after the packaged smoke exposed and fixed a zero-idf degeneracy and an
 exact-token precision gate.
 
-Current test count: 919 tests collected (916 passed, 3 skipped).
+Current test count: 934 tests collected (931 passed, 3 skipped).

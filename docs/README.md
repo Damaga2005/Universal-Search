@@ -52,7 +52,7 @@ nombrados, puertas de CI verificadas por test y un gate v2 ejecutable de 13
 invariantes (`python -m evaluation.gate`); detalles y límites en el
 [informe de la fase 030](development/030-v2-quality-gate-report.md).
 
-Current test count: 919 tests collected (916 passed, 3 skipped).
+Current test count: 934 tests collected (931 passed, 3 skipped).
 
 ## Cómo ejecutar
 

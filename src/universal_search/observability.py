@@ -24,8 +24,22 @@ REDACTED = "[redacted]"
 MAX_FIELD_CHARS = 300
 DEFAULT_EVENT_BYTES = 1_000_000
 DEFAULT_EVENT_BACKUPS = 3
+# A field whose *name* contains any of these is written as ``[redacted]``.
+# The list is deliberately generous: over-redacting a field nobody reads
+# costs a debugging session, while under-redacting one leaks the user's own
+# words into a file that gets attached to bug reports. The phase-030 release
+# audit added "text", "snippet" and "body" after finding that a field named
+# ``snippet`` or ``document_text`` was written verbatim.
 _SENSITIVE_KEY_PARTS = (
-    "password", "token", "secret", "credential", "content", "query",
+    "password",
+    "token",
+    "secret",
+    "credential",
+    "content",
+    "query",
+    "text",
+    "snippet",
+    "body",
 )
 
 

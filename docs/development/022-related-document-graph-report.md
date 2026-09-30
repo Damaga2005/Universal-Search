@@ -143,7 +143,7 @@ rows survive while the graph tables/metadata are created.
 Measurement command, run three times on Windows with Python 3.14:
 
 ```text
-.venv\Scripts\python C:\Users\dmart\AppData\Local\Temp\opencode\measure_phase022_graph.py
+.venv\Scripts\python %TEMP%\opencode\measure_phase022_graph.py
 ```
 
 The deterministic corpus contained 1,000 documents. Results were:

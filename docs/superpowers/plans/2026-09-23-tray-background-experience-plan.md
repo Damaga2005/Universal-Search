@@ -488,7 +488,7 @@ Build with the repository's exact command:
 .venv\Scripts\python -m PyInstaller packaging\universal-search.spec --noconfirm --clean
 ```
 
-Run the existing packaged smoke script at `C:\Users\dmart\AppData\Local\Temp\opencode\smoke020.py`, then invoke `dist\UniversalSearch\UniversalSearch.exe tray --help` and verify that the existing `indexer run` autostart command is unchanged. Do not leave build artifacts or credentials in the repository and do not push.
+Run the existing packaged smoke script at `%TEMP%\opencode\smoke020.py`, then invoke `dist\UniversalSearch\UniversalSearch.exe tray --help` and verify that the existing `indexer run` autostart command is unchanged. Do not leave build artifacts or credentials in the repository and do not push.
 
 - [ ] **Step 6: Review the final diff and create the single phase commit.**
 

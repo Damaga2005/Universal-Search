@@ -9,4 +9,26 @@ build/
 htmlcov/
 .vscode/
 .idea/
+.mypy_cache/
+.ruff_cache/
+
+# Local index and derived state. The application writes these to the
+# per-user data directory, but a test or a manual run from the repository
+# root used to leave one behind.
 /universal-search.db*
+*.db
+*.db-wal
+*.db-shm
+
+# Runtime artefacts: logs are rotated, events/metrics are JSON Lines, and
+# the control centre keeps a small JSON state file. None belong in git.
+*.log
+*.jsonl
+control-center.json
+*.tmp
+*.bak
+
+# Never commit credentials.
+.env
+*.pem
+*.key

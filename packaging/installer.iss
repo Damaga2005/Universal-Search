@@ -14,7 +14,7 @@
 ; PowerShell installer makes through install-manifest.json.
 
 #define MyAppName "Universal Search"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "2.0.0"
 #define MyAppPublisher "Universal Search contributors"
 #define MyAppExeName "UniversalSearch.exe"
 

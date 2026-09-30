@@ -1,0 +1,98 @@
+{
+  "product": "Universal Search",
+  "version": "2.0.0",
+  "released": "2026-09-30",
+  "commit": "cfe9e5b1f3112446bb5ba039d63cdaaaf2bf59a7",
+  "commit_message": "feat: close the Universal Search v2 quality gate (030)",
+  "phases": "011-030 (1.0.0 published 001-010)",
+  "build_environment": {
+    "os": "Windows 11 Pro build 26200",
+    "cpu": "AMD Ryzen 5 2600 (6 cores / 12 threads)",
+    "ram_gb": 16,
+    "python": "3.14.6",
+    "python_location": "project .venv (CPython, AMD64)",
+    "pyinstaller": ">=6.0 (build extra)",
+    "schema_version": 9
+  },
+  "runtime_dependencies": [
+    "pypdf>=6.0",
+    "watchdog>=4.0"
+  ],
+  "build_commands": [
+    "python -m pip install -e \".[build]\"",
+    "python -m PyInstaller packaging/universal-search.spec --noconfirm"
+  ],
+  "artifacts": [
+    {
+      "name": "universal-search.exe",
+      "role": "CLI, indexer, tray, diagnostics (console)",
+      "bytes": 3968243,
+      "sha256": "5A38886DCBB99068DAF9B55F2D05518C52DD90602F02B383CF1E441A47D85C9A",
+      "version_resource": "2.0.0"
+    },
+    {
+      "name": "UniversalSearch.exe",
+      "role": "GUI (windowed)",
+      "bytes": 3963123,
+      "sha256": "A1712F625966DAB1A652B36EDF020BA31ED4FBF2FEF5EA12232D9BAC841F909F",
+      "version_resource": "2.0.0"
+    }
+  ],
+  "documentation": [
+    {
+      "name": "RELEASE-NOTES-2.0.0.md",
+      "sha256": "114C0B216094FE179595574FC33D4648115B265D5537553CC4E0BA48401C9A3E"
+    },
+    {
+      "name": "CHANGELOG.md",
+      "sha256": "A126BFCF17469DBC182B9761C60FE14CD9CBB3348FBF4F8300549E277B4D82D8"
+    },
+    {
+      "name": "README.md",
+      "sha256": "BDF6A1DBE0AD6040E4D3D694B7B37307F16E898F55CEC9566119D298DE5404BC"
+    }
+  ],
+  "verification": {
+    "test_suite": "931 passed, 3 skipped, 934 collected (python -m pytest)",
+    "test_suite_strict_warnings": "931 passed, 3 skipped (python -m pytest -W error::DeprecationWarning)",
+    "pyflakes": "clean (src tests benchmarks evaluation)",
+    "quality_gate": "VERDICT: PASS (13/13) - python -m evaluation.gate",
+    "packaged_smoke": "13/13 checks on the frozen .exe files",
+    "install": "verified: install.ps1 on default per-user paths",
+    "uninstall": "verified: app, shortcut and Explorer verb removed; user data kept",
+    "migration": "verified: schema 5 (previous release line) -> 9 with documents and FTS rows preserved; downgrade refused",
+    "privacy": "verified: forget removed 1 document, 1 FTS row, 62 derived rows; source file untouched"
+  },
+  "search_quality": {
+    "corpus_documents": 27,
+    "labelled_queries": 18,
+    "lexical_mrr": 0.833,
+    "lexical_mean_p_at_1": 0.833,
+    "note": "Below the 1.0.0 figures of 1.000 because phase 026 added 5 labelled queries a lexical engine provably cannot answer (synonym, paraphrase, morphological). The failing set is exactly those classes; every answered query still ranks its relevant document first."
+  },
+  "benchmark": {
+    "command": "python -m benchmarks --profile 1000",
+    "head_indexing_s": 4.86,
+    "head_search_mean_ms": 14.74,
+    "head_search_p95_ms": 22.68,
+    "head_index_size_mib": 3.7,
+    "previous_line_indexing_s": 4.58,
+    "previous_line_search_mean_ms": 17.29,
+    "previous_line_search_p95_ms": 27.03,
+    "previous_line_index_size_mib": 3.3,
+    "note": "Measured back to back on the same machine at comparable load (50-70%). Run-to-run variance on this host exceeded 2x, so no regression can be claimed or denied for latency; the only load-independent difference is a 12% larger index from the phase 022/026 derived tables. A quiet-machine benchmark is still owed."
+  },
+  "signature": {
+    "signed": false,
+    "note": "No code-signing certificate is available. The executables ship unsigned."
+  },
+  "known_limitations_summary": [
+    "No learned semantic embeddings; the semantic layer is local n-gram TF-IDF, optional, fallback-only.",
+    "No external APIs, no cloud AI, no telemetry.",
+    "CI gates Python 3.12 only.",
+    "hotkey.py is the declared Windows-only exception to the platform-independent core.",
+    "No independent code review for phases 026-030.",
+    "Inno Setup installer not built or validated in this audit (Inno Setup unavailable); install.ps1 is the validated path.",
+    "Manual upgrade only; no auto-updater; index is not synchronised between machines."
+  ]
+}
