@@ -1,4 +1,6 @@
+import functools
 import hashlib
+import json
 import logging
 import os
 import sqlite3
@@ -28,8 +30,29 @@ from universal_search.providers.onedrive import (
 )
 
 
-ContentReader = Callable[[Path], ExtractionResult]
+ContentReader = Callable[..., ExtractionResult]
 log = logging.getLogger("universal_search.indexer")
+
+# Phase 025: extraction diagnostics are persisted in the derived
+# (disposable) intelligence table, never in the canonical document row.
+# A rebuild preserves these columns and a privacy forget deletes the row,
+# so diagnostics are explainable without outliving the document.
+_EXTRACTION_DIAGNOSTICS_SQL = """
+INSERT INTO document_intelligence (
+    document_id, version, extraction_status, extraction_warnings,
+    extraction_truncated, extraction_contract
+) VALUES (?, 0, ?, ?, ?, ?)
+ON CONFLICT(document_id) DO UPDATE SET
+    extraction_status=excluded.extraction_status,
+    extraction_warnings=excluded.extraction_warnings,
+    extraction_truncated=excluded.extraction_truncated,
+    extraction_contract=excluded.extraction_contract
+"""
+
+# Stored warnings are bounded twice: the extractor sanitizes them, and the
+# indexer caps the list and each entry again before JSON-encoding.
+MAX_STORED_WARNINGS = 20
+MAX_STORED_WARNING_CHARS = 300
 
 # Reconciliation flushes a transaction every this many changed files: one
 # amortized WAL write instead of a commit per row (profiled: a commit costs
@@ -226,6 +249,31 @@ class Indexer:
         )
 
     @staticmethod
+    def _record_extraction(connection, document_id: str, outcome: ExtractionResult) -> None:
+        """Persist extraction status/warnings/truncation beside the document.
+
+        Only the extraction columns are written; an intelligence rebuild
+        upserts its own analysis columns into the same row and never
+        touches these. Documents skipped as unchanged keep the diagnostics
+        of their previous extraction — the content is byte-identical, so
+        the extraction outcome is too.
+        """
+        warnings = [
+            str(warning)[:MAX_STORED_WARNING_CHARS]
+            for warning in outcome.warnings[:MAX_STORED_WARNINGS]
+        ]
+        connection.execute(
+            _EXTRACTION_DIAGNOSTICS_SQL,
+            (
+                document_id,
+                outcome.status,
+                json.dumps(warnings, ensure_ascii=False),
+                1 if outcome.truncated else 0,
+                outcome.contract_version,
+            ),
+        )
+
+    @staticmethod
     def _delete(connection, document_id: str) -> None:
         from universal_search.intelligence.graph import scrub_reference_metadata
 
@@ -373,9 +421,18 @@ class Indexer:
                         continue
 
                     content: str | None = None
+                    outcome: ExtractionResult | None = None
                     if allow_content_read(availability, item.size, onedrive_download_mb):
                         try:
-                            outcome = read_content(item.path)
+                            if cancel is not None:
+                                # Forward the cooperative cancel so a long
+                                # extraction can be stopped mid-document.
+                                reader = functools.partial(
+                                    read_content, cancel=cancel.cancelled
+                                )
+                                outcome = reader(item.path)
+                            else:
+                                outcome = read_content(item.path)
                         except Exception as exc:  # a broken reader must not stop the run
                             outcome = ExtractionResult(error=f"{type(exc).__name__}: {exc}")
                         if outcome.error is not None:
@@ -408,6 +465,8 @@ class Indexer:
                             mtime_ns=item.mtime_ns, run_id=run_id,
                             availability=availability,
                         )
+                        if outcome is not None:
+                            self._record_extraction(connection, document.id, outcome)
                         stats.created += 1
                         graph_touched.add(document.id)
                     elif (
@@ -435,6 +494,8 @@ class Indexer:
                             mtime_ns=item.mtime_ns, run_id=run_id,
                             availability=availability,
                         )
+                        if outcome is not None:
+                            self._record_extraction(connection, document.id, outcome)
                         stats.updated += 1
                         graph_touched.add(document.id)
                         if stored["id"] != document.id:

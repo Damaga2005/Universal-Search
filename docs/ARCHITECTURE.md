@@ -31,7 +31,14 @@ lives in the UI.
   are read bounded (2 M chars) with `utf-8-sig`; PDF via `pypdf`;
   DOCX/XLSX/PPTX via stdlib zip + ElementTree; unsupported binaries are
   never opened (no text, no error); failures come back as
-  `ExtractionResult(text, error)`.
+  `ExtractionResult(text, error)`. Phase 025: every result is versioned
+  (`contract_version`) and carries a machine-readable `status`, sanitized
+  `warnings`, bounded structure and `resource_usage`; `ExtractionLimits`
+  (input bytes, characters, pages, sheets, slides, time, ZIP members,
+  per-part bytes, expansion ratio) is enforced before unbounded reads on
+  every path, truncation is always flagged, and extraction diagnostics are
+  persisted in `document_intelligence` (derived, rebuild-preserving,
+  privacy-deletable).
 - **Domain** (`universal_search/domain/`): `Document` and the stable
   identity `document_id_for(source, path)`.
 - **Index** (`universal_search/index/`):

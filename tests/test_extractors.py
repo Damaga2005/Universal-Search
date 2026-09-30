@@ -1,7 +1,11 @@
 import zipfile
 from pathlib import Path
 
-from universal_search.domain.extraction import ExtractionResult
+from universal_search.domain.extraction import (
+    CONTRACT_VERSION,
+    ExtractionResult,
+    ExtractionStatus,
+)
 from universal_search.extractors import (
     MAX_CONTENT_CHARS,
     SUPPORTED_EXTENSIONS,
@@ -28,7 +32,11 @@ def write(path: Path, data: str | bytes) -> Path:
 
 def test_txt_extractor(tmp_path: Path) -> None:
     path = write(tmp_path / "notes.txt", "plain text about capacitors")
-    assert extract(path).text == "plain text about capacitors"
+    result = extract(path)
+    assert result.text == "plain text about capacitors"
+    assert result.status == ExtractionStatus.OK
+    assert result.contract_version == CONTRACT_VERSION
+    assert result.resource_usage is not None
 
 
 def test_md_extractor(tmp_path: Path) -> None:
@@ -62,6 +70,9 @@ def test_pdf_extractor(tmp_path: Path) -> None:
     assert result.error is None
     assert "BJT" in (result.text or "")
     assert "amplifier" in (result.text or "")
+    assert result.status == ExtractionStatus.OK
+    assert result.resource_usage is not None
+    assert result.resource_usage.pages == 1
 
 
 def test_docx_extractor(tmp_path: Path) -> None:
@@ -130,7 +141,7 @@ def test_corrupt_docx_reports_error(tmp_path: Path) -> None:
     assert result.error is not None
 
 
-def test_xlsx_with_malformed_xml_reports_error(tmp_path: Path) -> None:
+def test_xlsx_with_malformed_shared_strings_warns_but_continues(tmp_path: Path) -> None:
     import io
 
     buffer = io.BytesIO()
@@ -139,7 +150,11 @@ def test_xlsx_with_malformed_xml_reports_error(tmp_path: Path) -> None:
     path = write(tmp_path / "broken.xlsx", buffer.getvalue())
     result = extract(path)
     assert result.text is None
-    assert result.error is not None
+    # Phase 025: sharedStrings is an optional part — a malformed copy is a
+    # warning and a partial result, not a whole-document failure.
+    assert result.error is None
+    assert result.status == ExtractionStatus.PARTIAL
+    assert result.warnings
 
 
 def test_corrupt_pptx_reports_error(tmp_path: Path) -> None:
@@ -179,6 +194,7 @@ def test_empty_pdf_reports_error(tmp_path: Path) -> None:
     result = extract(path)
     assert result.text is None
     assert result.error is not None
+    assert result.status == ExtractionStatus.ERROR
 
 
 def test_empty_docx_reports_error(tmp_path: Path) -> None:
@@ -216,6 +232,10 @@ def test_huge_text_file_is_truncated_not_loaded(tmp_path: Path) -> None:
     result = extract(path)
     assert result.text is not None
     assert len(result.text) == MAX_CONTENT_CHARS
+    # Phase 025: the cut is visible — flagged, warned and measured.
+    assert result.truncated is True
+    assert result.status == ExtractionStatus.TRUNCATED
+    assert result.warnings
 
 
 # -- end-to-end: search finds terms inside binary documents -------------------

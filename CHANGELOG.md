@@ -7,6 +7,45 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 025 — Content extraction v2
+- Added a versioned extraction contract: `ExtractionResult` now carries
+  `contract_version`, a machine-readable `status` (`ok`, `truncated`,
+  `partial`, `no_content`, `error`, `cancelled`), sanitized `warnings`,
+  a bounded `structure` summary (title, headings, sheets, slides), a
+  `resource_usage` measurement and a `truncated` flag. `text`/`error`
+  keep their meaning, so older construction sites are unaffected.
+- Added `ExtractionLimits` (input bytes, characters, pages, sheets, slides,
+  time, ZIP members, per-part bytes, decompression expansion) with one
+  shared enforcement module (`extractors/base.py`): character-budget
+  accumulation, chunked bounded ZIP reads, header-level rejection of
+  traversal names / oversized parts / expansion ratios, DTD entity
+  rejection, and sanitized bounded warnings on every result.
+- Hardened PDF extraction: input limit before opening, encrypted files
+  rejected (owner-only readable with a warning), page/character/time
+  limits with visible truncation, per-page error isolation, empty text
+  layers reported as `no_content` instead of empty success, Info title
+  preserved, cooperative cancellation between pages.
+- Hardened Office extraction: member-count cap, per-member vetting before
+  reading, malformed optional parts (shared strings, workbook, single
+  sheets/slides) warn and continue instead of failing the whole document,
+  empty text layers are `no_content`, docx headings/title, xlsx sheet names
+  and pptx slide text preserved as bounded structure, sheet/slide limits
+  truncate visibly.
+- Preserved text-extractor behavior (UTF-8-sig, replacement, NUL/BOM strip,
+  2 M-char cut) — the cut is now flagged instead of silent — and registry
+  compatibility: pre-contract single-argument extractors keep working.
+- Persisted extraction status/warnings/truncation/contract in the derived
+  `document_intelligence` table (schema v8, idempotent migrations): an
+  intelligence rebuild preserves the columns and `privacy forget` deletes
+  the row, so diagnostics are explainable without outliving the document.
+  Diagnostics-only rows (`version = 0`) are not counted as stale analyses
+  and do not make `analysis_for`/`related` claim an analysis exists.
+- The indexer forwards the cooperative cancel to the content reader and
+  never lets one document stop a pass; cloud-only placeholders no longer
+  reference an unassigned outcome.
+- Phase 025 quality gate: **813 passed, 3 skipped**, clean pyflakes; exact
+  commands, measured behavior and limitations are in the phase report.
+
 ### Phase 024 — Provider expansion
 - Formalized the provider contract: streaming `iter_files` with bounded
   error reporting (`MAX_PROVIDER_ERRORS`), a cooperative `CancelToken`, a

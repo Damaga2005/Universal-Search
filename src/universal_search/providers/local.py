@@ -5,8 +5,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from universal_search.domain.document import Document, SourceKind, document_id_for
-from universal_search.domain.extraction import ExtractionResult
+from universal_search.domain.extraction import ExtractionLimits, ExtractionResult
 from universal_search.extractors import extract
+from universal_search.extractors.base import CancelCheck
 from universal_search.providers.base import (
     AVAILABILITY,
     CHANGE_DETECTION,
@@ -101,9 +102,19 @@ class LocalProvider:
             )
 
 
-def read_local_content(path: Path) -> ExtractionResult:
-    """Extract a file's content through the extractor registry."""
-    return extract(path)
+def read_local_content(
+    path: Path,
+    *,
+    limits: ExtractionLimits | None = None,
+    cancel: CancelCheck | None = None,
+) -> ExtractionResult:
+    """Extract a file's content through the extractor registry.
+
+    Phase 025: the indexer's resource ``limits`` and cooperative
+    ``cancel`` are forwarded, so one pass can bound and stop every
+    extraction it runs.
+    """
+    return extract(path, limits=limits, cancel=cancel)
 
 
 def scan_local(

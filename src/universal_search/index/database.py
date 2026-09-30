@@ -73,7 +73,15 @@ CREATE TABLE IF NOT EXISTS document_intelligence (
     analyzed_chars INTEGER NOT NULL DEFAULT 0,
     truncated INTEGER NOT NULL DEFAULT 0,
     content_hash TEXT,
-    analyzed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    analyzed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- Phase 025: extraction diagnostics written by the indexer at extraction
+    -- time (status, sanitized warnings, truncation flag, contract version).
+    -- Derived and disposable like the rest of this table: an intelligence
+    -- rebuild preserves the columns, a privacy forget deletes the row.
+    extraction_status TEXT,
+    extraction_warnings TEXT,
+    extraction_truncated INTEGER NOT NULL DEFAULT 0,
+    extraction_contract INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS document_intelligence_language
@@ -160,6 +168,13 @@ MIGRATIONS = (
     "ALTER TABLE documents ADD COLUMN mtime_ns INTEGER",
     "ALTER TABLE documents ADD COLUMN last_seen_run INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE documents ADD COLUMN availability TEXT NOT NULL DEFAULT 'available'",
+    # Phase 025: extraction diagnostics live in the derived table so they
+    # are explainable (diagnos*) and deletable (privacy forget) without
+    # touching the canonical document row.
+    "ALTER TABLE document_intelligence ADD COLUMN extraction_status TEXT",
+    "ALTER TABLE document_intelligence ADD COLUMN extraction_warnings TEXT",
+    "ALTER TABLE document_intelligence ADD COLUMN extraction_truncated INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE document_intelligence ADD COLUMN extraction_contract INTEGER",
 )
 
 # Phase 024: the v6 schema made `path` alone UNIQUE. SQLite cannot drop a
@@ -228,7 +243,7 @@ def _migrate_documents_uniqueness(connection: sqlite3.Connection) -> None:
 # (tests/test_release.py enforces the stamp on fresh and legacy databases).
 # Adding an object to SCHEMA also upgrades existing databases: the
 # schema-present gate sees a missing object and re-runs the idempotent DDL.
-SCHEMA_VERSION = 7  # + uniqueness moves from path to (source, path) (024)
+SCHEMA_VERSION = 8  # + extraction diagnostics in document_intelligence (025)
 
 # Every object SCHEMA creates. When all of them already exist the idempotent
 # DDL is skipped: one indexed sqlite_master lookup replaces re-parsing the
@@ -319,12 +334,18 @@ class SearchDatabase:
                 f"Search (schema {stored}, this build supports {SCHEMA_VERSION}). "
                 f"Install the newer release, or restore a backup."
             )
-        columns = {row["name"] for row in connection.execute("PRAGMA table_info(documents)")}
         for statement in MIGRATIONS:
-            column = statement.split()[5]
+            # "ALTER TABLE <table> ADD COLUMN <column> ..." — the column
+            # check must introspect the table the statement targets, which
+            # is not always `documents` (phase 025 adds derived-table
+            # columns).
+            table, column = statement.split()[2], statement.split()[5]
+            columns = {
+                row["name"]
+                for row in connection.execute(f"PRAGMA table_info({table})")
+            }
             if column not in columns:
                 connection.execute(statement)
-                columns.add(column)
                 connection.commit()
         _migrate_documents_uniqueness(connection)
         if stored != SCHEMA_VERSION:

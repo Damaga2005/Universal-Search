@@ -91,6 +91,7 @@ phase 024 formalised the provider contract (streaming `iter_files`, bounded erro
 | 022 | Grafo local de documentos relacionados | ✅ |
 | 023 | UX de indexación y centro de control | ✅ |
 | 024 | Expansión de proveedores (NAS/extraíble, identidad `(source, path)`) | ✅ |
+| 025 | Extracción de contenido v2 (contrato versionado, límites, diagnósticos) | ✅ |
 
 Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
 by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).

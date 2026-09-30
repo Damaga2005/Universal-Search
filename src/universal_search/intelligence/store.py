@@ -289,6 +289,11 @@ def _resolve(
 
     A person types a path they can see; tooling passes an id. A bare name
     is accepted too, because that is what people paste from a listing.
+
+    Phase 025: only *analysed* rows resolve (``version > 0``). Rows with
+    ``version = 0`` carry extraction diagnostics only — related/analysis
+    answer honestly with "none" until an intelligence rebuild has run,
+    exactly as they did before diagnostics existed.
     """
     candidate = Path(reference)
     if candidate.exists():
@@ -296,7 +301,8 @@ def _resolve(
             """
             SELECT i.* FROM document_intelligence AS i
             JOIN documents AS d ON d.id = i.document_id
-            WHERE d.path = ? ORDER BY (d.path = ?) DESC LIMIT 1
+            WHERE d.path = ? AND i.version > 0
+            ORDER BY (d.path = ?) DESC LIMIT 1
             """,
             (str(candidate), str(candidate)),
         ).fetchone()
@@ -306,14 +312,14 @@ def _resolve(
         """
         SELECT i.* FROM document_intelligence AS i
         JOIN documents AS d ON d.id = i.document_id
-        WHERE d.name = ? ORDER BY d.path LIMIT 1
+        WHERE d.name = ? AND i.version > 0 ORDER BY d.path LIMIT 1
         """,
         (candidate.name,),
     ).fetchone()
     if row is not None:
         return row
     return connection.execute(
-        "SELECT * FROM document_intelligence WHERE document_id = ?",
+        "SELECT * FROM document_intelligence WHERE document_id = ? AND version > 0",
         (reference,),
     ).fetchone()
 

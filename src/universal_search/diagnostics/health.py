@@ -301,14 +301,17 @@ def _extraction_check(database: SearchDatabase) -> list[HealthCheck]:
 
 def _derived_check(database: SearchDatabase) -> list[HealthCheck]:
     with closing(database.connect()) as connection:
+        # Phase 025: rows with version 0 carry extraction diagnostics only —
+        # they are "not analysed yet", not analyses from an older version.
         analysed = int(
             connection.execute(
-                "SELECT COUNT(*) FROM document_intelligence"
+                "SELECT COUNT(*) FROM document_intelligence WHERE version > 0"
             ).fetchone()[0]
         )
         outdated = int(
             connection.execute(
-                "SELECT COUNT(*) FROM document_intelligence WHERE version <> ?",
+                "SELECT COUNT(*) FROM document_intelligence"
+                " WHERE version > 0 AND version <> ?",
                 (_intelligence_version(),),
             ).fetchone()[0]
         )
