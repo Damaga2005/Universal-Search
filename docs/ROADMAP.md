@@ -55,15 +55,18 @@
 - [x] Content extraction v2 (025)
 - [x] Local semantic search without cloud AI (026)
 - [x] Windows shell integration (027)
-- [ ] Observability & recovery (028)
+- [x] Observability & recovery (028)
 - [ ] Release engineering & CI (029)
 - [ ] Universal Search v2 quality gate (030)
 
 ---
 
-Phases 001–026 are implemented and documented (per-phase reports in
-`docs/development/`). The phase-027 quality gate measured **859 passing tests,
+Phases 001–028 are implemented and documented (per-phase reports in
+`docs/development/`). The phase-028 quality gate measured **874 passing tests,
 3 skipped**, clean pyflakes, a measured lexical baseline (MRR 0.833, exact-match
 correctness 1.0) and an optional, dependency-free, fallback-only local
-semantic layer that cleared a priori evidence gates (hybrid MRR 0.944). Still
-open: the planned phases from 027 through 030.
+semantic layer that cleared a priori evidence gates (hybrid MRR 0.944).
+Observability is bounded, redacted and local: JSON Lines events, a seven-area
+self-test, a support bundle that declares what it does not contain, and four
+named recovery cases that never touch source files. Still open: the planned
+phases from 029 through 030.

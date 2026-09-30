@@ -7,6 +7,28 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 028 — Local observability and recovery
+- Added `EventRecorder`: bounded JSON Lines with a fixed schema
+  (`at`, `component`, `event_id`, `severity`), size-based rotation (1 MB x 3)
+  and field-name redaction for credentials, content and query fields. Every
+  control-center action now leaves one such event; telemetry failures can never
+  break an action.
+- Added `universal-search diagnose self-test`, which exercises the database,
+  FTS, schema, providers, extractors, worker and free disk space and returns
+  the worst verdict (exit 0/1/2).
+- Added `universal-search diagnose export --output PATH`, a sanitized support
+  bundle that explicitly declares it contains no document content, no query
+  text and no credentials.
+- Added `universal-search diagnose recover CASE` with exactly four named cases
+  (`orphan-derived`, `dirty-derived`, `stale-coordination`, `reset-derived`).
+  A live worker owner is never disowned; destructive cases require `--yes`; no
+  case can delete a user's source files.
+- Exposed the self-test and the support bundle in the control center with
+  typed `ActionResult`s (`data_scope="none"`), and declared `events.jsonl` in
+  the privacy inventory and `docs/PRIVACY.md`.
+- No new dependencies, no network, no telemetry leaving the machine.
+- Phase 028 quality gate: **874 passed, 3 skipped**, clean pyflakes.
+
 ### Phase 027 — Windows shell integration
 - Added `universal-search open PATH` and `universal-search reveal PATH`, both
   delegating to the platform adapter and failing with an actionable code.

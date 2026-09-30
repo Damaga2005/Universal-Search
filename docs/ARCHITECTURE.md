@@ -141,6 +141,16 @@ lives in the UI.
   `forget()`, which removes a document and everything derived from it while
   leaving the file alone. See `docs/PRIVACY.md` and `docs/EXTENDING.md`
   (adding providers and extractors).
+- **Observability and recovery** (`universal_search/observability.py`,
+  `universal_search/recovery.py`, phase 028): local, bounded and
+  content-free. `EventRecorder` writes JSON Lines with a fixed schema and
+  redacts by field name; `self_test()` exercises seven subsystems and returns
+  the worst verdict; `support_bundle()` writes a bundle that declares what it
+  does not contain. `recover()` accepts exactly four named cases
+  (`orphan-derived`, `dirty-derived`, `stale-coordination`, `reset-derived`),
+  refuses to disown a live worker, requires explicit confirmation for
+  destructive cases, and never deletes a source file. Both are wired into
+  `diagnose` in the CLI and into the control center as typed `ActionResult`s.
 - **Presentation**:
   - `cli.py` — `index | search | gui | tray | onedrive | context | usage
     | hotkey | recent | indexer | intelligence | diagnose | privacy …`

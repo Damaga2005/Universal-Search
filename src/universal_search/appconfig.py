@@ -82,6 +82,11 @@ class AppPaths:
         return self.home / "indexer.starting"
 
     @property
+    def events_file(self) -> Path:
+        """Bounded, redacted operational events (phase 028)."""
+        return self.home / "events.jsonl"
+
+    @property
     def startup_lease_file(self) -> Path:
         """Persistent OS lease serializing startup-claim recovery."""
         return self.home / "indexer.starting.lease"

@@ -9,6 +9,7 @@ from universal_search.appconfig import AppPaths
 from universal_search.index.database import SearchDatabase, UnsupportedSchemaVersion
 from universal_search.index.indexer import Indexer
 from universal_search.index.search import SearchEngine
+from universal_search.recovery import CASES as RECOVERY_CASES
 
 
 def main() -> None:
@@ -303,6 +304,29 @@ def main() -> None:
             help="required: confirms that this operation deletes data",
         )
 
+    # -- phase 028: self-test, sanitized export and named recovery cases ------
+    diagnose_self_test = diagnose_sub.add_parser(
+        "self-test", help="exercise every local subsystem and report verdicts"
+    )
+    diagnose_self_test.add_argument(
+        "--database", type=Path, default=default_database,
+        help="index database (default: the user data directory)",
+    )
+    diagnose_export = diagnose_sub.add_parser(
+        "export", help="write a sanitized support bundle (no content, no queries)"
+    )
+    diagnose_export.add_argument(
+        "--output", type=Path, required=True, help="destination JSON bundle",
+    )
+    diagnose_recover = diagnose_sub.add_parser(
+        "recover", help="run one named recovery case (never touches source files)"
+    )
+    diagnose_recover.add_argument("case", choices=RECOVERY_CASES)
+    diagnose_recover.add_argument(
+        "--yes", action="store_true",
+        help="required for destructive cases that delete derived data",
+    )
+
     args = parser.parse_args()
     if args.command == "index":
         db = _open_or_explain(args.database)
@@ -580,6 +604,36 @@ def _diagnose_command(args) -> int:
             print(f"Repair blocked: {exc}", file=sys.stderr)
             return 1
         print(f"{result.action}: {result.detail}")
+        return 0
+
+    if args.diagnose_command == "recover":
+        from universal_search.recovery import RecoveryConfirmationRequired, recover
+
+        try:
+            result = recover(args.case, confirm=args.yes)
+        except RecoveryConfirmationRequired as exc:
+            print(f"Refusing a destructive recovery: {exc}", file=sys.stderr)
+            print("Re-run with --yes when you are sure.", file=sys.stderr)
+            return 1
+        print(f"{result.case}: {result.code} - {result.message}")
+        return 0
+
+    if args.diagnose_command == "self-test":
+        from universal_search.observability import self_test
+
+        report = self_test()
+        for entry in report.checks:
+            print(f"{entry.name:<11} {entry.status:<7} {entry.detail}")
+        print(f"storage:    {report.storage['free_bytes']} bytes free")
+        print(f"overall:    {report.status}")
+        return {"ok": 0, "warning": 1, "fatal": 2}[report.status]
+
+    if args.diagnose_command == "export":
+        from universal_search.observability import support_bundle
+
+        bundle = support_bundle(None, args.output)
+        print(f"Wrote sanitized support bundle: {bundle.path}")
+        print("It declares: no document content, no query text, no credentials.")
         return 0
 
     database = SearchDatabase(args.database)

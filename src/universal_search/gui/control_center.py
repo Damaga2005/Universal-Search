@@ -748,7 +748,7 @@ class ControlCenterService:
                     data_scope="none",
                 )
         try:
-            return operation()
+            return self._record(action, operation())
         except Exception as exc:  # every UI action returns a typed failure
             message = _bounded_error(f"{type(exc).__name__}: {exc}")
             log.warning("control-center action %s failed (%s)", action, type(exc).__name__)
@@ -763,6 +763,24 @@ class ControlCenterService:
             if worker_lease is not None:
                 worker_lease.release()
             self._action_lock.release()
+
+    def _record(self, action: str, result: ActionResult) -> ActionResult:
+        """Append one bounded, redacted operational event (phase 028)."""
+        from universal_search.observability import EventRecorder
+
+        try:
+            EventRecorder(self.paths.events_file).emit(
+                "control-center",
+                action,
+                "info" if result.ok else "warning",
+                code=result.code,
+                data_scope=result.data_scope,
+                changed=result.changed,
+                errors=",".join(result.errors) if result.errors else "",
+            )
+        except Exception:  # telemetry must never break an action
+            log.debug("could not record the operational event", exc_info=True)
+        return result
 
     def _provider_for(self, path: str) -> tuple[str, str, bool, tuple[str, ...]]:
         try:
@@ -1542,6 +1560,63 @@ class ControlCenterService:
 
         return self._run_locked(f"rebuild-{selected}", operation)
 
+    def self_test(self) -> ActionResult:
+        """Exercise every local subsystem and report the worst verdict."""
+        from universal_search.observability import self_test as run_self_test
+
+        def operation() -> ActionResult:
+            try:
+                report = run_self_test(self.paths)
+            except Exception as exc:
+                return _failure(
+                    "self-test",
+                    "error",
+                    _bounded_error(f"{type(exc).__name__}: {exc}"),
+                    data_scope="none",
+                )
+            failed = [c.name for c in report.checks if c.status == "fatal"]
+            warned = [c.name for c in report.checks if c.status == "warning"]
+            parts = [f"{c.name}: {c.status}" for c in report.checks]
+            return ActionResult(
+                action="self-test",
+                ok=not failed,
+                message="; ".join(parts)[:500],
+                code=report.status,
+                data_scope="none",
+                errors=tuple(failed) + tuple(f"warning:{name}" for name in warned),
+            )
+
+        return self._run_locked("self-test", operation, coordinate_worker=False)
+
+    def support_bundle(self, destination: Path | str) -> ActionResult:
+        """Write a sanitized support bundle; it never contains user content."""
+        from universal_search.observability import support_bundle as write_bundle
+
+        target = Path(destination)
+
+        def operation() -> ActionResult:
+            try:
+                result = write_bundle(self.paths, target)
+            except Exception as exc:
+                return _failure(
+                    "support-bundle",
+                    "error",
+                    _bounded_error(f"{type(exc).__name__}: {exc}"),
+                    data_scope="none",
+                )
+            return ActionResult(
+                action="support-bundle",
+                ok=True,
+                message=(
+                    f"Paquete de soporte en {result.path} "
+                    "(sin contenido, sin consultas, sin credenciales)"
+                ),
+                code="ok",
+                data_scope="none",
+            )
+
+        return self._run_locked("support-bundle", operation, coordinate_worker=False)
+
 
 # -- optional Tk presentation ------------------------------------------------
 
@@ -1700,6 +1775,16 @@ if tk is not None:
                 maintenance,
                 text="Reconstruir todo",
                 command=lambda: self.rebuild("all"),
+            ).pack(side="left", padx=(6, 0))
+            ttk.Button(
+                maintenance,
+                text="Autodiagnóstico",
+                command=self.self_test,
+            ).pack(side="left", padx=(18, 0))
+            ttk.Button(
+                maintenance,
+                text="Paquete de soporte…",
+                command=self.support_bundle,
             ).pack(side="left", padx=(6, 0))
 
             self.status_var = tk.StringVar(value="")
@@ -1900,6 +1985,24 @@ if tk is not None:
                 self.status_var.set("Reconstrucción cancelada")
                 return
             self._submit("action", lambda: self.service.rebuild(kind, confirm=True))
+
+        def self_test(self) -> None:
+            self._submit("self-test", self.service.self_test)
+
+        def support_bundle(self) -> None:
+            destination = filedialog.asksaveasfilename(
+                parent=self,
+                title="Guardar paquete de soporte",
+                defaultextension=".json",
+                initialfile="universal-search-support.json",
+                filetypes=[("JSON", "*.json")],
+            )
+            if not destination:
+                self.status_var.set("Paquete de soporte cancelado")
+                return
+            self._submit(
+                "support-bundle", lambda: self.service.support_bundle(destination)
+            )
 
         def close(self) -> None:
             self.closed = True

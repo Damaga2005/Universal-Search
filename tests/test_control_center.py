@@ -274,6 +274,51 @@ def test_rebuild_kinds_have_explicit_scope_and_full_rebuild_confirmation(
     assert rebuilt_full.physical_files == 0
     assert root.exists()
 
+    # Every action leaves one bounded, redacted operational event (phase 028).
+    events = [json.loads(line) for line in _paths.events_file.read_text(
+        encoding="utf-8").splitlines()]
+    assert [entry["event_id"] for entry in events] == [
+        "rebuild-relationships", "rebuild-intelligence", "rebuild-full"
+    ]
+    assert {entry["component"] for entry in events} == {"control-center"}
+    assert all("BJT" not in json.dumps(entry) for entry in events)
+
+
+def test_self_test_and_support_bundle_are_typed_and_content_free(
+    tmp_path: Path,
+) -> None:
+    service, _paths, _database, _roots = make_service(tmp_path)
+
+    report = service.self_test()
+
+    assert report.ok is True
+    assert report.code in {"ok", "warning"}
+    assert report.data_scope == "none"
+    assert "database" in report.message
+    assert "fts" in report.message
+
+    destination = tmp_path / "support.json"
+    bundle = service.support_bundle(destination)
+
+    assert bundle.ok is True
+    assert bundle.data_scope == "none"
+    assert destination.exists()
+    payload = json.loads(destination.read_text(encoding="utf-8"))
+    assert payload["declaration"]["contains_document_content"] is False
+    assert payload["declaration"]["contains_query_text"] is False
+
+
+def test_support_bundle_failure_is_typed_not_raised(tmp_path: Path) -> None:
+    service, _paths, _database, _roots = make_service(tmp_path)
+    blocker = tmp_path / "blocked"
+    blocker.write_text("not a directory", encoding="utf-8")
+
+    result = service.support_bundle(blocker / "nested" / "bundle.json")
+
+    assert result.ok is False
+    assert result.code == "error"
+    assert result.errors
+
 
 def test_concurrent_mutating_actions_fail_closed_as_busy(tmp_path: Path) -> None:
     service, _paths, _database, (root,) = make_service(tmp_path)

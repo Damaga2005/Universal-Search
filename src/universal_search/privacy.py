@@ -100,6 +100,15 @@ INVENTORY: tuple[DataItem, ...] = (
         optional=True,
     ),
     DataItem(
+        key="events",
+        what="component, event id, severity, scope and error names; never text",
+        where="JSON lines file `events.jsonl` (1 MB x 3 rotados)",
+        purpose="operational traceability of control-center actions (phase 028)",
+        retention="bounded by size; the oldest lines rotate out",
+        deletion="borrar el fichero",
+        optional=True,
+    ),
+    DataItem(
         key="usage",
         what="document id + query text of opened results, timestamps",
         where="SQLite table `usage_events`",

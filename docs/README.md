@@ -34,6 +34,7 @@ El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
 | 025 | Extracción de contenido v2 (contrato versionado, límites, diagnósticos) | ✅ Completada | [025-content-extraction-v2.md](development/025-content-extraction-v2.md) | [informe](development/025-content-extraction-v2-report.md) |
 | 026 | Búsqueda semántica local con evidencia primero (capa opcional sin dependencias) | ✅ Completada | [026-local-semantic-search.md](development/026-local-semantic-search.md) | [informe](development/026-local-semantic-search-report.md) |
 | 027 | Integración con el shell de Windows | ✅ Completada | [027-windows-shell-integration.md](development/027-windows-shell-integration.md) | [informe](development/027-windows-shell-integration-report.md) |
+| 028 | Observabilidad y recuperación local | ✅ Completada | [028-observability-and-recovery.md](development/028-observability-and-recovery.md) | [informe](development/028-observability-and-recovery-report.md) |
 
 Verificado en la fase 010: **208 tests en verde**
 (`.venv\Scripts\python -m pytest`), E2E completo de indexador, CLI, GUI e
@@ -41,11 +42,12 @@ instalador. Posteriormente, pasada de auditoría + optimización con
 perfilado: indexación ×16 (2000 docs 45,3s → 2,8s) y consulta media
 48,6 → 34,4 ms —
 [informe](development/optimization-report.md). La verificación más reciente,
-fase 027, deja **859 tests passed y 3 skipped**, pyflakes limpio, una capa
+fase 028, deja **874 tests passed y 3 skipped**, pyflakes limpio, una capa
 semántica local opcional medida, protección de privacidad para sus vectores,
-comandos open/reveal, DPI por monitor y el verbo Explorer per-user reversible;
-detalles y límites en el
-[informe de la fase 026](development/026-local-semantic-search-report.md).
+comandos open/reveal, DPI por monitor, el verbo Explorer per-user reversible,
+autodiagnóstico, paquete de soporte declarado y recuperación con casos
+nombrados; detalles y límites en el
+[informe de la fase 028](development/028-observability-and-recovery-report.md).
 
 ## Cómo ejecutar
 
