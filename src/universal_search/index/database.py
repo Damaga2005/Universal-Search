@@ -186,6 +186,41 @@ CREATE INDEX IF NOT EXISTS document_graph_terms_document
 CREATE INDEX IF NOT EXISTS document_graph_nodes_generation
     ON document_graph_nodes(generation, version);
 
+-- Phase 031 derived blocking fingerprints. These are NOT the match: they are
+-- a cheap, bounded filter that proposes candidates for typo and prefix
+-- queries, and universal_search.fuzzy/verify.py decides every match against
+-- the real text. Bounded per document (at most 64 trigrams), not per byte, so
+-- a huge file cannot make the index explode. Local, versioned, rebuildable
+-- and removable: search never requires it.
+--
+-- The posting rows carry a small integer surrogate instead of the 64-character
+-- document hash. Measured on the labelled corpus, storing the hash made each
+-- row cost about 250 bytes and put this phase's storage gate at 35% growth;
+-- with the surrogate the same rows cost about 20. The mapping is derived data
+-- too, and is rebuilt with the rest.
+CREATE TABLE IF NOT EXISTS document_fuzzy_documents (
+    surrogate INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS document_fuzzy_terms (
+    ngram TEXT NOT NULL,
+    surrogate INTEGER NOT NULL,
+    weight REAL NOT NULL,
+    version INTEGER NOT NULL,
+    preprocessing_version INTEGER NOT NULL,
+    PRIMARY KEY(ngram, surrogate)
+);
+
+CREATE INDEX IF NOT EXISTS document_fuzzy_terms_document
+    ON document_fuzzy_terms(surrogate);
+
+CREATE TABLE IF NOT EXISTS document_fuzzy_metadata (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Forward-only migration ledger (spec 020). One row per schema version
 -- this database has actually been stamped with; append-only, so it is an
 -- audit trail rather than state. A database newer than this build refuses
@@ -276,7 +311,7 @@ def _migrate_documents_uniqueness(connection: sqlite3.Connection) -> None:
 # (tests/test_release.py enforces the stamp on fresh and legacy databases).
 # Adding an object to SCHEMA also upgrades existing databases: the
 # schema-present gate sees a missing object and re-runs the idempotent DDL.
-SCHEMA_VERSION = 9  # + derived semantic index (026)
+SCHEMA_VERSION = 10  # + derived blocking fingerprints (031)
 
 # Every object SCHEMA creates. When all of them already exist the idempotent
 # DDL is skipped: one indexed sqlite_master lookup replaces re-parsing the
@@ -303,6 +338,10 @@ SCHEMA_OBJECTS = (
     "document_semantic_terms",
     "document_semantic_terms_ngram",
     "document_semantic_metadata",
+    "document_fuzzy_documents",
+    "document_fuzzy_terms",
+    "document_fuzzy_terms_document",
+    "document_fuzzy_metadata",
     "schema_migrations",
 )
 

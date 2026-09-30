@@ -151,6 +151,18 @@ lives in the UI.
   refuses to disown a live worker, requires explicit confirmation for
   destructive cases, and never deletes a source file. Both are wired into
   `diagnose` in the CLI and into the control center as typed `ActionResult`s.
+- **Robust search** (`universal_search/fuzzy/`, phase 031): two modules with
+  two jobs, and the separation is the point. `trigrams.py` *blocks*: a bounded
+  fingerprint of at most 64 trigrams per document, taken from that document's
+  32 most distinctive words, round-robin so no single word eats the budget,
+  stored against a small integer surrogate rather than the 64-character
+  document hash. `verify.py` *decides*: a candidate survives only if its real
+  text contains the token, or holds a word within a bounded Damerau-Levenshtein
+  distance of it. `engine.py` wraps the authoritative `SearchEngine` and
+  consults the layer only when it returns nothing, disables it when a
+  `source`/`type` filter is present, and opens exactly one database
+  connection for the whole fallback. Schema 9 to 10; the tables are derived,
+  versioned, rebuildable and removable.
 - **Release contract** (phase 029): `tests/test_ci_gates.py` reads
   `.github/workflows/ci.yml` as text (PyYAML is deliberately not a
   dependency) and asserts what actually breaks in practice — a deleted gate,

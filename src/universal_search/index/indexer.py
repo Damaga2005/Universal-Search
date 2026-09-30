@@ -307,6 +307,28 @@ class Indexer:
         connection.execute(
             "DELETE FROM document_graph_nodes WHERE document_id = ?", (document_id,)
         )
+        # The optional derived layers (026 semantic vectors, 031 blocking
+        # fingerprints) follow the canonical document too. They are disposable
+        # and rebuildable, so deleting them here is always safe — and leaving
+        # them would mean a document removed from disk stayed reachable as an
+        # orphan until someone ran `diagnose recover orphan-derived`.
+        connection.execute(
+            "DELETE FROM document_semantic_terms WHERE document_id = ?",
+            (document_id,),
+        )
+        connection.execute(
+            "DELETE FROM document_semantic WHERE document_id = ?", (document_id,)
+        )
+        connection.execute(
+            "DELETE FROM document_fuzzy_terms WHERE surrogate IN"
+            " (SELECT surrogate FROM document_fuzzy_documents"
+            "  WHERE document_id = ?)",
+            (document_id,),
+        )
+        connection.execute(
+            "DELETE FROM document_fuzzy_documents WHERE document_id = ?",
+            (document_id,),
+        )
         connection.execute("DELETE FROM documents WHERE id = ?", (document_id,))
 
     # -- reconciliation ----------------------------------------------------

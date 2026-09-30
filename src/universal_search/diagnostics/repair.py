@@ -146,6 +146,20 @@ def rebuild_fts(
                 f"DELETE FROM document_graph_nodes WHERE document_id IN ({placeholders})",
                 params,
             )
+            # Phase 031 blocking fingerprints: derived from the same text, so
+            # an orphaned FTS row must not leave a fingerprint behind that
+            # could still propose the missing document to a query.
+            connection.execute(
+                "DELETE FROM document_fuzzy_terms WHERE surrogate IN"
+                " (SELECT surrogate FROM document_fuzzy_documents"
+                f"  WHERE document_id IN ({placeholders}))",
+                params,
+            )
+            connection.execute(
+                "DELETE FROM document_fuzzy_documents"
+                f" WHERE document_id IN ({placeholders})",
+                params,
+            )
             connection.execute(
                 f"DELETE FROM documents_fts WHERE document_id IN ({placeholders})",
                 params,

@@ -499,12 +499,46 @@ def check_every_phase_is_documented() -> CheckResult:
 
 
 def check_roadmap_has_no_open_phase() -> CheckResult:
+    """The roadmap must be honest about what is open and what is done.
+
+    Phase 031 opened a second programme (v2.x, phases 031-040), so "no
+    checkbox is open" stopped being a true invariant for every commit and
+    became a release-readiness check that belongs to the final phase. The
+    invariant that *is* always true, and is strictly stronger than an empty
+    checklist, is structural:
+
+    * a **completed** phase has a substantial document and an index row;
+    * an open phase is never skipped over by a completed one, so a stray
+      checkbox in the middle of a finished programme is caught.
+
+    Open phases are read *from* the roadmap, so they are declared by
+    definition and need no document yet; requiring one would demand
+    documentation for phases that have not happened.
+    """
     roadmap = (DOCS / "ROADMAP.md").read_text(encoding="utf-8")
-    open_items = re.findall(r"^- \[ \] (.+)$", roadmap, flags=re.MULTILINE)
+    done = [int(n) for n in re.findall(r"^- \[x\] .*?(\d{3})", roadmap, re.MULTILINE)]
+    open_phases = [
+        int(n) for n in re.findall(r"^- \[ \] .*?(\d{3})", roadmap, re.MULTILINE)
+    ]
+    index = (DOCS / "README.md").read_text(encoding="utf-8")
+    documents = {path.name[:3] for path in (DOCS / "development").glob("*.md")}
+
+    problems: list[str] = []
+    if done and open_phases and min(open_phases) < max(done):
+        problems.append(
+            f"open phase {min(open_phases)} sits below completed {max(done)}"
+        )
+    for phase in sorted(set(done)):
+        if f"| {phase:03d} |" not in index:
+            problems.append(f"{phase:03d} has no row in docs/README.md")
+        if f"{phase:03d}" not in documents:
+            problems.append(f"{phase:03d} has no document")
     return CheckResult(
-        "roadmap closed",
-        not open_items,
-        "no open phases" if not open_items else f"still open: {open_items}",
+        "roadmap is honest",
+        not problems,
+        f"{len(done)} done (all documented), {len(open_phases)} open"
+        if not problems
+        else "; ".join(problems[:6]),
     )
 
 

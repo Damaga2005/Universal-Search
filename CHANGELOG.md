@@ -5,6 +5,52 @@ All notable changes to Universal Search. The format follows
 `src/universal_search/__init__.py::__version__`, single-sourced into the
 PyInstaller resource and the installer (enforced by `test_release.py`).
 
+## [Unreleased]
+
+### Phase 031 - Robust search: typos and partial words
+- Typo and partial-word queries now resolve. `transisto`, `transsistor`,
+  `transistorr`, `transltor`, `polarisacion` and two-word queries with one
+  misspelled word retrieve nothing on the lexical engine today and the right
+  document after this phase.
+- The design is blocking plus verification, and the separation is the whole
+  point: a bounded trigram fingerprint (at most 64 trigrams per document,
+  from its 32 most distinctive words, round-robin, keyed on a small integer
+  surrogate) only *proposes* candidates, and every match is decided against
+  the document's real text by substring or bounded Damerau-Levenshtein. A
+  document the filter loves and the verifier rejects is never returned.
+- A second FTS5 `trigram` table was rejected on measured storage cost, not on
+  availability: SQLite 3.50.4 does support it, and it emits one term per
+  character position, which is 2 million rows for a 2 MB document.
+- The layer is fallback-only and filter-disabling, like the semantic layer: any
+  non-empty lexical result is returned untouched, `source`/`type` switches it
+  off, `--no-fuzzy` opts out, and `explain` reports the token, the rule and the
+  distance.
+- Schema 9 -> 10. The new tables are derived, versioned, rebuildable lazily
+  and removable; `privacy forget` deletes a document's fingerprints and the
+  privacy inventory declares all three tables.
+- Fixed a real gap found by inspection: `Indexer._delete` removed the document,
+  its FTS rows and the graph, but left the phase-026 semantic vectors behind,
+  so a document deleted from disk survived as an orphan until someone ran
+  `diagnose recover orphan-derived`. Both optional derived tables are now
+  scrubbed at delete time, with tests.
+- Evidence gate `python -m evaluation.fuzzy_gate`: **6/6 PASS**. Recall@5 of
+  0,90 on the typo/prefix set, zero leaks on the must-retrieve-nothing set, no
+  change to any lexical metric, 5,8 % extra index size and +5,13 ms of added
+  p95 latency. The gate failed twice first, on real defects: a global overlap
+  threshold that discarded candidates the verifier had already accepted
+  (T1 0,40 -> 0,90 once blocking became per token), 64-character hash keys in
+  every posting (T4 34,7 % -> 5,8 % with an integer surrogate), and four
+  sources of waste worth 36 ms (one connection per operation, unbounded content
+  fetches, per-token accent folding, and a distance computation per word). The
+  gate's own latency measurement was also wrong - it took the p95 of paired
+  differences, which on a loaded machine measures noise - and now reports each
+  engine's p95 separately plus the machine's CPU load.
+- Documented out of scope with reasons rather than hidden: typos three edits
+  away, words that appear only in a path, and mid-word transpositions in words
+  of seven characters or fewer.
+- Phase 031 gate: **976 passed, 3 skipped** (979 collected), clean pyflakes,
+  `python -m evaluation.gate` PASS (13/13).
+
 ## [2.0.0] - 2026-09-30
 
 Major release covering phases 011-030. Version 1.0.0 shipped phases 001-010 on

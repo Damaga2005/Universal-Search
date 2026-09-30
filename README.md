@@ -68,12 +68,13 @@ phase 023 adds a separate indexing control center with typed source actions,
 health/storage/derived-data state and explicit safety confirmations. The
 phase 024 formalised the provider contract (streaming `iter_files`, bounded errors, cancellation, capability/interface negotiation), made the provider key the canonical source discriminator with a `(source, path)` uniqueness migration, and added mounted-path NAS/removable providers plus mixed-provider indexing with per-provider failure isolation. Phase 025 added a versioned extraction contract with bounded PDF/Office resources and visible truncation diagnostics. Phase 026 measured a fixed lexical baseline and shipped a dependency-free, versioned n-gram fallback only where the evidence gate justified it; phase 027 added DPI awareness, `open`/`reveal` commands and reversible per-user Explorer integration. Phase 028 added bounded redacted JSON events, a seven-area `diagnose self-test`, a support bundle that declares what it does not contain, and four named recovery cases that never touch source files. Phase 029 made the CI gates a verified contract and the packaged smoke a real gate; that smoke found and fixed a semantic-layer defect (a zero idf on a one-document index, and a precision gate that rejected morphological variants), re-measured with no metric regression. Phase 030 closed the line with an executable gate: `python -m evaluation.gate` runs thirteen local invariants, including a behavioural proof that no repair can touch a user's files.
 
-Current test count: 934 tests collected (931 passed, 3 skipped).
+Current test count: 979 tests collected (976 passed, 3 skipped).
 
 ## Known limitations
 
 Read this before expecting more than the program does.
 
+- **Typo tolerance is bounded, not free.** Words within one edit (up to seven characters) or two edits (longer) are found, as are prefixes. A typo three edits away, or a transposition in the middle of a word of seven characters or fewer, is out of reach. Nothing is invented: every fuzzy match is verified against the real text.
 - **No learned semantic embeddings.** The semantic layer (phase 026) is a
   local character n-gram TF-IDF fallback, not a trained embedding model. It
   catches morphological variants, accent-folded overlaps and partial term
@@ -130,6 +131,7 @@ Read this before expecting more than the program does.
 | 028 | Observabilidad y recuperación local (eventos, self-test, casos nombrados) | ✅ |
 | 029 | Release engineering y CI (puertas verificadas por test) | ✅ |
 | 030 | Puerta de calidad v2 (gate ejecutable, 13 invariantes) | ✅ |
+| 031 | Búsqueda robusta: erratas y palabras parciales (verificada) | ✅ |
 
 Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
 by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).
@@ -145,6 +147,8 @@ universal-search index C:\Users\me\Documents
 universal-search search "meeting notes" --limit 20
 universal-search search "notes" --source onedrive --type pdf   # filters (009)
 universal-search search "notes" --context engineering --explain # context + scoring breakdown (008)
+universal-search search "transisto"                    # typo / partial word (031)
+universal-search search "bjt" --no-fuzzy              # lexical only (031)
 universal-search search "bjt type:txt after:2026-01-01"        # query language (012)
 universal-search search "bjt -cmos size:>10KB"                # negation + size filter (012)
 universal-search search '"ebers moll" OR "gunn effect"'      # phrase + OR (012)

@@ -109,6 +109,21 @@ INVENTORY: tuple[DataItem, ...] = (
         optional=True,
     ),
     DataItem(
+        key="fuzzy_index",
+        what="at most 64 character trigrams per document, as blocking fingerprints",
+        where=(
+            "SQLite tables `document_fuzzy_documents` (integer surrogate to "
+            "document hash), `document_fuzzy_terms` and `document_fuzzy_metadata`"
+        ),
+        purpose=(
+            "propose candidates for typo and prefix queries (phase 031); the "
+            "match is always decided against the document text"
+        ),
+        retention="until rebuilt, removed, the document is forgotten or the index is dropped",
+        deletion="`privacy forget`, `FuzzyIndex.remove_all()`, or full rebuild",
+        optional=True,
+    ),
+    DataItem(
         key="usage",
         what="document id + query text of opened results, timestamps",
         where="SQLite table `usage_events`",
@@ -316,6 +331,19 @@ def forget(database: SearchDatabase, path: Path | str) -> ForgetResult:
             ).rowcount
             derived_rows += connection.execute(
                 "DELETE FROM document_semantic WHERE document_id = ?",
+                (document_id,),
+            ).rowcount
+            # Phase 031 blocking fingerprints are derived from the same
+            # document text. They are personal data too: a forgotten document
+            # must not stay reachable through the fuzzy fallback.
+            derived_rows += connection.execute(
+                "DELETE FROM document_fuzzy_terms WHERE surrogate IN"
+                " (SELECT surrogate FROM document_fuzzy_documents"
+                "  WHERE document_id = ?)",
+                (document_id,),
+            ).rowcount
+            derived_rows += connection.execute(
+                "DELETE FROM document_fuzzy_documents WHERE document_id = ?",
                 (document_id,),
             ).rowcount
             # Phase 022 graph rows are derived from the same document and

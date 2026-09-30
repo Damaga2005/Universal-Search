@@ -110,6 +110,17 @@ def _orphan_derived(paths: AppPaths) -> RecoveryResult:
                 f"DELETE FROM {table} WHERE {column} NOT IN"
                 " (SELECT id FROM documents)"
             ).rowcount
+        # The phase-031 postings key on a surrogate, so they are cleaned in
+        # the opposite order: the mapping first, then whatever postings were
+        # left pointing at a mapping row that no longer exists.
+        removed += connection.execute(
+            "DELETE FROM document_fuzzy_documents WHERE document_id NOT IN"
+            " (SELECT id FROM documents)"
+        ).rowcount
+        removed += connection.execute(
+            "DELETE FROM document_fuzzy_terms WHERE surrogate NOT IN"
+            " (SELECT surrogate FROM document_fuzzy_documents)"
+        ).rowcount
         connection.commit()
     return RecoveryResult(
         "orphan-derived", "repaired", removed > 0,
@@ -143,6 +154,9 @@ def _reset_derived(paths: AppPaths) -> RecoveryResult:
             "document_semantic_terms",
             "document_semantic",
             "document_semantic_metadata",
+            "document_fuzzy_terms",
+            "document_fuzzy_documents",
+            "document_fuzzy_metadata",
             "document_graph_edges",
             "document_graph_terms",
             "document_graph_nodes",

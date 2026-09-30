@@ -1,0 +1,338 @@
+"""Phase 031 evidence: the six gates of the design, measured.
+
+Run from the repository root::
+
+    python -m evaluation.fuzzy_gate
+
+Nothing here is a claim; every number is printed next to its threshold. The
+phase ships only if T1 and T2 pass, and the others must not regress.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from evaluation import corpus as corpus_module  # noqa: E402
+from evaluation import runner  # noqa: E402
+from universal_search.fuzzy import (  # noqa: E402
+    FuzzyIndex,
+    FuzzySearchEngine,
+    MAX_TRIGRAMS_PER_DOC,
+)
+from universal_search.index.database import SearchDatabase  # noqa: E402
+from universal_search.index.indexer import Indexer  # noqa: E402
+from universal_search.index.search import SearchEngine  # noqa: E402
+from universal_search.semantic import SemanticIndex  # noqa: E402
+
+
+# The failure classes phase 031 exists to fix, as (query, expected document
+# id fragment). Every one of these retrieves nothing on the lexical engine
+# today. Cases that the *design* cannot serve are deliberately absent and
+# listed under OUT_OF_SCOPE below, rather than quietly dropped.
+ROBUST_QUERIES: tuple[tuple[str, str], ...] = (
+    ("transisto", "bjt"),           # prefix
+    ("transsistor", "bjt"),         # transposition, the classic typo
+    ("transistorr", "bjt"),         # doubled letter
+    ("transltor", "bjt"),           # two edits
+    ("polarisacion", "bjt"),        # accent folded away
+    ("eberts moll", "ebers"),       # two words, one misspelled
+    ("valensiana", "paella"),       # transposition in a long word
+    ("azarfan", "paella"),          # one edit in a long word
+    ("sofritoo", "paella"),         # doubled vowel
+    ("azaarfann", "paella"),        # doubled consonant
+)
+
+# Measured, not assumed: these do not work, and the reason belongs in the
+# report rather than in a passing test.
+#   * a typo three edits away ("polirazcion" for "polarizacion") is outside
+#     the design's distance budget, on purpose: raising the budget to catch
+#     it would multiply false positives on short words.
+#   * a query for a word that only appears in a *path* ("recettas" for
+#     personal/recetas/paella.md) is out of scope because paths are
+#     deliberately not fingerprinted; phase 026 measured that path trigrams
+#     pollute similarity.
+OUT_OF_SCOPE = (
+    ("polirazcion", "3 edits away: beyond the design's budget of 2"),
+    ("recettas", "the word is only in the path, never in the content"),
+    ("transistores", "already answered by the lexical engine"),
+)
+
+# Queries that must retrieve nothing, whatever the layer proposes.
+MUST_BE_EMPTY = ("zzz no existe", "noexistenadaquienadie", "qqqzzz wwwyyy")
+
+THRESHOLDS = {
+    "T1_recall5_robust_queries": 0.80,
+    "T2_leaks_on_must_be_empty": 0,
+    "T3_lexical_mrr_unchanged": 0.0,
+    "T4_storage_growth": 0.15,
+    "T5_p95_added_ms": 8.0,
+    "T6_new_runtime_dependencies": 0,
+}
+
+
+@dataclass
+class Verdict:
+    gate: str
+    measured: float
+    threshold: float
+    passed: bool
+    detail: str
+
+    def line(self) -> str:
+        status = "PASS" if self.passed else "FAIL"
+        return (
+            f"{status}  {self.gate:<34} {self.measured:>10.4f}"
+            f"  (umbral {self.threshold})  {self.detail}"
+        )
+
+
+def _sync(path: Path) -> None:
+    """Force the WAL into the main file so sizes are comparable."""
+    import sqlite3
+
+    connection = sqlite3.connect(path)
+    connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    connection.close()
+
+
+def main() -> int:
+    corpus_module.assert_labels_are_consistent()
+    workspace = Path(tempfile.mkdtemp(prefix="universal-search-031-"))
+    tree = workspace / "tree"
+    corpus_module.build(tree)
+    database = SearchDatabase(workspace / "index.db")
+    Indexer(database).index_root(tree)
+    mapping = corpus_module.ids_by_path(tree)
+    lexical = SearchEngine(database)
+
+    report = runner.measure(lexical, mapping)
+    lexical_mrr = report.mrr()
+
+    # The size baseline is taken with the *full* derived set in place, so the
+    # fuzzy cost is measured against what the product actually stores, not
+    # against a half-built database.
+    SemanticIndex(database).rebuild()
+    _sync(workspace / "index.db")
+    size_before = (workspace / "index.db").stat().st_size
+
+    index = FuzzyIndex(database)
+    index.rebuild()
+    rows = index.row_count()
+    _sync(workspace / "index.db")
+    size_after = (workspace / "index.db").stat().st_size
+
+    fuzzy = FuzzySearchEngine(lexical, index)
+
+    # -- T1: recall on the robust queries ------------------------------------
+    hits = 0
+    detail_rows = []
+    for query, expected in ROBUST_QUERIES:
+        ranked = [
+            mapping.get(Path(result.path).resolve(), result.path)
+            for result in fuzzy.search(query, limit=5)
+        ]
+        lexical_hits = [
+            mapping.get(Path(result.path).resolve(), result.path)
+            for result in lexical.search(query, limit=5)
+        ]
+        found = any(expected in name for name in ranked)
+        hits += bool(found)
+        detail_rows.append({
+            "query": query,
+            "lexical": lexical_hits,
+            "fuzzy": ranked,
+            "expected_fragment": expected,
+            "found": found,
+        })
+    recall5 = hits / len(ROBUST_QUERIES)
+
+    # -- T2: nothing invented ------------------------------------------------
+    leaks = []
+    for query in MUST_BE_EMPTY:
+        ranked = fuzzy.search(query, limit=5)
+        if ranked:
+            leaks.append({
+                "query": query,
+                "results": [r.name for r in ranked],
+            })
+
+    # -- T3: the lexical engine is untouched --------------------------------
+    report_after = runner.measure(lexical, mapping)
+    mrr_delta = abs(report_after.mrr() - lexical_mrr)
+
+    # -- T4: storage --------------------------------------------------------
+    fuzzy_bytes = size_after - size_before
+    growth = (fuzzy_bytes / size_before) if size_before else 0.0
+
+    # -- T5: latency of a query that finds nothing --------------------------
+    # Measured as the difference between two *independent* p95 values, not as
+    # the p95 of paired differences. The first version of this gate did the
+    # latter and reported 41 ms, then 33 ms, then 16 ms while the layer's real
+    # cost was falling — because on a loaded machine the p95 of the
+    # difference of two noisy samples is dominated by noise, not by the layer.
+    # Absolute p95s per engine are also recorded, and the machine's load, so
+    # the number can be interpreted instead of merely believed.
+    lexical_p50, lexical_p95, fuzzy_p50, fuzzy_p95, load = _latency(
+        lexical, fuzzy, MUST_BE_EMPTY
+    )
+    added = fuzzy_p95 - lexical_p95
+
+    # -- T6: dependencies ----------------------------------------------------
+    declared = _runtime_dependencies()
+    allowed = {"pypdf", "watchdog"}
+    new_dependencies = len(declared - allowed)
+
+    verdicts = [
+        Verdict("T1 recall@5 robust queries", recall5,
+                THRESHOLDS["T1_recall5_robust_queries"],
+                recall5 >= THRESHOLDS["T1_recall5_robust_queries"],
+                f"{hits}/{len(ROBUST_QUERIES)} consultas"),
+        Verdict("T2 leaks on must-be-empty", len(leaks),
+                THRESHOLDS["T2_leaks_on_must_be_empty"],
+                not leaks,
+                "ninguna consulta recibio resultados" if not leaks else str(leaks)),
+        Verdict("T3 lexical MRR change", mrr_delta,
+                THRESHOLDS["T3_lexical_mrr_unchanged"],
+                mrr_delta == 0.0,
+                f"MRR sigue en {lexical_mrr:.4f}"),
+        Verdict("T4 index storage growth", growth,
+                THRESHOLDS["T4_storage_growth"],
+                growth <= THRESHOLDS["T4_storage_growth"],
+                f"{fuzzy_bytes:,} B sobre {size_before:,} B, "
+                f"{rows} filas ({rows / max(1, len(corpus_module.DOCUMENTS)):.0f} "
+                f"por documento, tope {MAX_TRIGRAMS_PER_DOC})"),
+        Verdict("T5 added p95 (ms)", added,
+                THRESHOLDS["T5_p95_added_ms"],
+                added <= THRESHOLDS["T5_p95_added_ms"],
+                f"lexico p50={lexical_p50:.2f} p95={lexical_p95:.2f} | "
+                f"hibrido p50={fuzzy_p50:.2f} p95={fuzzy_p95:.2f} | "
+                f"carga de CPU {load}%"),
+        Verdict("T6 new runtime dependencies", new_dependencies,
+                THRESHOLDS["T6_new_runtime_dependencies"],
+                new_dependencies == 0,
+                f"declaradas={sorted(declared)}"),
+    ]
+
+    print("=" * 100)
+    print("PUERTA DE EVIDENCIA - FASE 031 (busqueda robusta)")
+    print("=" * 100)
+    for verdict in verdicts:
+        print(verdict.line())
+    print("-" * 100)
+    print("detalle por consulta (T1):")
+    for row in detail_rows:
+        mark = "ok " if row["found"] else "FALLO"
+        print(f"  {mark} {row['query']!r:>18} -> {row['fuzzy']}")
+        if not row["lexical"]:
+            print("       (lexico: nada, como se esperaba)")
+    payload = {
+        "phase": "031",
+        "verdicts": [
+            {
+                "gate": verdict.gate,
+                "measured": verdict.measured,
+                "threshold": verdict.threshold,
+                "passed": verdict.passed,
+                "detail": verdict.detail,
+            }
+            for verdict in verdicts
+        ],
+        "robust_queries": detail_rows,
+        "out_of_scope": [
+            {"query": query, "reason": reason} for query, reason in OUT_OF_SCOPE
+        ],
+        "leaks": leaks,
+        "rows": rows,
+        "documents": len(corpus_module.DOCUMENTS),
+    }
+    out = ROOT / "evaluation" / "fuzzy_baseline.json"
+    out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    print(f"\nregistro escrito en {out.relative_to(ROOT)}")
+    failed = [verdict for verdict in verdicts if not verdict.passed]
+    print("VEREDICTO:", "SHIP" if not failed else f"NO SHIP ({len(failed)} puertas)")
+    return 0 if not failed else 1
+
+
+def _cpu_load() -> str:
+    """CPU load as a percentage, because a loaded machine cannot conclude."""
+    try:
+        import subprocess
+
+        out = subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             "(Get-CimInstance Win32_Processor).LoadPercentage"],
+            capture_output=True, text=True, timeout=20,
+        )
+        return out.stdout.strip() or "?"
+    except Exception:
+        try:
+            import os
+
+            return str(int(os.getloadavg()[0]))
+        except (AttributeError, OSError):
+            return "?"
+
+
+def _percentile(samples: list[float], fraction: float) -> float:
+    ordered = sorted(samples)
+    position = max(0, int(round(fraction * len(ordered))) - 1)
+    return ordered[position]
+
+
+def _latency(lexical, fuzzy, queries, samples: int = 80) -> tuple:
+    """p50/p95 of each engine, measured independently, plus the CPU load."""
+    import time as _time
+
+    def run(engine, query) -> None:
+        engine.search(query, limit=5)
+
+    # A warm-up pass keeps first-call import and page-cache costs out of both
+    # distributions, so the comparison is between the two engines and not
+    # between "first call" and "rest".
+    for query in queries:
+        run(lexical, query)
+        run(fuzzy, query)
+
+    lexical_samples: list[float] = []
+    fuzzy_samples: list[float] = []
+    for _ in range(samples):
+        for query in queries:
+            started = _time.perf_counter()
+            run(lexical, query)
+            lexical_samples.append((_time.perf_counter() - started) * 1000)
+    for _ in range(samples):
+        for query in queries:
+            started = _time.perf_counter()
+            run(fuzzy, query)
+            fuzzy_samples.append((_time.perf_counter() - started) * 1000)
+
+    load = _cpu_load()
+    return (
+        _percentile(lexical_samples, 0.50),
+        _percentile(lexical_samples, 0.95),
+        _percentile(fuzzy_samples, 0.50),
+        _percentile(fuzzy_samples, 0.95),
+        load,
+    )
+
+
+def _runtime_dependencies() -> set[str]:
+    import re
+    import tomllib
+
+    data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    return {
+        re.split(r"[<>=!\[ ]", entry, maxsplit=1)[0].strip().lower()
+        for entry in data["project"]["dependencies"]
+    }
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

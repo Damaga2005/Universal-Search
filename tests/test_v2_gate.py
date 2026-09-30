@@ -205,18 +205,64 @@ def test_a_missing_count_line_is_detected(tmp_path: Path, monkeypatch):
     assert "no 'Current test count:' line" in result.detail
 
 
-def test_the_roadmap_check_reports_what_is_still_open(
-    tmp_path: Path, monkeypatch
-):
-    (tmp_path / "ROADMAP.md").write_text(
-        "- [x] done phase\n- [ ] pending phase (030)\n", encoding="utf-8"
+def test_roadmap_is_honest_about_a_programme_still_in_flight(tmp_path, monkeypatch):
+    """A legitimately open programme must not turn the gate red.
+
+    Phase 031 opened phases 032-040, so "no checkbox is open" stopped being a
+    true invariant for every commit. What must stay true is that a completed
+    phase is documented and that no open phase hides below a completed one.
+    """
+    docs = tmp_path / "docs"
+    (docs / "development").mkdir(parents=True)
+    (docs / "README.md").write_text(
+        "\n".join(f"| {n:03d} | fase | Completada |" for n in (1, 2, 3)) + "\n",
+        encoding="utf-8",
     )
-    monkeypatch.setattr(gate, "DOCS", tmp_path)
+    for n in (1, 2, 3):
+        (docs / "development" / f"{n:03d}-fase.md").write_text("x" * 900, encoding="utf-8")
+    (docs / "ROADMAP.md").write_text(
+        "- [x] primera (001)\n- [x] segunda (002)\n"
+        "- [x] tercera (003)\n- [ ] cuarta (004)\n- [ ] quinta (005)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(gate, "DOCS", docs)
+
+    result = gate.check_roadmap_has_no_open_phase()
+
+    assert result.ok is True, result.detail
+
+
+def test_a_stray_open_phase_below_a_completed_one_is_rejected(
+    tmp_path: Path, monkeypatch
+) -> None:
+    docs = tmp_path / "docs"
+    (docs / "development").mkdir(parents=True)
+    (docs / "README.md").write_text("| 001 | fase | Completada |\n", encoding="utf-8")
+    (docs / "development" / "001-fase.md").write_text("x" * 900, encoding="utf-8")
+    (docs / "ROADMAP.md").write_text(
+        "- [ ] forgotten (001)\n- [x] segunda (002)\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(gate, "DOCS", docs)
 
     result = gate.check_roadmap_has_no_open_phase()
 
     assert result.ok is False
-    assert "pending phase" in result.detail
+    assert "sits below completed" in result.detail
+
+
+def test_a_completed_phase_without_a_document_is_rejected(
+    tmp_path: Path, monkeypatch
+) -> None:
+    docs = tmp_path / "docs"
+    (docs / "development").mkdir(parents=True)
+    (docs / "README.md").write_text("| 001 | fase | Completada |\n", encoding="utf-8")
+    (docs / "ROADMAP.md").write_text("- [x] primera (001)\n", encoding="utf-8")
+    monkeypatch.setattr(gate, "DOCS", docs)
+
+    result = gate.check_roadmap_has_no_open_phase()
+
+    assert result.ok is False
+    assert "no document" in result.detail
 
 
 @pytest.mark.parametrize(

@@ -37,6 +37,7 @@ El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
 | 028 | Observabilidad y recuperación local | ✅ Completada | [028-observability-and-recovery.md](development/028-observability-and-recovery.md) | [informe](development/028-observability-and-recovery-report.md) |
 | 029 | Release engineering y CI (puertas verificadas) | ✅ Completada | [029-release-engineering-and-ci.md](development/029-release-engineering-and-ci.md) | [informe](development/029-release-engineering-and-ci-report.md) |
 | 030 | Puerta de calidad v2 (gate ejecutable) | ✅ Completada | [030-universal-search-v2-quality-gate.md](development/030-universal-search-v2-quality-gate.md) | [informe](development/030-v2-quality-gate-report.md) |
+| 031 | Búsqueda robusta: erratas y palabras parciales | ✅ Completada | [031-robust-search.md](development/031-robust-search.md) | [informe](development/031-robust-search-report.md) |
 
 Verificado en la fase 010: **208 tests en verde**
 (`.venv\Scripts\python -m pytest`), E2E completo de indexador, CLI, GUI e
@@ -52,7 +53,7 @@ nombrados, puertas de CI verificadas por test y un gate v2 ejecutable de 13
 invariantes (`python -m evaluation.gate`); detalles y límites en el
 [informe de la fase 030](development/030-v2-quality-gate-report.md).
 
-Current test count: 934 tests collected (931 passed, 3 skipped).
+Current test count: 979 tests collected (976 passed, 3 skipped).
 
 ## Cómo ejecutar
 

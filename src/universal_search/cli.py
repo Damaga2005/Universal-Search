@@ -65,6 +65,10 @@ def main() -> None:
         "--no-semantic", action="store_true",
         help="disable the local semantic fallback (lexical search only)",
     )
+    search.add_argument(
+        "--no-fuzzy", action="store_true",
+        help="disable typo and partial-word tolerance (lexical search only)",
+    )
     sub.add_parser("gui", help="launch the desktop search window")
     open_command = sub.add_parser("open", help="open a file or folder with its default app")
     open_command.add_argument("path", type=Path)
@@ -456,14 +460,21 @@ def main() -> None:
         else:
             context = None
         database = _open_or_explain(args.database)
+        # Two optional, fallback-only layers over the same authoritative
+        # lexical engine. Each one has its own opt-out, and the order matters
+        # only in that the semantic layer is the broader guess and the fuzzy
+        # layer the closer one.
+        lexical = SearchEngine(database)
         if args.no_semantic:
-            engine = SearchEngine(database)
+            engine = lexical
         else:
             from universal_search.semantic import HybridSearchEngine, SemanticIndex
 
-            engine = HybridSearchEngine(
-                SearchEngine(database), SemanticIndex(database)
-            )
+            engine = HybridSearchEngine(lexical, SemanticIndex(database))
+        if not args.no_fuzzy:
+            from universal_search.fuzzy import FuzzyIndex, FuzzySearchEngine
+
+            engine = FuzzySearchEngine(engine, FuzzyIndex(database))
         try:
             results = engine.search(
                 args.query,
