@@ -35,6 +35,7 @@ from evaluation.runner import (
 )
 
 BASELINE = Path(__file__).resolve().parents[1] / "evaluation" / "baseline.json"
+ROOT = Path(__file__).resolve().parents[1]
 
 
 # -- metric definitions --------------------------------------------------------
@@ -156,6 +157,7 @@ def corpus_env(tmp_path_factory):
         "tree": tree,
         "database": database,
         "engine": SearchEngine(database),
+        "ids": corpus_module.ids_by_path(tree),
     }
 
 
@@ -477,3 +479,66 @@ def test_build_semantic_baseline_records_hash_metrics_and_failures(report, tmp_p
     # Latency is recorded but marked informational (machine-dependent).
     assert payload["latency_ms"]["informational"] is True
     assert payload["latency_ms"]["mean"] == pytest.approx(2.0)
+
+
+# -- phase 029: the semantic decision is a fixture, not a claim ---------------
+
+def test_committed_semantic_baseline_records_the_measured_gate():
+    """The committed baseline must match the model that is actually shipped."""
+    from universal_search.semantic.ngram import NGRAM_VERSION
+
+    baseline = json.loads(
+        (ROOT / "evaluation" / "semantic_baseline.json").read_text(encoding="utf-8")
+    )
+    decision = baseline["decision"]
+    assert decision["outcome"] == "SHIP"
+    measured = decision["measured"]
+    # The evidence gate the design was accepted on.
+    assert measured["hybrid_failure_recall5"] >= decision["thresholds"][
+        "T1_min_failure_recall5"
+    ]
+    assert measured["lexical_failure_recall5"] < measured["hybrid_failure_recall5"]
+    assert measured["exact_match_correctness"] == 1.0
+    assert measured["preexisting_top1_regressions"] == 0
+    # The recorded model version must be the one in the code, or the record
+    # describes a model that no longer ships.
+    assert decision["model"]["ngram_version"] == NGRAM_VERSION
+
+
+def test_semantic_layer_wins_on_the_labelled_failures_and_keeps_nonsense_empty(
+    corpus_env,
+):
+    """Re-measure the gate instead of trusting the committed numbers.
+
+    Phase 029 changed the idf and the precision gate; this is the test that
+    would have caught it if the change had cost a single point of recall or
+    let a nonsense query through.
+    """
+    from universal_search.semantic import HybridSearchEngine, SemanticIndex
+
+    database = corpus_env["database"]
+    mapping = corpus_env["ids"]
+    lexical = corpus_env["engine"]
+    semantic = SemanticIndex(database)
+    semantic.rebuild()
+    hybrid = HybridSearchEngine(lexical, semantic)
+
+    def ranked(engine, query):
+        return [
+            mapping.get(Path(result.path).resolve(), result.path)
+            for result in engine.search(query, limit=10)
+        ]
+
+    for labelled in corpus_module.LABELLED_QUERIES:
+        if not labelled.failure_class:
+            continue
+        found = ranked(hybrid, labelled.query)
+        assert found, labelled.query
+        if labelled.query != "BJT":  # BJT is a partial failure, not a total one
+            assert labelled.relevant & set(found), labelled.query
+
+    # The "must retrieve nothing" contract survives both the model change and
+    # the morphology-tolerant gate.
+    for nonsense in ("zzz no existe", "noexistenadaquienadie"):
+        assert ranked(hybrid, nonsense) == [], nonsense
+        assert ranked(lexical, nonsense) == [], nonsense

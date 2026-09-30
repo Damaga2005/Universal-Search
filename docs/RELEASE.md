@@ -91,14 +91,35 @@ python -m PyInstaller packaging/universal-search.spec --noconfirm
 
 | Trabajo | Plataforma | Puerta | Qué hace |
 |---|---|---|---|
-| `quality` | windows-latest | sí | pyflakes, suite completa, migraciones, fiabilidad, calidad de búsqueda, seguridad |
+| `quality` | windows-latest | sí | pyflakes, suite completa, migraciones, fiabilidad, calidad de búsqueda, seguridad, observabilidad/recuperación, shell, contrato de release |
 | `core-portability` | ubuntu-latest | **no** (sondeo) | suite sin los tests de GUI/atajo/instalador, para medir la independencia del núcleo |
-| `package` | windows-latest | sí (tras `quality`) | build con PyInstaller, prueba de humo del CLI empaquetado, hashes, artefactos |
+| `package` | windows-latest | sí (tras `quality`) | build con PyInstaller, prueba de humo del CLI **y del ejecutable GUI**, hashes y paquete de soporte |
 
 El trabajo de Ubuntu es deliberadamente no bloqueante: el núcleo es
 independiente de la plataforma (fase 016), pero GUI, registro, atajo global
 e instalador son de Windows por diseño, y un trabajo rojo que nadie puede
 arreglar en ese sistema informa peor que una señal honesta.
+
+Desde la fase 029 el workflow está verificado por `tests/test_ci_gates.py`:
+si alguien borra una puerta, añade `continue-on-error` a un trabajo que
+bloquea, o declara una tercera dependencia de runtime, la suite falla antes
+de que llegue a GitHub. Los hashes y el paquete de soporte se adjuntan con
+`if: always()`, así que un humo fallido no se lleva por delante la evidencia.
+
+## 6 bis. Autodiagnóstico y paquete de soporte (fase 028)
+
+Son la primera parada cuando algo va mal, antes de pedirle a nadie que pegue
+contenido de su disco:
+
+```bash
+universal-search diagnose self-test          # 7 áreas, salida 0/1/2
+universal-search diagnose export --out bundle.json
+universal-search diagnose recover orphan-derived
+```
+
+`diagnose export` escribe un JSON que **declara** que no contiene contenido de
+documentos, ni texto de consultas, ni credenciales. Adjuntarlo a un reporte es
+seguro por construcción, no por confianza.
 
 ## 7. Lista de release (reproducible)
 
@@ -110,16 +131,24 @@ arreglar en ese sistema informa peor que una señal honesta.
 5. [ ] `python -m benchmarks --profile 1000` y anotar los números.
 6. [ ] `python -m evaluation` y confirmar que el baseline sigue igual
       (si cambia, el cambio se justifica en el informe de la fase).
+6 bis. [ ] `python -m pytest tests/test_semantic_search.py tests/test_evaluation.py`
+      y comprobar que `evaluation/semantic_baseline.json` describe el modelo
+      que se envía (`NGRAM_VERSION`) y que las consultas "debe recuperar
+      nada" siguen vacías.
 7. [ ] `python -m PyInstaller packaging/universal-search.spec --noconfirm`.
-8. [ ] Prueba de humo del empaquetado (abajo), con los dos ejecutables.
+8. [ ] Prueba de humo del empaquetado (abajo), con los dos ejecutables:
+      el CLI y la ventana, que debe abrir y cerrarse.
+8 bis. [ ] `universal-search diagnose self-test` y `diagnose export` sobre el
+      ejecutable empaquetado.
 9. [ ] `powershell -File packaging/make-start-menu.ps1` y
       `explorer-search.ps1` (opcionales, por usuario).
 10. [ ] Instalar en limpio con `install.ps1`; comprobar acceso directo,
-       menú Inicio, indexar una carpeta, buscar, cerrar, reabrir, y que el
-       índice sigue ahí.
+       menú Inicio, verbo Explorer, indexar una carpeta, buscar, cerrar,
+       reabrir, y que el índice sigue ahí.
 11. [ ] Probar la actualización: instalar la versión anterior, indexar,
        instalar esta, y comprobar que los documentos siguen (migraciones).
-12. [ ] Probar el desinstalado y que los datos sobreviven sin flag.
+12. [ ] Probar el desinstalado: el verbo Explorer desaparece y los datos
+       sobreviven sin flag.
 13. [ ] `Get-FileHash` de los ejecutables; publicarlos con las notas.
 14. [ ] Notas de versión: cambios, migraciones, problemas conocidos,
        hashes.

@@ -14,6 +14,12 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Superseded runs are cancelled: a stale red build is noise, and the newest
+# commit is the only one that can gate a release.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -53,6 +59,18 @@ jobs:
 
       - name: Security regressions (phase 018)
         run: python -m pytest tests/test_privacy.py -q
+
+      # Phase 029: the per-phase suites stay named in the log. A regression in
+      # one layer should identify itself instead of hiding inside a 900-test
+      # run, and every gate below is also asserted by tests/test_ci_gates.py.
+      - name: Observability and recovery regressions (phase 028)
+        run: python -m pytest tests/test_observability.py tests/test_recovery.py -q
+
+      - name: Shell integration regressions (phase 027)
+        run: python -m pytest tests/test_windows_shell.py -q
+
+      - name: Release contract (CI gates, version pinning, dependency budget)
+        run: python -m pytest tests/test_ci_gates.py -q
 
   core-portability:
     name: platform-independent core (probe, non-gating)
@@ -101,7 +119,9 @@ jobs:
         shell: pwsh
         run: |
           $exe = "dist\UniversalSearch\universal-search.exe"
+          $gui = "dist\UniversalSearch\UniversalSearch.exe"
           if (-not (Test-Path $exe)) { throw "CLI executable missing" }
+          if (-not (Test-Path $gui)) { throw "GUI executable missing" }
           & $exe --version
           $tmp = Join-Path $env:RUNNER_TEMP "smoke"
           New-Item -ItemType Directory -Force -Path "$tmp\docs" | Out-Null
@@ -109,8 +129,17 @@ jobs:
           & $exe index "$tmp\docs" --database "$tmp\index.db"
           & $exe search "bjt" --database "$tmp\index.db"
           & $exe diagnose health --database "$tmp\index.db"
+          & $exe diagnose self-test
+          & $exe diagnose export --output "$tmp\support.json"
+          & $exe diagnose recover orphan-derived
           & $exe privacy show --database "$tmp\index.db"
           & $exe extensions
+          # The GUI executable must at least start and be asked to quit by the
+          # runner; a windowed build that dies on import ships a broken app.
+          $process = Start-Process -FilePath $gui -PassThru
+          Start-Sleep -Seconds 5
+          if ($process.HasExited) { throw "GUI executable exited immediately" }
+          Stop-Process -Id $process.Id -Force
 
       - name: Record artifact hashes
         shell: pwsh
@@ -120,10 +149,22 @@ jobs:
             Out-File -Encoding ascii artifacts.sha256
           Get-Content artifacts.sha256
 
+      # The support bundle is content-free by construction (phase 028), so it
+      # is safe to attach to a build: a failure report that a maintainer can
+      # read without asking the reporter to paste anything.
+      - name: Attach the sanitized support bundle
+        if: always()
+        shell: pwsh
+        run: |
+          $bundle = Join-Path $env:RUNNER_TEMP "smoke\support.json"
+          if (Test-Path $bundle) { Copy-Item $bundle artifacts-support.json }
+
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: universal-search-windows
           path: |
             dist/UniversalSearch/*.exe
             artifacts.sha256
+            artifacts-support.json
           retention-days: 30

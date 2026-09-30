@@ -151,6 +151,13 @@ lives in the UI.
   refuses to disown a live worker, requires explicit confirmation for
   destructive cases, and never deletes a source file. Both are wired into
   `diagnose` in the CLI and into the control center as typed `ActionResult`s.
+- **Release contract** (phase 029): `tests/test_ci_gates.py` reads
+  `.github/workflows/ci.yml` as text (PyYAML is deliberately not a
+  dependency) and asserts what actually breaks in practice — a deleted gate,
+  `continue-on-error` on a job that blocks, a missing runner, or a new
+  third-party runtime dependency. `pyproject.toml` is the single source for
+  the dependency budget: `pypdf` and `watchdog` at runtime, `pyinstaller`
+  only in the optional `build` extra.
 - **Presentation**:
   - `cli.py` — `index | search | gui | tray | onedrive | context | usage
     | hotkey | recent | indexer | intelligence | diagnose | privacy …`

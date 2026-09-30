@@ -1,4 +1,4 @@
-# Roadmap
+﻿# Roadmap
 
 ## v0.1
 - [x] Project skeleton
@@ -56,17 +56,16 @@
 - [x] Local semantic search without cloud AI (026)
 - [x] Windows shell integration (027)
 - [x] Observability & recovery (028)
-- [ ] Release engineering & CI (029)
+- [x] Release engineering & CI (029)
 - [ ] Universal Search v2 quality gate (030)
 
 ---
 
-Phases 001–028 are implemented and documented (per-phase reports in
-`docs/development/`). The phase-028 quality gate measured **874 passing tests,
-3 skipped**, clean pyflakes, a measured lexical baseline (MRR 0.833, exact-match
-correctness 1.0) and an optional, dependency-free, fallback-only local
-semantic layer that cleared a priori evidence gates (hybrid MRR 0.944).
-Observability is bounded, redacted and local: JSON Lines events, a seven-area
-self-test, a support bundle that declares what it does not contain, and four
-named recovery cases that never touch source files. Still open: the planned
-phases from 029 through 030.
+Phases 001–029 are implemented and documented (per-phase reports in
+`docs/development/`). The phase-029 quality gate measured **891 passing tests,
+3 skipped**, clean pyflakes, a green packaged smoke over both real
+executables, and a re-measured semantic layer (hybrid failure R@5 0.762,
+exact-match correctness 1.0, no top-1 regression, nonsense queries still
+empty) after the packaged smoke exposed and fixed a zero-idf degeneracy and an
+exact-token precision gate. The CI gates are themselves asserted by
+`tests/test_ci_gates.py`. Still open: phase 030, the v2 quality gate.

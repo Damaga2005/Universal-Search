@@ -1,4 +1,4 @@
-# Universal Search — Roadmap & Documentation
+﻿# Universal Search — Roadmap & Documentation
 
 Índice de documentación con el estado real del roadmap, fase a fase.
 El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
@@ -35,6 +35,7 @@ El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
 | 026 | Búsqueda semántica local con evidencia primero (capa opcional sin dependencias) | ✅ Completada | [026-local-semantic-search.md](development/026-local-semantic-search.md) | [informe](development/026-local-semantic-search-report.md) |
 | 027 | Integración con el shell de Windows | ✅ Completada | [027-windows-shell-integration.md](development/027-windows-shell-integration.md) | [informe](development/027-windows-shell-integration-report.md) |
 | 028 | Observabilidad y recuperación local | ✅ Completada | [028-observability-and-recovery.md](development/028-observability-and-recovery.md) | [informe](development/028-observability-and-recovery-report.md) |
+| 029 | Release engineering y CI (puertas verificadas) | ✅ Completada | [029-release-engineering-and-ci.md](development/029-release-engineering-and-ci.md) | [informe](development/029-release-engineering-and-ci-report.md) |
 
 Verificado en la fase 010: **208 tests en verde**
 (`.venv\Scripts\python -m pytest`), E2E completo de indexador, CLI, GUI e
@@ -42,12 +43,13 @@ instalador. Posteriormente, pasada de auditoría + optimización con
 perfilado: indexación ×16 (2000 docs 45,3s → 2,8s) y consulta media
 48,6 → 34,4 ms —
 [informe](development/optimization-report.md). La verificación más reciente,
-fase 028, deja **874 tests passed y 3 skipped**, pyflakes limpio, una capa
+fase 029, deja **891 tests passed y 3 skipped**, pyflakes limpio, una capa
 semántica local opcional medida, protección de privacidad para sus vectores,
 comandos open/reveal, DPI por monitor, el verbo Explorer per-user reversible,
-autodiagnóstico, paquete de soporte declarado y recuperación con casos
-nombrados; detalles y límites en el
-[informe de la fase 028](development/028-observability-and-recovery-report.md).
+autodiagnóstico, paquete de soporte declarado, recuperación con casos
+nombrados y puertas de CI verificadas por test; el humo del paquete detectó y
+midió el arreglo del idf semántico; detalles y límites en el
+[informe de la fase 029](development/029-release-engineering-and-ci-report.md).
 
 ## Cómo ejecutar
 

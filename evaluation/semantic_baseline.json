@@ -8,8 +8,15 @@
       "lexical_failure_recall5": 0.179,
       "preexisting_top1_regressions": 0
     },
+    "model": {
+      "ngram_version": 2,
+      "idf": "log((n + 1) / (df + 1)) + 1",
+      "precision_gate": "shared content word, exact or prefix relation with both words >= 5 characters",
+      "revised_in": "029",
+      "revision_reason": "The phase-029 packaged smoke found that version 1 disabled the layer on a one-document index (log(n/df) is 0 for every n-gram present in all documents) and that the exact-token precision gate rejected the morphological variants the layer exists to catch. Re-measured after the fix: every recorded metric is unchanged, both nonsense queries still return nothing, and exact-match correctness is still 1.0."
+    },
     "outcome": "SHIP",
-    "rationale": "The lexical engine retrieves nothing for the synonym, paraphrase and morphological queries (mean failure R@5 0.179). A bounded semantic boost on a non-empty pool was evaluated and rejected (it flipped the exact-token query CMOS and gained nothing on the failure subset). The fallback-only design recovers the failure queries (mean failure R@5 0.762) with exact-match correctness 1.0 and no top-1 regression. The shared-content-word precision gate rejects nonsense queries that a fixed cosine threshold cannot (incidental sub-word overlap such as the nad/ada of nada).",
+    "rationale": "The lexical engine retrieves nothing for the synonym, paraphrase and morphological queries (mean failure R@5 0.179). A bounded semantic boost on a non-empty pool was evaluated and rejected (it flipped the exact-token query CMOS and gained nothing on the failure subset). The fallback-only design recovers the failure queries (mean failure R@5 0.762) with exact-match correctness 1.0 and no top-1 regression. The shared-content-word precision gate rejects nonsense queries that a fixed cosine threshold cannot (incidental sub-word overlap such as the nad/ada of nada), while tolerating morphological variants of a real word.",
     "thresholds": {
       "T1_min_failure_recall5": 0.5,
       "T2_exact_match_correctness": 1.0,

@@ -180,6 +180,46 @@ def test_hybrid_fallback_respects_must_retrieve_nothing(indexed_env):
     assert hybrid.search("zzz no existe", limit=5) == []
 
 
+def test_precision_gate_accepts_morphological_variants(tmp_path: Path):
+    """The gate must not block the very case the layer exists to catch.
+
+    Found by the phase-029 packaged smoke: with a single document in the
+    corpus, "recetas" had no lexical match and the exact-token gate rejected
+    "receta" as a shared word, so the morphological promise was silently
+    broken.
+    """
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    (tree / "receta.md").write_text(
+        "receta de paella valenciana con arroz bomba", encoding="utf-8"
+    )
+    database = SearchDatabase(tmp_path / "index.db")
+    Indexer(database).index_root(tree)
+    engine = SearchEngine(database)
+    semantic = SemanticIndex(database)
+    semantic.rebuild()
+    hybrid = HybridSearchEngine(engine, semantic)
+
+    assert engine.search("recetas", limit=5) == []  # lexical really misses
+    results = hybrid.search("recetas", limit=5)
+
+    assert [r.path.name for r in results] == ["receta.md"]
+    assert results[0].explain["semantic_similarity"] > 0
+
+
+def test_precision_gate_still_rejects_short_fragments():
+    """Prefix tolerance is bounded: a 3-4 character fragment proves nothing."""
+    from universal_search.semantic.index import _shares_word
+
+    assert _shares_word({"receta"}, {"recetas", "paella"}) is True
+    assert _shares_word({"informes"}, {"informe"}) is True
+    assert _shares_word({"recetas"}, {"recetar"}) is False
+    assert _shares_word({"nad"}, {"nada"}) is False
+    assert _shares_word({"noexistenadaquienadie"}, {"nada"}) is False
+    assert _shares_word({"zzz"}, {"zzz-almacen"}) is False
+    assert _shares_word(set(), {"receta"}) is False
+
+
 def test_hybrid_without_provider_is_lexical_only(indexed_env):
     _tree, _database, engine, _semantic = indexed_env
     hybrid = HybridSearchEngine(engine, None)

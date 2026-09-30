@@ -32,7 +32,10 @@ from collections import Counter
 # model contract; bump NGRAM_PREPROCESSING_VERSION to change how text is
 # normalized before n-gramming. Both are stored per row so a rebuild can
 # detect incompatibility.
-NGRAM_VERSION = 1
+# 2: smoothed idf (phase 029). Version 1 used log(n/df), which is zero for
+# every n-gram present in all documents and disabled the layer entirely on a
+# one-document index.
+NGRAM_VERSION = 2
 NGRAM_PREPROCESSING_VERSION = 1
 
 # Character n-gram size. 3-grams are the shortest that still discriminate
@@ -145,7 +148,19 @@ class SemanticProvider:
 
     @staticmethod
     def idf(n_docs: int, df: int) -> float:
-        """Inverse document frequency, with the usual log damping."""
+        """Smoothed inverse document frequency, always strictly positive.
+
+        The textbook ``log(n / df)`` is exactly zero for an n-gram that
+        appears in *every* document, which silently switched the whole
+        semantic layer off for a one-document index (a real state right
+        after a fresh install) and made a morphological query retrieve
+        nothing. The smoothed form is monotone in ``df`` — it ranks
+        n-grams exactly as before — but never collapses to zero.
+
+        Bumping ``NGRAM_VERSION`` is mandatory when this changes: derived
+        rows store the version, so incompatible vectors are rebuilt
+        instead of being reinterpreted.
+        """
         if n_docs <= 0 or df <= 0:
             return 0.0
-        return math.log(n_docs / df)
+        return math.log((n_docs + 1) / (df + 1)) + 1.0

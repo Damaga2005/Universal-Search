@@ -37,11 +37,39 @@ from universal_search.semantic.ngram import (
 # this the overlap is incidental (see module docstring).
 MIN_SIMILARITY = 0.12
 
+# A query word and a document word also count as shared when one is a prefix
+# of the other and both are at least this long ("receta"/"recetas",
+# "informe"/"informes"). The layer exists to catch morphological variants, and
+# an exact-token gate silently blocked exactly that case. The length floor is
+# what keeps the gate honest: a 3-4 character fragment ("nad" of "nada") is
+# exactly the incidental overlap the gate exists to reject.
+MIN_STEM_CHARS = 5
+
 _DIRTY_KEY = "dirty"
 _COUNT_KEY = "count"
 _N_KEY = "n"
 _VERSION_KEY = "version"
 _PREPROCESSING_KEY = "preprocessing_version"
+
+
+def _shares_word(query_words: set[str], doc_words: set[str]) -> bool:
+    """True when a query word and a document word are the same variant.
+
+    Exact equality, or a prefix relation between two words of at least
+    ``MIN_STEM_CHARS`` characters. Longer words only: a short fragment is not
+    evidence of anything.
+    """
+    if query_words & doc_words:
+        return True
+    for word in query_words:
+        if len(word) < MIN_STEM_CHARS:
+            continue
+        for other in doc_words:
+            if len(other) >= MIN_STEM_CHARS and (
+                word.startswith(other) or other.startswith(word)
+            ):
+                return True
+    return False
 
 
 class SemanticIndex:
@@ -323,7 +351,9 @@ class SemanticIndex:
                 )
         scored: list[tuple[str, float]] = []
         for doc_id, dot in dots.items():
-            if query_words and not (doc_words.get(doc_id, set()) & query_words):
+            if query_words and not _shares_word(
+                query_words, doc_words.get(doc_id, set())
+            ):
                 continue
             norm = norms.get(doc_id, 0.0)
             if norm <= 0.0:

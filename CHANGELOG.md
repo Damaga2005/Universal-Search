@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to Universal Search. The format follows
 [Keep a Changelog](https://keepachangelog.com/); the project version is
@@ -6,6 +6,37 @@ All notable changes to Universal Search. The format follows
 PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
+
+### Phase 029 — Release engineering and CI
+- Made the release gates a verified contract: `tests/test_ci_gates.py` fails
+  when a gating job tolerates failure, when a mandatory gate disappears from
+  the workflow, when the workflow is not read-only/serialized, or when a third
+  runtime dependency appears. Runtime dependencies stay exactly `pypdf` and
+  `watchdog`; the `build` extra is optional and disjoint.
+- Strengthened the packaged gate: the smoke now checks **both** executables,
+  runs `diagnose self-test`, `diagnose export` and
+  `diagnose recover orphan-derived`, asserts that a destructive recovery is
+  refused without `--yes`, and starts the windowed GUI to catch a build that
+  dies on import. Hashes and the sanitized support bundle upload with
+  `if: always()`.
+- Added named per-phase steps to the `quality` job so a regression names
+  itself instead of hiding inside a single large run.
+- **Fixed two real semantic-layer defects found by that smoke** (test-first,
+  `NGRAM_VERSION` 1 -> 2 so incompatible vectors are rebuilt):
+  - smoothed idf (`log((n+1)/(df+1)) + 1`). The previous `log(n/df)` is
+    exactly zero for every n-gram present in all documents, which silently
+    disabled the whole layer on a one-document index.
+  - the precision gate now accepts a morphological variant (`receta` /
+    `recetas`) when both words are at least five characters, instead of
+    requiring exact token equality. Short fragments still count for nothing,
+    so the "must retrieve nothing" contract is unchanged.
+  - Re-measured on the labelled corpus: hybrid failure R@5 0.762, exact-match
+    correctness 1.0, zero top-1 regressions, both nonsense queries still
+    empty — no metric moved. `evaluation/semantic_baseline.json` now records
+    the model version, the idf formula and the gate rule, and a test fails if
+    the committed record describes a model that is no longer shipped.
+- Phase 029 quality gate: **891 passed, 3 skipped**, clean pyflakes, and a
+  green packaged smoke over the real `.exe` files.
 
 ### Phase 028 — Local observability and recovery
 - Added `EventRecorder`: bounded JSON Lines with a fixed schema
