@@ -62,6 +62,15 @@ def main() -> None:
         help="keep the temporary corpus instead of deleting it",
     )
     parser.add_argument(
+        "--semantic-baseline",
+        type=Path,
+        default=None,
+        help=(
+            "phase 026: also write the full measurement record (corpus hash, "
+            "metrics, exact-match correctness, latency, failures) to this JSON"
+        ),
+    )
+    parser.add_argument(
         "--flip",
         nargs=2,
         metavar=("WEIGHT", "QUERY"),
@@ -104,6 +113,7 @@ def main() -> None:
         json_out=args.json,
         keep=args.keep,
         write_fixture=args.write_fixture,
+        semantic_baseline=args.semantic_baseline,
     )
 
 

@@ -298,6 +298,41 @@ def test_forget_removes_every_provider_copy_of_a_path(tmp_path: Path):
         ).fetchone()[0] == 0
 
 
+def test_forget_removes_semantic_vectors_and_inventory_declares_them(
+    indexed: SearchDatabase, tmp_path: Path
+):
+    """Semantic vectors are derived personal data and must be deletable."""
+    from universal_search.privacy import INVENTORY
+    from universal_search.semantic import SemanticIndex
+
+    semantic = SemanticIndex(indexed)
+    semantic.rebuild()
+    target = tmp_path / "tree" / "privado" / "secreto.txt"
+    with indexed.connect() as connection:
+        target_id = connection.execute(
+            "SELECT id FROM documents WHERE path = ?", (str(target),)
+        ).fetchone()["id"]
+    assert connection_semantic_count(indexed, target_id)
+
+    forget(indexed, target)
+
+    assert not connection_semantic_count(indexed, target_id)
+    assert any(item.key == "semantic_index" for item in INVENTORY)
+
+
+def connection_semantic_count(database: SearchDatabase, document_id: str) -> int:
+    with database.connect() as connection:
+        vectors = connection.execute(
+            "SELECT COUNT(*) FROM document_semantic WHERE document_id = ?",
+            (document_id,),
+        ).fetchone()[0]
+        terms = connection.execute(
+            "SELECT COUNT(*) FROM document_semantic_terms WHERE document_id = ?",
+            (document_id,),
+        ).fetchone()[0]
+    return int(vectors) + int(terms)
+
+
 def test_full_deletion_and_rebuild_keeps_the_application_usable(
     indexed: SearchDatabase, tmp_path: Path
 ):

@@ -142,6 +142,39 @@ CREATE TABLE IF NOT EXISTS document_graph_metadata (
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Phase 026 derived semantic index. Fallback-only: it is read only when
+-- the lexical engine returns nothing, so exact matches, phrases, filters
+-- and query operators stay authoritative. Local, versioned, rebuildable and
+-- removable like the other derived data — search never requires it.
+CREATE TABLE IF NOT EXISTS document_semantic (
+    document_id TEXT PRIMARY KEY,
+    version INTEGER NOT NULL,
+    preprocessing_version INTEGER NOT NULL,
+    norm REAL NOT NULL,
+    words TEXT NOT NULL DEFAULT '[]',
+    content_hash TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS document_semantic_terms (
+    ngram TEXT NOT NULL,
+    document_id TEXT NOT NULL,
+    weight REAL NOT NULL,
+    idf REAL NOT NULL,
+    version INTEGER NOT NULL,
+    preprocessing_version INTEGER NOT NULL,
+    PRIMARY KEY(ngram, document_id)
+);
+
+CREATE INDEX IF NOT EXISTS document_semantic_terms_ngram
+    ON document_semantic_terms(ngram, document_id);
+
+CREATE TABLE IF NOT EXISTS document_semantic_metadata (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS document_graph_edges_source
     ON document_graph_edges(source_document_id, weight DESC, target_document_id);
 CREATE INDEX IF NOT EXISTS document_graph_edges_target
@@ -243,7 +276,7 @@ def _migrate_documents_uniqueness(connection: sqlite3.Connection) -> None:
 # (tests/test_release.py enforces the stamp on fresh and legacy databases).
 # Adding an object to SCHEMA also upgrades existing databases: the
 # schema-present gate sees a missing object and re-runs the idempotent DDL.
-SCHEMA_VERSION = 8  # + extraction diagnostics in document_intelligence (025)
+SCHEMA_VERSION = 9  # + derived semantic index (026)
 
 # Every object SCHEMA creates. When all of them already exist the idempotent
 # DDL is skipped: one indexed sqlite_master lookup replaces re-parsing the
@@ -266,6 +299,10 @@ SCHEMA_OBJECTS = (
     "document_graph_terms_term",
     "document_graph_terms_document",
     "document_graph_nodes_generation",
+    "document_semantic",
+    "document_semantic_terms",
+    "document_semantic_terms_ngram",
+    "document_semantic_metadata",
     "schema_migrations",
 )
 

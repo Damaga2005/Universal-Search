@@ -80,7 +80,15 @@ class SearchService:
         self.database = SearchDatabase(
             Path(database_path) if database_path else self.paths.database
         )
-        self.engine = SearchEngine(self.database)
+        # Phase 026: the local semantic layer is fallback-only, so the
+        # lexical engine stays authoritative and exact matches, phrases,
+        # filters and operators are unchanged. With the derived tables
+        # absent the hybrid engine is exactly the lexical engine.
+        from universal_search.semantic import HybridSearchEngine, SemanticIndex
+
+        self.engine = HybridSearchEngine(
+            SearchEngine(self.database), SemanticIndex(self.database)
+        )
         self.config = AppConfig.load(self.paths)
         # Last query-language error (spec 012): the window reads this to show
         # understandable feedback instead of a traceback.

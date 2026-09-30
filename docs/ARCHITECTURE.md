@@ -99,6 +99,19 @@ lives in the UI.
   only graph lookup; `SearchEngine` and ranking never read these tables.
   Derived data only: **search never reads it**, deleting it costs nothing, and
   document similarity is computed without the ranking formula.
+- **Semantic** (`universal_search/semantic/`, spec 026): an optional,
+  dependency-free, fallback-only local semantic layer. `ngram.py` is a
+  versioned character 3-gram TF-IDF embedder (the "model" — no runtime
+  dependency, no network, no license). `index.py` is the versioned,
+  rebuildable, removable vector store (schema v9: an inverted n-gram index
+  plus per-document norms and content words). `engine.py` is the hybrid
+  wrapper: the lexical engine always runs first and its results are
+  returned unchanged; the semantic layer is consulted **only** when lexical
+  returns nothing, and a shared-content-word precision gate rejects
+  nonsense queries. The indexer marks the index dirty after a pass and it
+  rebuilds lazily. With the layer disabled or removed, search is exactly
+  the lexical engine. Measured decision and evidence gates: see
+  `docs/development/026-local-semantic-search-report.md`.
 - **Diagnostics** (`universal_search/diagnostics/`, specs 015 and 023): read-only
   by default — `stats.py` (`collect`: counts, sizes, schema, worker state;
   `collect_sources`/`collect_derived`/`collect_storage` for the control

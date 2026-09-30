@@ -545,8 +545,26 @@ class Indexer:
             db_writes = connection.total_changes - writes_before
         if graph_touched:
             self._invalidate_graph(graph_touched)
+        if stats.created or stats.updated or stats.deleted:
+            self._mark_semantic_dirty()
         record_index(time.perf_counter() - started, stats.as_dict(), db_writes)
         return stats
+
+    def _mark_semantic_dirty(self) -> None:
+        """Mark the derived semantic index stale after a pass (phase 026).
+
+        The semantic index is fallback-only derived data, so a pass that
+        changed documents only needs to flag it — the index rebuilds lazily
+        on the next fallback search. A failure here must never fail the
+        indexing pass, exactly like graph invalidation.
+        """
+        try:
+            from universal_search.semantic.index import SemanticIndex
+
+            SemanticIndex(self.database).mark_dirty()
+        except Exception:
+            log.exception("semantic index marked dirty deferred to rebuild")
+            return
 
     def index_sources(
         self,

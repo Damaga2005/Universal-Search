@@ -7,6 +7,35 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 026 — Evidence-first local semantic search
+- Extended the fixed evaluation corpus (20 → 27 documents, 13 → 18 labelled
+  queries) with the failure classes a semantic layer must fix: a BJT
+  synonym that never says "BJT", a voltaje/tension synonym pair, an accented
+  variant, a stopword-heavy paraphrase, a malformed binary `.md`, and two
+  unrelated-domain distractors.
+- Added a deterministic corpus hash, per-query latency, exact-match
+  correctness and a failure inventory to the evaluation runner, and a
+  `--semantic-baseline` record (`evaluation/semantic_baseline.json`).
+- Measured the lexical baseline: MRR 0.833, exact-match correctness 1.0,
+  with three total failures (synonym, paraphrase, morphological) and one
+  partial (the BJT synonym document is unreachable).
+- Shipped an optional, dependency-free, fallback-only local semantic layer
+  (`src/universal_search/semantic/`): a versioned character 3-gram TF-IDF
+  embedder, a versioned/rebuildable/removable vector index (schema v9) and
+  a hybrid engine that consults the layer only when the lexical engine
+  returns nothing. A shared-content-word precision gate rejects nonsense
+  queries that a fixed cosine threshold cannot.
+- The layer cleared a priori evidence gates (material gain, exact-match
+  authority, no top-1 regression, no new dependency): hybrid MRR 0.833 →
+  0.944, R@5 0.817 → 0.947, exact-match correctness 1.0. A bounded semantic
+  boost on a non-empty pool was measured and rejected (it flipped the
+  exact-token query "CMOS" and gained nothing on the failure subset).
+- Exact filenames, phrases, filters and query operators stay authoritative;
+  with the layer disabled or removed, search is exactly the lexical engine.
+  No cloud, network, telemetry, external API or runtime dependency.
+- Phase 026 quality gate: **852 passed, 3 skipped**, clean pyflakes; exact
+  commands, measured behavior and limitations are in the phase report.
+
 ### Phase 025 — Content extraction v2
 - Added a versioned extraction contract: `ExtractionResult` now carries
   `contract_version`, a machine-readable `status` (`ok`, `truncated`,

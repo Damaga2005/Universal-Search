@@ -23,7 +23,16 @@ from evaluation.metrics import (
     reciprocal_rank,
     score_query,
 )
-from evaluation.runner import K_VALUES, measure
+from evaluation.runner import (
+    K_VALUES,
+    build_semantic_baseline,
+    corpus_hash,
+    exact_match_summary,
+    exact_targets,
+    failure_inventory,
+    measure,
+    query_text_part,
+)
 
 BASELINE = Path(__file__).resolve().parents[1] / "evaluation" / "baseline.json"
 
@@ -157,12 +166,21 @@ def report(corpus_env):
     )
 
 
-def test_every_labelled_query_reports_a_relevant_document_first(report):
-    # MRR of 1.0 means the first result of every non-empty query is
-    # relevant; this is the headline number the phase is judged on.
-    assert report.mrr() == pytest.approx(1.0)
-    assert report.mean_precision(1) == pytest.approx(1.0)
-    assert report.mean_recall(3) >= 0.90
+def test_every_non_failure_query_reports_a_relevant_document_first(report):
+    # Phase 013's headline was MRR 1.0. Phase 026 extends the corpus with
+    # the failure classes a semantic layer must fix, so the lexical MRR
+    # drops to a measured 0.833 — and the queries that fail are EXACTLY
+    # the labelled synonym/paraphrase/morphological ones, not accidents.
+    assert report.mrr() == pytest.approx(0.8333, abs=1e-3)
+    # The queries that retrieve NOTHING are exactly the total failures.
+    failed = {
+        score.query for score in report.scores if score.reciprocal_rank == 0.0
+    }
+    assert failed == {"voltaje base emisor", "como se determina el punto de trabajo", "receta paella"}
+    # Every query that is NOT a total failure still answers first.
+    clean = [score for score in report.scores if score.reciprocal_rank > 0.0]
+    assert clean
+    assert all(score.reciprocal_rank == 1.0 for score in clean)
 
 
 def test_ranking_matches_the_committed_baseline(report):
@@ -321,3 +339,141 @@ def test_filename_exact_is_the_tightest_boundary_in_the_system(corpus_env):
     # Under 1.3x its current value the two exact-name documents swap: this
     # is the number to know before touching it.
     assert result["headroom_ratio"] < 1.5
+
+
+# -- phase 026: the extended corpus and the lexical baseline ---------------
+
+PHASE026_DOCUMENT_IDS = {
+    "transistor-bipolar", "tension-base-emisor", "polarizacion-acentuada",
+    "calculo-punto-operacion", "malformed", "futbol", "viajes",
+}
+
+PHASE026_QUERIES = {
+    "voltaje base emisor", "como se determina el punto de trabajo",
+    "punto Q", "archivo_roto", "receta paella",
+}
+
+
+def test_phase026_corpus_extends_the_failure_classes():
+    ids = {document.id for document in corpus_module.DOCUMENTS}
+    assert PHASE026_DOCUMENT_IDS <= ids
+    queries = {labelled.query for labelled in corpus_module.LABELLED_QUERIES}
+    assert PHASE026_QUERIES <= queries
+    # The synonym and accent documents joined existing relevant sets.
+    by_query = {labelled.query: labelled for labelled in corpus_module.LABELLED_QUERIES}
+    assert "transistor-bipolar" in by_query["BJT"].relevant
+    assert "polarizacion-acentuada" in by_query["polarizacion"].relevant
+    # Every new failure query is tagged with its class.
+    assert by_query["voltaje base emisor"].failure_class == "synonym"
+    assert by_query["como se determina el punto de trabajo"].failure_class == "paraphrase"
+    assert by_query["receta paella"].failure_class == "morphological"
+    assert by_query["BJT"].failure_class == "synonym"
+
+
+def test_phase026_lexical_engine_fails_the_labelled_failure_queries(report):
+    """The measured synonym/paraphrase/morphological failures, as evidence.
+
+    These are the concrete failures a semantic layer would have to fix:
+    the lexical engine retrieves NOTHING for the synonym, paraphrase and
+    morphological queries, and misses the BJT synonym document.
+    """
+    scores = report.by_query()
+    # Total failures: nothing relevant retrieved.
+    for query in (
+        "voltaje base emisor", "como se determina el punto de trabajo",
+        "receta paella",
+    ):
+        assert scores[query].ranked == (), query
+        assert scores[query].reciprocal_rank == 0.0, query
+    # Partial failure: the BJT synonym document is never retrieved, so the
+    # query tops out at 6 of 7 relevant (5 of 7 within the first five).
+    bjt = scores["BJT"]
+    assert "transistor-bipolar" not in bjt.ranked
+    assert bjt.recall[5] == pytest.approx(5 / 7)
+    assert list(bjt.missing()) == ["transistor-bipolar"]
+
+
+def test_phase026_malformed_document_is_indexed_and_findable_by_name(report):
+    """A binary-garbage .md must not break indexing and must stay findable."""
+    scores = report.by_query()
+    assert scores["archivo_roto"].ranked[0] == "malformed"
+    # The garbage body produces no false matches for unrelated queries.
+    assert "malformed" not in scores["BJT"].ranked
+
+
+def test_phase026_unrelated_documents_never_surface_for_technical_queries(report):
+    scores = report.by_query()
+    for query in ("BJT", "CMOS", "MUX", '"ebers moll"', "polarizacion"):
+        retrieved = set(scores[query].ranked)
+        assert not (retrieved & {"futbol", "viajes", "paella"}), query
+
+
+# -- phase 026: the measurement instrument ------------------------------------
+
+def test_corpus_hash_is_deterministic(tmp_path: Path):
+    first_root = tmp_path / "one"
+    second_root = tmp_path / "two"
+    corpus_module.build(first_root)
+    corpus_module.build(second_root)
+    assert corpus_hash(first_root) == corpus_hash(second_root)
+    # A one-byte change in any document changes the hash.
+    victim = first_root / "personal" / "recetas" / "paella.md"
+    victim.write_text(victim.read_text(encoding="utf-8") + " x", encoding="utf-8")
+    assert corpus_hash(first_root) != corpus_hash(second_root)
+
+
+def test_query_text_part_strips_filters():
+    assert query_text_part("bjt type:txt") == "bjt"
+    assert query_text_part("type:pdf") == ""
+    assert query_text_part('"ebers moll"') == "ebers moll"
+    assert query_text_part("punto Q") == "punto q"
+
+
+def test_exact_targets_find_name_and_content_matches():
+    documents = corpus_module.DOCUMENTS
+    # "informe" is a filename (informe.txt) and a content word.
+    assert "informe-etiqueta" in exact_targets("informe", documents)
+    assert "informe" in exact_targets("informe", documents)
+    # "punto Q" is a content phrase.
+    assert "bjt-modelo" in exact_targets("punto Q", documents)
+    # "archivo_roto" is a filename.
+    assert exact_targets("archivo_roto", documents) == frozenset({"malformed"})
+    # A filter-only query has no text and so no exact targets.
+    assert exact_targets("type:pdf", documents) == frozenset()
+
+
+def test_exact_match_correctness_is_perfect_for_the_lexical_engine(report):
+    correctness, rows = exact_match_summary(report, corpus_module.DOCUMENTS)
+    assert correctness == 1.0
+    assert rows  # there is at least one exact query
+    assert all(row["correct"] for row in rows)
+
+
+def test_failure_inventory_lists_the_measured_failures(report):
+    rows = failure_inventory(report, corpus_module.LABELLED_QUERIES)
+    by_query = {row["query"]: row for row in rows}
+    # Three total failures and one partial, worst first.
+    assert [row["kind"] for row in rows] == ["total", "total", "total", "partial"]
+    assert by_query["como se determina el punto de trabajo"]["retrieved"] == 0
+    assert by_query["voltaje base emisor"]["relevant"] == 2
+    assert by_query["BJT"]["missing"] == ["transistor-bipolar"]
+
+
+def test_build_semantic_baseline_records_hash_metrics_and_failures(report, tmp_path: Path):
+    tree = tmp_path / "tree"
+    corpus_module.build(tree)
+    payload = build_semantic_baseline(
+        report=report, tree=tree, limit=10, k_values=(1, 3, 5),
+        latency={"q1": 1.0, "q2": 3.0},
+    )
+    assert payload["phase"] == "026"
+    assert payload["engine"] == "lexical"
+    assert payload["documents"] == len(corpus_module.DOCUMENTS)
+    assert payload["queries"] == len(report.scores)
+    assert payload["corpus_hash"] == corpus_hash(tree)
+    assert payload["metrics"]["mrr"] == pytest.approx(report.mrr())
+    assert payload["exact_match_correctness"] == 1.0
+    assert len(payload["failures"]) == 4
+    # Latency is recorded but marked informational (machine-dependent).
+    assert payload["latency_ms"]["informational"] is True
+    assert payload["latency_ms"]["mean"] == pytest.approx(2.0)

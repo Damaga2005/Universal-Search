@@ -1,16 +1,16 @@
 {
   "aggregates": {
     "mean_precision_at_k": {
-      "1": 1.0,
-      "3": 0.717948717948718,
-      "5": 0.5230769230769231
+      "1": 0.8333333333333334,
+      "3": 0.5925925925925926,
+      "5": 0.43333333333333335
     },
     "mean_recall_at_k": {
-      "1": 0.6025641025641025,
-      "3": 0.9230769230769231,
-      "5": 0.9871794871794872
+      "1": 0.5033068783068784,
+      "3": 0.7599206349206349,
+      "5": 0.8174603174603174
     },
-    "mrr": 1.0
+    "mrr": 0.8333333333333334
   },
   "k_values": [
     1,
@@ -37,9 +37,13 @@
       "mux-generico",
       "cmos-mux"
     ],
+    "archivo_roto": [
+      "malformed"
+    ],
     "bjt type:txt": [
       "bjt-carpeta"
     ],
+    "como se determina el punto de trabajo": [],
     "diagrama": [
       "diagrama-almacen",
       "diagrama-lecturas"
@@ -56,7 +60,8 @@
     ],
     "notas": [
       "bjt-notas",
-      "notas-generico"
+      "notas-generico",
+      "tension-base-emisor"
     ],
     "polarizacion": [
       "bjt-notas",
@@ -66,9 +71,16 @@
     "presupuesto": [
       "presupuesto"
     ],
+    "punto Q": [
+      "calculo-punto-operacion",
+      "polarizacion-acentuada",
+      "bjt-modelo"
+    ],
+    "receta paella": [],
     "type:pdf": [
       "bjt-datasheet"
     ],
+    "voltaje base emisor": [],
     "zzz no existe": []
   }
 }

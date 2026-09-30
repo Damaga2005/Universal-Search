@@ -53,7 +53,7 @@
 - [x] Indexing UX & control center (023)
 - [x] Provider expansion (024)
 - [x] Content extraction v2 (025)
-- [ ] Local semantic search without cloud AI (026)
+- [x] Local semantic search without cloud AI (026)
 - [ ] Windows shell integration (027)
 - [ ] Observability & recovery (028)
 - [ ] Release engineering & CI (029)
@@ -61,9 +61,9 @@
 
 ---
 
-Phases 001–025 are implemented and documented (per-phase reports in
-`docs/development/`). The phase-025 quality gate measured **813 passing tests,
-3 skipped**, clean pyflakes, a versioned extraction contract with enforced
-resource limits, hardened PDF/Office extraction and extraction diagnostics
-persisted in the derived data. Still open: the planned phases from 026
-through 030.
+Phases 001–026 are implemented and documented (per-phase reports in
+`docs/development/`). The phase-026 quality gate measured **852 passing tests,
+3 skipped**, clean pyflakes, a measured lexical baseline (MRR 0.833, exact-match
+correctness 1.0) and an optional, dependency-free, fallback-only local
+semantic layer that cleared a priori evidence gates (hybrid MRR 0.944). Still
+open: the planned phases from 027 through 030.

@@ -11,6 +11,9 @@ Universal Search indexes local files and cloud-backed locations such as OneDrive
 - Fast incremental indexing.
 - Provider-agnostic architecture.
 - Search ranking based on filename, content, context and later optional local usage signals.
+- Optional local semantic fallback (character n-gram TF-IDF) that answers
+  queries the lexical engine misses — synonyms, paraphrases, morphological
+  variants — without reordering exact matches. Dependency-free and removable.
 - Windows desktop application with a background indexer.
 
 ## Initial scope
@@ -63,7 +66,7 @@ phase 022 added a versioned, bounded local relationship graph with explainable
 signals, incremental maintenance and a small related-documents list in the GUI;
 phase 023 adds a separate indexing control center with typed source actions,
 health/storage/derived-data state and explicit safety confirmations. The
-phase 024 formalised the provider contract (streaming `iter_files`, bounded errors, cancellation, capability/interface negotiation), made the provider key the canonical source discriminator with a `(source, path)` uniqueness migration, and added mounted-path NAS/removable providers plus mixed-provider indexing with per-provider failure isolation. The current gate is **765 passing tests, 3 skipped**.
+phase 024 formalised the provider contract (streaming `iter_files`, bounded errors, cancellation, capability/interface negotiation), made the provider key the canonical source discriminator with a `(source, path)` uniqueness migration, and added mounted-path NAS/removable providers plus mixed-provider indexing with per-provider failure isolation. The current gate is **852 passing tests, 3 skipped**.
 
 | Fase | Entrega | Estado |
 |------|---------|--------|
@@ -92,6 +95,7 @@ phase 024 formalised the provider contract (streaming `iter_files`, bounded erro
 | 023 | UX de indexación y centro de control | ✅ |
 | 024 | Expansión de proveedores (NAS/extraíble, identidad `(source, path)`) | ✅ |
 | 025 | Extracción de contenido v2 (contrato versionado, límites, diagnósticos) | ✅ |
+| 026 | Búsqueda semántica local con evidencia primero (capa opcional sin dependencias) | ✅ |
 
 Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
 by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).

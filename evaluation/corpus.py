@@ -19,6 +19,14 @@ match (``cursos/BJT/``), an accidental generic path match
 (``descargas/notas/`` holding an unrelated CV), a long document that must
 not win by bulk, a metadata-only binary, a filter-only query, and
 unrelated documents that must never surface.
+
+Phase 026 extends the corpus with the failure classes a semantic layer
+would have to fix, so the lexical baseline can be measured against them:
+a synonym document (``transistor-bipolar`` never says "BJT"), a
+voltaje/tension synonym pair, an accented variant (``polarización`` vs the
+unaccented query), a stopword-heavy paraphrase, a short query with a
+single-character term, a malformed binary ``.md`` that is findable by name
+only, and two more unrelated-domain distractors.
 """
 
 import os
@@ -43,12 +51,19 @@ LOG_WORDS = (
 
 @dataclass(frozen=True, slots=True)
 class CorpusDocument:
-    """One synthetic file: what it is, and how relevant it may look."""
+    """One synthetic file: what it is, and how relevant it may look.
+
+    ``content`` is the file text, or ``None`` for a binary the extractors
+    cannot read. ``raw`` (phase 026) writes exact bytes instead — used for
+    the malformed document, whose body is binary garbage the text
+    extractor reads as replacement characters.
+    """
 
     id: str
     path: str
     content: str | None
     age_days: int
+    raw: bytes | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,11 +71,15 @@ class LabelledQuery:
     """A query plus the document ids a user would call relevant.
 
     An empty ``relevant`` set marks the "must retrieve nothing" case.
+    ``failure_class`` (phase 026) tags the failure class a query is meant
+    to measure (``synonym``, ``paraphrase``, ``morphological``), so the
+    baseline report can group the failures it records.
     """
 
     query: str
     relevant: frozenset[str]
     note: str
+    failure_class: str = ""
 
 
 def _long_log_mentions(count: int = 4000) -> str:
@@ -248,6 +267,89 @@ DOCUMENTS: tuple[CorpusDocument, ...] = (
             "suaves y viento del norte."
         ),
     ),
+    # -- phase 026: the failure classes a semantic layer must fix ----------
+    # A document about BJT that never uses the acronym: the synonym case.
+    # Query "BJT" cannot reach it through any lexical signal.
+    CorpusDocument(
+        id="transistor-bipolar",
+        path="electronica/transistores/transistor_bipolar.md",
+        age_days=150,
+        content=(
+            "El transistor de union bipolar es un dispositivo de tres "
+            "terminales llamados base, emisor y colector. La ganancia de "
+            "corriente Beta relaciona la corriente de colector con la "
+            "corriente de base. La union base-emisor se polariza en directa "
+            "mientras la union base-colector se polariza en inversa."
+        ),
+    ),
+    # voltaje/tension synonym pair: this document says "tension", the query
+    # says "voltaje" — no shared token, so the AND of the query fails.
+    CorpusDocument(
+        id="tension-base-emisor",
+        path="electronica/notas/tension_base_emisor.md",
+        age_days=70,
+        content=(
+            "La tension entre base y emisor de un transistor determina la "
+            "corriente de colector. Un valor tipico de 0.7 V indica silicio "
+            "y unos 0.2 V indica germanio."
+        ),
+    ),
+    # Accented variant: the query "polarizacion" (unaccented, as most users
+    # type) must reach a document that only exists in accented form. FTS5's
+    # unicode61 tokenizer case-folds but does not strip diacritics.
+    CorpusDocument(
+        id="polarizacion-acentuada",
+        path="electronica/apuntes/polarizacion_acentuada.md",
+        age_days=200,
+        content=(
+            "La polarización del punto de operación se analiza con la recta "
+            "de carga. El análisis de pequeña señal requiere conocer el "
+            "punto Q y la tensión térmica del semiconductor."
+        ),
+    ),
+    # Paraphrase target: the query "como se determina el punto de trabajo"
+    # shares only function words with this document, so the lexical AND of
+    # every query term fails even though it is exactly about that.
+    CorpusDocument(
+        id="calculo-punto-operacion",
+        path="cursos/practicas/calculo_punto_operacion.md",
+        age_days=300,
+        content=(
+            "Como calcular el punto de operacion de un transistor bipolar: "
+            "se iguala la recta de carga a la curva caracteristica y se "
+            "resuelve el punto Q resultante."
+        ),
+    ),
+    # Malformed content: a .md whose body is binary garbage. The indexer
+    # must survive it (extraction errors are data) and the document must
+    # stay findable by its name alone.
+    CorpusDocument(
+        id="malformed",
+        path="datos/malformed/archivo_roto.md",
+        age_days=10,
+        content=None,
+        raw=b"\x00\x01\x02\x03\x04\xff\xfe\xfd\xfc\xfb\xfa"
+            b"\x00\x00\x00\x80\x81\x82\x83\x84\x85",
+    ),
+    # Unrelated-domain distractors: must never surface for technical queries.
+    CorpusDocument(
+        id="futbol",
+        path="personal/deportes/futbol.md",
+        age_days=5,
+        content=(
+            "Partido de futbol entre los equipos del barrio. El delantero "
+            "marco dos goles en la segunda parte."
+        ),
+    ),
+    CorpusDocument(
+        id="viajes",
+        path="personal/viajes/bruselas.md",
+        age_days=20,
+        content=(
+            "Viaje a Bruselas: visita al Atomium, al Grand Place y al museo "
+            "del Cromatico. El vuelo sale el lunes por la manana."
+        ),
+    ),
 )
 
 DOCUMENT_IDS: frozenset[str] = frozenset(doc.id for doc in DOCUMENTS)
@@ -258,8 +360,13 @@ LABELLED_QUERIES: tuple[LabelledQuery, ...] = (
         relevant=frozenset({
             "bjt-modelo", "bjt-amplificador", "bjt-notas",
             "bjt-log", "bjt-datasheet", "bjt-carpeta",
+            "transistor-bipolar",
         }),
-        note="single term: filename, content, binary and path-only matches",
+        note=(
+            "single term: filename, content, binary, path-only and "
+            "synonym matches (transistor-bipolar never says 'BJT')"
+        ),
+        failure_class="synonym",
     ),
     LabelledQuery(
         query='"ebers moll"',
@@ -303,8 +410,15 @@ LABELLED_QUERIES: tuple[LabelledQuery, ...] = (
     ),
     LabelledQuery(
         query="polarizacion",
-        relevant=frozenset({"bjt-modelo", "bjt-amplificador", "bjt-notas"}),
-        note="content-heavy match with no filename help",
+        relevant=frozenset({
+            "bjt-modelo", "bjt-amplificador", "bjt-notas",
+            "polarizacion-acentuada",
+        }),
+        note=(
+            "content-heavy match with no filename help, plus an accented "
+            "variant: unicode61 folds diacritics so it IS retrieved, but "
+            "the Python ranker scores it lower (mild ranking effect)"
+        ),
     ),
     LabelledQuery(
         query="notas",
@@ -331,6 +445,48 @@ LABELLED_QUERIES: tuple[LabelledQuery, ...] = (
         relevant=frozenset(),
         note="must retrieve nothing (empty relevance set)",
     ),
+    # -- phase 026: the measured failure classes --------------------------
+    LabelledQuery(
+        query="voltaje base emisor",
+        relevant=frozenset({"bjt-notas", "tension-base-emisor"}),
+        note="synonym voltaje/tension: the lexical AND fails on 'voltaje'",
+        failure_class="synonym",
+    ),
+    LabelledQuery(
+        query="como se determina el punto de trabajo",
+        relevant=frozenset({
+            "bjt-modelo", "bjt-notas", "calculo-punto-operacion",
+        }),
+        note=(
+            "paraphrase: stopword-heavy, the lexical AND of every term "
+            "fails even though the documents are about exactly this"
+        ),
+        failure_class="paraphrase",
+    ),
+    LabelledQuery(
+        query="punto Q",
+        relevant=frozenset({
+            "bjt-modelo", "calculo-punto-operacion", "polarizacion-acentuada",
+        }),
+        note=(
+            "short query with a single-character term: every document that "
+            "names 'punto Q' explicitly"
+        ),
+    ),
+    LabelledQuery(
+        query="archivo_roto",
+        relevant=frozenset({"malformed"}),
+        note="malformed content: name-only match over a binary body",
+    ),
+    LabelledQuery(
+        query="receta paella",
+        relevant=frozenset({"paella"}),
+        note=(
+            "morphological: 'receta' (singular) vs 'recetas' (plural path) "
+            "— the AND fails even though the recipe is exactly this"
+        ),
+        failure_class="morphological",
+    ),
 )
 
 
@@ -340,7 +496,11 @@ def build(root: Path) -> list[Path]:
     for document in DOCUMENTS:
         path = root / document.path
         path.parent.mkdir(parents=True, exist_ok=True)
-        if document.content is None:
+        if document.raw is not None:
+            # Exact bytes (phase 026): a malformed body the text extractor
+            # reads as replacement characters, never as a crash.
+            path.write_bytes(document.raw)
+        elif document.content is None:
             # Deterministic bytes an extractor cannot read: the document
             # stays in the index as metadata-only (name and path searchable).
             path.write_bytes(

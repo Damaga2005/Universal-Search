@@ -88,6 +88,18 @@ INVENTORY: tuple[DataItem, ...] = (
         optional=True,
     ),
     DataItem(
+        key="semantic_index",
+        what="bounded local character n-gram vectors and content-word lists",
+        where=(
+            "SQLite tables `document_semantic`, `document_semantic_terms` "
+            "and `document_semantic_metadata`"
+        ),
+        purpose="optional lexical-miss fallback retrieval (phase 026)",
+        retention="until rebuilt, removed, the document is forgotten or the index is dropped",
+        deletion="`privacy forget`, `semantic_index.remove_all()`, or full rebuild",
+        optional=True,
+    ),
+    DataItem(
         key="usage",
         what="document id + query text of opened results, timestamps",
         where="SQLite table `usage_events`",
@@ -284,6 +296,17 @@ def forget(database: SearchDatabase, path: Path | str) -> ForgetResult:
             ).rowcount
             derived_rows += connection.execute(
                 "DELETE FROM document_intelligence WHERE document_id = ?",
+                (document_id,),
+            ).rowcount
+            # Phase 026 semantic vectors are derived from the same document
+            # text. They are personal data too: a forgotten document must
+            # not remain retrievable through the optional fallback.
+            derived_rows += connection.execute(
+                "DELETE FROM document_semantic_terms WHERE document_id = ?",
+                (document_id,),
+            ).rowcount
+            derived_rows += connection.execute(
+                "DELETE FROM document_semantic WHERE document_id = ?",
                 (document_id,),
             ).rowcount
             # Phase 022 graph rows are derived from the same document and

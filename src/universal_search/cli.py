@@ -60,6 +60,10 @@ def main() -> None:
         "--type", dest="doc_type", default=None,
         help="only results of this type, e.g. pdf",
     )
+    search.add_argument(
+        "--no-semantic", action="store_true",
+        help="disable the local semantic fallback (lexical search only)",
+    )
     sub.add_parser("gui", help="launch the desktop search window")
     extensions = sub.add_parser(
         "extensions", help="registered providers and extractors (inspectable)"
@@ -409,7 +413,15 @@ def main() -> None:
             context = get_context(config, config.active_context)
         else:
             context = None
-        engine = SearchEngine(_open_or_explain(args.database))
+        database = _open_or_explain(args.database)
+        if args.no_semantic:
+            engine = SearchEngine(database)
+        else:
+            from universal_search.semantic import HybridSearchEngine, SemanticIndex
+
+            engine = HybridSearchEngine(
+                SearchEngine(database), SemanticIndex(database)
+            )
         try:
             results = engine.search(
                 args.query,
