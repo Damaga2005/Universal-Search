@@ -54,6 +54,14 @@ lives in the UI.
   archive is **one** document, not one per member — enumerating members
   as virtual documents needs a provider layer and an open-result action
   that can materialize a member, which is future work.
+- **Batch operations** (`universal_search/gui/batch.py`, phase 035):
+  multi-selection actions (open, reveal, copy paths, forget) in a
+  Tk-free core, so the rules are testable without a display and any
+  front end can reuse them. The contract is that a batch never claims
+  more than it did: a hard cap per batch (`MAX_BATCH_OPERATIONS = 50`)
+  with what was left out counted, per-item failure isolation, and a
+  `skip_reason` so an unconfirmed forget never blames the size limit.
+  Forgetting is destructive and requires explicit `confirm=True`.
 - **Domain** (`universal_search/domain/`): `Document` and the stable
   identity `document_id_for(source, path)`.
 - **Index** (`universal_search/index/`):

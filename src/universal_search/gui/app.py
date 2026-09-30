@@ -12,11 +12,13 @@ import threading
 import time
 import tkinter as tk
 from dataclasses import replace
-from tkinter import filedialog, ttk
+from pathlib import Path
+from tkinter import filedialog, messagebox, ttk
 
 from universal_search import __version__
 from universal_search.context import load_contexts
 from universal_search.gui import rows, services, theme as theme_module
+from universal_search.gui.batch import BatchOperations
 from universal_search.gui.services import (
     SearchService,
     open_path,
@@ -161,6 +163,26 @@ class SearchWindow(tk.Tk):
         file_menu.add_command(label="Salir", command=self._on_close)
         menu.add_cascade(label="Archivo", menu=file_menu)
 
+        # Phase 035: batch operations over a multi-selection.
+        batch_menu = tk.Menu(menu, tearoff=0)
+        batch_menu.add_command(
+            label="Abrir seleccionados (Ctrl+O)", command=self._open_selected
+        )
+        batch_menu.add_command(
+            label="Mostrar seleccionados (Ctrl+R)",
+            command=self._reveal_selected,
+        )
+        batch_menu.add_command(
+            label="Copiar rutas seleccionadas (Ctrl+C)",
+            command=self._copy_selected_paths,
+        )
+        batch_menu.add_separator()
+        batch_menu.add_command(
+            label="Olvidar seleccionados del índice (Ctrl+Shift+R)",
+            command=self._forget_selected,
+        )
+        menu.add_cascade(label="Selección", menu=batch_menu)
+
         self.indexer_menu = tk.Menu(menu, tearoff=0)
         self.indexer_menu.add_command(
             label="Iniciar indexador", command=lambda: self._indexer_action("start")
@@ -205,6 +227,10 @@ class SearchWindow(tk.Tk):
             font=self.fonts["body"],
             activestyle="none",
             exportselection=False,
+            # Phase 035: a selection of many results, so they can be opened,
+            # revealed or copied in one action. Ctrl+click adds, Shift+click
+            # extends; the keyboard focus ring behaviour is unchanged.
+            selectmode="extended",
             relief="flat",
             takefocus=True,  # reachable with Tab, visible with the focus ring
             highlightthickness=1,
@@ -245,12 +271,16 @@ class SearchWindow(tk.Tk):
         self.entry.bind("<Up>", self._move_up)
         self.entry.bind("<Next>", self._page_down)
         self.entry.bind("<Prior>", self._page_up)
-        self.listbox.bind("<Return>", self._on_open)
-        self.listbox.bind("<Control-Return>", self._on_reveal)
+        self.listbox.bind("<Return>", self._open_selected)
+        self.listbox.bind("<Control-Return>", self._reveal_selected)
         self.listbox.bind("<Escape>", self._on_escape)
-        self.listbox.bind("<Double-Button-1>", self._on_open)
+        self.listbox.bind("<Double-Button-1>", self._open_selected)
         self.listbox.bind("<<ListboxSelect>>", self._update_preview)
-        self.listbox.bind("<Control-c>", self._copy_path)
+        self.listbox.bind("<Control-c>", self._copy_selected_paths)
+        # Phase 035: batch actions over a multi-selection.
+        self.listbox.bind("<Control-o>", self._open_selected)
+        self.listbox.bind("<Control-r>", self._reveal_selected)
+        self.listbox.bind("<Control-Shift-R>", self._forget_selected)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self._poll_indexer()
         self._poll_show_request()
@@ -709,6 +739,104 @@ class SearchWindow(tk.Tk):
         if selection and selection[0] < len(self.results):
             return selection[0]
         return None
+
+    def _selected_paths(self) -> list[Path]:
+        """Paths of the current selection, in result order (phase 035).
+
+        Ordered by result position rather than by click order, so a batch acts
+        on what the list shows rather than on the order the user happened to
+        click in.
+        """
+        chosen = set(self.listbox.curselection())
+        return [
+            result.path
+            for index, result in enumerate(self.results)
+            if index in chosen
+        ]
+
+    def _batch(self) -> BatchOperations:
+        return BatchOperations(
+            database=getattr(self.service, "database", None)
+        )
+
+    def _open_selected(self) -> str:
+        """Open the selection: one document opens it, several open all of them.
+
+        One code path for both, deliberately. A separate "open the first one"
+        branch is where the two behaviours drift apart and a single click ends
+        up meaning something different from a single selection.
+        """
+        paths = self._selected_paths()
+        index = self._selected_index()
+        if not paths:
+            if index is None and self.results:
+                index = 0
+            if index is None:
+                return "break"
+            paths = [self.results[index].path]
+            index = 0
+        report = self._batch().open_all(paths)
+        if len(paths) == 1 and report.ok:
+            # Recent queries and the local usage signal are recorded when the
+            # user commits to a single result, never per batch item.
+            self.service.record_query(self.query_var.get())
+            try:
+                self.service.record_open(
+                    self.results[index].document_id, self.query_var.get()
+                )
+            except (AttributeError, IndexError):
+                pass
+        # The report is never replaced by a bare "done": how many opened, how
+        # many failed and how many were left out are all in this one line.
+        self._set_status(report.summary())
+        return "break"
+
+    def _reveal_selected(self) -> str:
+        paths = self._selected_paths()
+        if not paths:
+            index = self._selected_index()
+            if index is None and self.results:
+                index = 0
+            if index is None:
+                return "break"
+            paths = [self.results[index].path]
+        self._set_status(self._batch().reveal_all(paths).summary())
+        return "break"
+
+    def _copy_selected_paths(self) -> str:
+        paths = self._selected_paths()
+        if not paths:
+            index = self._selected_index()
+            if index is None and self.results:
+                index = 0
+            if index is None:
+                return "break"
+            paths = [self.results[index].path]
+        text = self._batch().paths_text(paths)
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        count = len(text.splitlines()) if text else 0
+        self._set_status(f"Ruta copiada: {paths[0]}" if count == 1
+                         else f"{count} rutas copiadas")
+        return "break"
+
+    def _forget_selected(self) -> str:
+        """Forget the selected documents, after an explicit confirmation."""
+        paths = self._selected_paths()
+        if not paths:
+            self._set_status("Selecciona al menos un documento para olvidar")
+            return "break"
+        plural = "documentos" if len(paths) > 1 else "documento"
+        if not messagebox.askyesno(
+            "Olvidar documentos",
+            f"Se borrarán del índice {len(paths)} {plural}.\n\n"
+            "Los archivos del disco no se tocan.\n¿Continuar?",
+        ):
+            self._set_status("Cancelado: no se olvidó nada")
+            return "break"
+        report = self._batch().forget_all(paths, confirm=True)
+        self._set_status(report.summary())
+        return "break"
 
     def _select(self, index: int) -> None:
         if not self.results:

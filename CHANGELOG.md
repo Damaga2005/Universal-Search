@@ -7,6 +7,39 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 035 - Batch operations over the selection
+- The result list is now multi-selectable (Ctrl+click adds, Shift+click extends)
+  and a new **Selección** menu acts on the whole selection: open (Ctrl+O),
+  reveal (Ctrl+R), copy paths (Ctrl+C) and forget from the index
+  (Ctrl+Shift+R).
+- The logic lives in `universal_search/gui/batch.py`, free of Tk and of the
+  clipboard, so the rules are testable without a display and any front end can
+  reuse them.
+- The contract is that **a batch never claims more than it did**: a hard cap of
+  50 per batch with what was left out counted and reported, per-item failure
+  isolation so one missing path does not cost the other 49, and exact counts
+  where only the list of reasons is abbreviated.
+- Return, Ctrl+Return and double-click all go through one code path for one
+  selection and for many. A separate "open the first one" branch is exactly
+  where the two behaviours drift apart and a single click ends up meaning
+  something different from a single selection.
+- The usage signal and the recent-query record are only written for a
+  **single** successful open: a batch does not train the ranking.
+- Evidence gate `python -m evaluation.batch_gate`: **9/9 PASS**.
+- The gate found a real defect in the module written to prevent this class of
+  lie: an unconfirmed forget reported `4 sin procesar por el limite de 50`,
+  blaming the size limit for something that had not happened because nothing was
+  confirmed. `BatchReport` now carries a `skip_reason`, and T9 checks that an
+  unconfirmed forget says so and never mentions the limit.
+- T8 failed first for the wrong reason and was fixed for the right one: it
+  searched the file for the word "clipboard" and matched a docstring saying the
+  module is *free* of it. It now checks imports, not words.
+- Known limits: no select-all and no keyboard range selection (Tk's Listbox
+  offers neither, and a custom selection model is out of scope); no undo for
+  forget; the cap is not user-adjustable, on purpose.
+- Phase 035 gate: **1060 passed, 3 skipped** (1063 collected), clean pyflakes,
+  `python -m evaluation.gate` PASS (13/13).
+
 ### Phase 034 - Content inside ZIP archives
 - `.zip` is now searchable, reusing the phase-025 `member_problem()` and
   `read_member_bounded()` rather than writing a second, weaker set of rules.

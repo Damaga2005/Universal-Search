@@ -41,6 +41,7 @@ El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
 | 032 | Sugerencias de consulta verificadas | ✅ Completada | [032-query-suggestions.md](development/032-query-suggestions.md) | [informe](development/032-query-suggestions-report.md) |
 | 033 | Correo como fuente (`.eml`, `.mbox`) | ✅ Completada | — | [informe](development/033-mail-source-report.md) |
 | 034 | Contenido dentro de `.zip` | ✅ Completada | — | [informe](development/034-archive-content-report.md) |
+| 035 | Operaciones por lotes sobre la selección | ✅ Completada | — | [informe](development/035-batch-operations-report.md) |
 
 Verificado en la fase 010: **208 tests en verde**
 (`.venv\Scripts\python -m pytest`), E2E completo de indexador, CLI, GUI e
@@ -56,7 +57,7 @@ nombrados, puertas de CI verificadas por test y un gate v2 ejecutable de 13
 invariantes (`python -m evaluation.gate`); detalles y límites en el
 [informe de la fase 030](development/030-v2-quality-gate-report.md).
 
-Current test count: 1041 tests collected (1038 passed, 3 skipped).
+Current test count: 1063 tests collected (1060 passed, 3 skipped).
 
 ## Cómo ejecutar
 

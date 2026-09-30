@@ -1,0 +1,112 @@
+{
+  "phase": "035",
+  "verdicts": [
+    {
+      "gate": "T1 complete batch says complete",
+      "measured": 1,
+      "threshold": 1,
+      "passed": true,
+      "detail": "Abriendo: 5 de 5"
+    },
+    {
+      "gate": "T2 partial batch is distinguishable",
+      "measured": 1,
+      "threshold": 1,
+      "passed": true,
+      "detail": "Abriendo: 15 de 20  \u00b7  5 con error (doc0.md: FileNotFoundError; doc1.md: FileNotFoundError; doc2.md: FileNotFoundError; y 2 mas)"
+    },
+    {
+      "gate": "T3 batch is bounded",
+      "measured": 1,
+      "threshold": 1,
+      "passed": true,
+      "detail": "50 abiertos, 30 saltados"
+    },
+    {
+      "gate": "T4 one failure is isolated",
+      "measured": 1,
+      "threshold": 1,
+      "passed": true,
+      "detail": "Abriendo: 9 de 10  \u00b7  1 con error (doc3.md: FileNotFoundError)"
+    },
+    {
+      "gate": "T5 counts are exact",
+      "measured": 1,
+      "threshold": 1,
+      "passed": true,
+      "detail": "Abriendo: 3 de 10  \u00b7  3 sin procesar por el limite de 50  \u00b7  4 con error (doc0.md: FileNotFoundError; doc1.md: FileNotFoundError; doc2.md: FileNotFoundError; y 1 mas)"
+    },
+    {
+      "gate": "T6 forget needs confirmation",
+      "measured": 1,
+      "threshold": 1,
+      "passed": true,
+      "detail": "sin confirmar quedan 4 indexados"
+    },
+    {
+      "gate": "T7 forget really removes",
+      "measured": 1,
+      "threshold": 1,
+      "passed": true,
+      "detail": "quedan 2, ficheros intactos: True"
+    },
+    {
+      "gate": "T8 no display dependency in the core",
+      "measured": 1,
+      "threshold": 1,
+      "passed": true,
+      "detail": "importadas: ['__future__', 'dataclasses', 'pathlib', 'universal_search']"
+    },
+    {
+      "gate": "T9 no false 'listo' or wrong reason",
+      "measured": 1,
+      "threshold": 1,
+      "passed": true,
+      "detail": "7 informes; sin confirmar dice: Olvidando: 0 de 4  \u00b7  4 sin procesar por que no se confirmo"
+    }
+  ],
+  "findings": {
+    "T1": {
+      "summary": "Abriendo: 5 de 5",
+      "ok": true
+    },
+    "T2": {
+      "summary": "Abriendo: 15 de 20  \u00b7  5 con error (doc0.md: FileNotFoundError; doc1.md: FileNotFoundError; doc2.md: FileNotFoundError; y 2 mas)",
+      "ok": false
+    },
+    "T3": {
+      "opened": 50,
+      "skipped": 30,
+      "summary": "Abriendo: 50 de 80  \u00b7  30 sin procesar por el limite de 50"
+    },
+    "T4": {
+      "opened": 9,
+      "summary": "Abriendo: 9 de 10  \u00b7  1 con error (doc3.md: FileNotFoundError)"
+    },
+    "T5": {
+      "summary": "Abriendo: 3 de 10  \u00b7  3 sin procesar por el limite de 50  \u00b7  4 con error (doc0.md: FileNotFoundError; doc1.md: FileNotFoundError; doc2.md: FileNotFoundError; y 1 mas)"
+    },
+    "T6": {
+      "summary": "Olvidando: 0 de 4  \u00b7  4 sin procesar por que no se confirmo",
+      "still_indexed": 4
+    },
+    "T7": {
+      "summary": "Olvidando: 2 de 2",
+      "still_indexed": 2,
+      "files_untouched": true
+    },
+    "T8": {
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "pathlib",
+        "universal_search"
+      ],
+      "forbidden": []
+    },
+    "T9": {
+      "reports_checked": 7,
+      "unconfirmed_summary": "Olvidando: 0 de 4  \u00b7  4 sin procesar por que no se confirmo"
+    }
+  }
+}
