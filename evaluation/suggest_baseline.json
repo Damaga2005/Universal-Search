@@ -1,0 +1,129 @@
+{
+  "phase": "032",
+  "verdicts": [
+    {
+      "gate": "T1 recall of corrections",
+      "measured": 1.0,
+      "threshold": 0.6,
+      "passed": true,
+      "detail": "3/3 consultas con correccion esperada"
+    },
+    {
+      "gate": "T2 unverified suggestions",
+      "measured": 0,
+      "threshold": 0,
+      "passed": true,
+      "detail": "toda sugerencia devuelve un documento"
+    },
+    {
+      "gate": "T3 advice on correct queries",
+      "measured": 0,
+      "threshold": 0,
+      "passed": true,
+      "detail": "sin consejos donde no hay nada que corregir"
+    },
+    {
+      "gate": "T4 lexical MRR change",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "MRR sigue en 0.8333"
+    },
+    {
+      "gate": "T5 added p95, warm (ms)",
+      "measured": 6.439299999328796,
+      "threshold": 8.0,
+      "passed": true,
+      "detail": "sesion de busqueda viva; cold (una sola peticion) 24.58 ms"
+    },
+    {
+      "gate": "T6 persistent state left",
+      "measured": 0,
+      "threshold": 0,
+      "passed": true,
+      "detail": "la vista de vocabulario se crea y se retira"
+    }
+  ],
+  "queries": [
+    {
+      "query": "transsitor",
+      "expected": "transistor",
+      "suggestions": [
+        {
+          "query": "transistor",
+          "token": "transsitor",
+          "replacement": "transistor",
+          "distance": 1,
+          "results": 1
+        }
+      ],
+      "all_verified": true
+    },
+    {
+      "query": "transistorr",
+      "expected": "transistor",
+      "suggestions": [
+        {
+          "query": "transistor",
+          "token": "transistorr",
+          "replacement": "transistor",
+          "distance": 1,
+          "results": 1
+        }
+      ],
+      "all_verified": true
+    },
+    {
+      "query": "modlo ebers",
+      "expected": "modelo",
+      "suggestions": [
+        {
+          "query": "modelo ebers",
+          "token": "modlo",
+          "replacement": "modelo",
+          "distance": 1,
+          "results": 1
+        }
+      ],
+      "all_verified": true
+    },
+    {
+      "query": "polirazcion",
+      "expected": null,
+      "suggestions": [],
+      "all_verified": true
+    },
+    {
+      "query": "gaurrent",
+      "expected": null,
+      "suggestions": [],
+      "all_verified": true
+    },
+    {
+      "query": "puntoe trabajo",
+      "expected": null,
+      "suggestions": [
+        {
+          "query": "punto trabajo",
+          "token": "puntoe",
+          "replacement": "punto",
+          "distance": 1,
+          "results": 1
+        }
+      ],
+      "all_verified": true
+    },
+    {
+      "query": "zzzz transsitor",
+      "expected": null,
+      "suggestions": [],
+      "all_verified": true
+    },
+    {
+      "query": "informe anua",
+      "expected": null,
+      "suggestions": [],
+      "all_verified": true
+    }
+  ]
+}

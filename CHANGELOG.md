@@ -7,6 +7,34 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 032 - Query suggestions
+- When a search returns nothing, Universal Search now proposes corrections,
+  and the rule is the whole feature: **a suggestion is a query that was
+  actually run and actually returned a document.** The candidate words come
+  only from the user's own index, read through `fts5vocab` (a view over the
+  existing FTS index, created and dropped on the spot, so nothing is stored).
+  There is no dictionary, no spell-checking service, no network and no list of
+  common typos.
+- Corrections reuse the bounded Damerau-Levenshtein budget of phase 031 and are
+  ordered by edit distance, then by how often the word appears in the index.
+- A rule the evidence gate added: a token that is neither indexed nor
+  correctable is not a misspelling of anything, so no advice is offered. The
+  first run failed this gate (T3) by suggesting something for "zzz no existe".
+- `search --no-suggest` opts out, symmetric with `--no-fuzzy` and
+  `--no-semantic`.
+- Evidence gate `python -m evaluation.suggest_gate`: **6/6 PASS** (recall of
+  corrections 1,00, zero unverified suggestions, zero advice where there is
+  nothing to correct, no lexical metric moved, no persistent state left).
+- The gate found two of my own mistakes and both are written down rather than
+  quietly fixed: the vocabulary cache keyed on the database file's mtime never
+  hit, because WAL checkpointing rewrites that file during ordinary operation;
+  it is now keyed on (document count, latest indexed_at), which changes
+  exactly when the vocabulary can change. And the gate itself built a fresh
+  suggester per sample, so it reported the cold cost dressed as the warm one —
+  it now measures and prints both (+7,19 ms warm, +23,33 ms cold).
+- Phase 032 gate: **993 passed, 3 skipped** (996 collected), clean pyflakes,
+  `python -m evaluation.gate` PASS (13/13).
+
 ### Phase 031 - Robust search: typos and partial words
 - Typo and partial-word queries now resolve. `transisto`, `transsistor`,
   `transistorr`, `transltor`, `polarisacion` and two-word queries with one

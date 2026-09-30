@@ -44,6 +44,13 @@ from universal_search.fuzzy.verify import (
     resolve_token_folded,
     resolve_tokens,
 )
+from universal_search.fuzzy.suggest import (
+    MAX_SUGGESTIONS,
+    QuerySuggester,
+    Suggestion,
+    correct_token,
+    indexed_vocabulary,
+)
 
 __all__ = [
     "FUZZY_PREPROCESSING_VERSION",
@@ -51,16 +58,21 @@ __all__ = [
     "FuzzyIndex",
     "FuzzySearchEngine",
     "MAX_CANDIDATES",
+    "MAX_SUGGESTIONS",
     "MAX_TRIGRAMS_PER_DOC",
     "MAX_VERIFY_CHARS",
     "MIN_TOKEN_OVERLAP",
     "MIN_TOKEN_CHARS",
     "MIN_TRIGRAMS_FOR_DOCUMENT",
     "NGRAM_SIZE",
+    "QuerySuggester",
+    "Suggestion",
+    "correct_token",
     "damerau_levenshtein",
     "edit_budget",
     "engine_for",
     "fold",
+    "indexed_vocabulary",
     "is_nonsense",
     "query_trigrams",
     "resolve_query",

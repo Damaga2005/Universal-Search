@@ -69,6 +69,10 @@ def main() -> None:
         "--no-fuzzy", action="store_true",
         help="disable typo and partial-word tolerance (lexical search only)",
     )
+    search.add_argument(
+        "--no-suggest", action="store_true",
+        help="do not suggest corrections when nothing is found (032)",
+    )
     sub.add_parser("gui", help="launch the desktop search window")
     open_command = sub.add_parser("open", help="open a file or folder with its default app")
     open_command.add_argument("path", type=Path)
@@ -489,6 +493,18 @@ def main() -> None:
             # A malformed query is feedback, never a traceback (spec 012).
             print(f"error: {exc}", file=sys.stderr)
             raise SystemExit(1) from None
+        if not results and not args.no_suggest:
+            # Phase 032: a suggestion is a query that was actually run and
+            # actually returned a document, drawn only from the words in the
+            # user's own index. Nothing verified means nothing offered.
+            from universal_search.fuzzy import QuerySuggester
+
+            for suggestion in QuerySuggester(engine).suggest(args.query):
+                print(
+                    f"¿Querías decir?  {suggestion.query}"
+                    f"  (de {suggestion.token} a {suggestion.replacement},"
+                    f" {suggestion.results} resultado(s))"
+                )
         for result in results:
             print(
                 f"[{result.source}] {result.name}\n"
