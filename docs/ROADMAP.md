@@ -50,8 +50,8 @@
 
 - [x] Robust search: typos and partial words (031)
 - [x] Query suggestions (032)
-- [ ] Email as a source (033)
-- [ ] Content inside archives (034)
+- [x] Email as a source (033)
+- [x] Content inside archives (034)
 - [ ] GUI batch operations (035)
 - [ ] Grouping, sorting and saved searches (036)
 - [ ] Distribution: portable mode and single executable (037)
@@ -76,7 +76,7 @@
 
 ---
 
-Phases 001–033 are implemented and documented (per-phase reports in
+Phases 001–034 are implemented and documented (per-phase reports in
 `docs/development/`). The v2 quality gate is an executable instrument, not a
 promise: `python -m evaluation.gate` runs thirteen local invariants —
 dependency budget, no network or model imports, a platform-independent data
@@ -90,4 +90,4 @@ exact-match correctness 1.0, no top-1 regression, nonsense queries still
 empty) after the packaged smoke exposed and fixed a zero-idf degeneracy and an
 exact-token precision gate.
 
-Current test count: 1019 tests collected (1016 passed, 3 skipped).
+Current test count: 1041 tests collected (1038 passed, 3 skipped).

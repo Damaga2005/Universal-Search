@@ -338,7 +338,9 @@ def test_successful_extraction_carries_the_versioned_contract(tmp_path: Path) ->
 
 def test_registry_declares_limits_and_contract_version() -> None:
     described = infos()
-    assert [info.key for info in described] == ["text", "pdf", "office", "mail"]
+    assert [info.key for info in described] == [
+        "text", "pdf", "office", "mail", "archive"
+    ]
     for info in described:
         payload = info.as_dict()
         assert payload["contract_version"] == CONTRACT_VERSION

@@ -7,6 +7,47 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 034 - Content inside ZIP archives
+- `.zip` is now searchable, reusing the phase-025 `member_problem()` and
+  `read_member_bounded()` rather than writing a second, weaker set of rules.
+  Members are read in memory (nothing is written to disk) and only when their
+  suffix is a registered text format, so a `.exe` or `.png` inside an archive is
+  never interpreted as text.
+- **No recursion** into nested archives, with a warning: without a depth limit
+  they are an unbounded expansion path and the obvious thing to abuse.
+- Each member is labelled (`=== name (size) ===`) so a hit on the text can be
+  traced to a member, and member names are indexed as text so a file inside the
+  archive is findable by its own name.
+- Evidence gate `python -m evaluation.archive_gate`: **9/9 PASS**. It plants the
+  attack in the *same* archive as the good content — three searchable members,
+  an `.exe`, two traversal names (`../../windows/…` and `/raiz/…`), a nested zip
+  and a member expanding 407x — so the refusal rules cannot pass by suppressing
+  useful content (archive recall 4/4 while zero hostile tokens are indexed, and
+  the good members survive as `PARTIAL`, never lost).
+- Deliberate limitation: an archive is **one** document, not one per member. A
+  hit is attributed to the `.zip`, so the result list cannot say which member
+  matched. Enumerating members as virtual documents needs a provider layer, a
+  content path that understands virtual paths, and an open-result action that can
+  materialize a member; a half-built version of that would leave opening a result
+  broken, which is worse than a documented limit.
+- T6 failed on its first run with four "lost" documents, and it was my mistake
+  for the second time in two phases: it measured "before" on an index that
+  already contained the archive, counting queries that were never found as lost.
+  Both gates now index the corpus alone, measure, and only then add the archive.
+  Corrected, T6 is 0 lost and MRR does not move at all (0,8333 -> 0,8333).
+- One test of mine failed because the code was right: `"a" * 5000` compresses at
+  a 250x ratio, so the expansion check refused it. The content was changed to
+  realistic prose and the failure recorded, because that check is the thing
+  standing between a hostile archive and the materialization of its payload.
+- Phase 034 gate: **1038 passed, 3 skipped** (1041 collected), clean pyflakes,
+  `python -m evaluation.gate` PASS (13/13).
+- A documentation update of mine silently did nothing: the ROADMAP line for 033
+  reads `Email as a source (033)` and I had been replacing `Mail as a source
+  (033)`, so phase 033 was left open in the roadmap while marked complete. The
+  gate caught it through invariant 13 (`roadmap is honest`: no open phase may sit
+  below a completed one), which is exactly what that invariant exists for. Every
+  roadmap edit from here asserts the line it replaces is actually there.
+
 ### Phase 033 - Mail as a source
 - `.eml`, `.mbox`, `.mbx` and `.email` are now searchable, through the stdlib
   `email` parser only: no new runtime dependency (`pypdf` and `watchdog` remain

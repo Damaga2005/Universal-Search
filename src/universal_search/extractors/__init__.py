@@ -21,6 +21,7 @@ from universal_search.domain.extraction import (
     ExtractionLimits,
     ExtractionResult,
 )
+from universal_search.extractors.archive import ARCHIVE_EXTENSIONS, read_archive
 from universal_search.extractors.base import CancelCheck
 from universal_search.extractors.mail import MAIL_EXTENSIONS, read_mail
 from universal_search.extractors.office import read_docx, read_pptx, read_xlsx
@@ -82,6 +83,16 @@ EXTRACTOR_SPECS: tuple[ExtractorSpec, ...] = (
             "attachments never read"
         ),
     ),
+    ExtractorSpec(
+        key="archive",
+        extensions=ARCHIVE_EXTENSIONS,
+        max_chars=MAX_CONTENT_CHARS,
+        binary_safe=True,
+        note=(
+            "ZIP members read through the existing traversal/size/expansion "
+            "checks; text members only, no recursion, nothing written to disk"
+        ),
+    ),
 )
 
 EXTRACTORS: dict[str, ExtractFunction] = {
@@ -97,6 +108,7 @@ EXTRACTORS.update({
     ".mbox": read_mail,
     ".mbx": read_mail,
     ".email": read_mail,
+    ".zip": read_archive,
 })
 
 SUPPORTED_EXTENSIONS: frozenset[str] = frozenset(EXTRACTORS)
@@ -200,6 +212,7 @@ def extract(
 
 
 __all__ = [
+    "ARCHIVE_EXTENSIONS",
     "CONTRACT_VERSION",
     "DEFAULT_LIMITS",
     "EXTRACTORS",

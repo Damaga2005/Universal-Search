@@ -24,7 +24,7 @@ quedar vieja) y se muestra con `universal-search privacy show`.
 | Elemento | Qué contiene | Para qué | Retención | Cómo se borra | ¿Sale? |
 |---|---|---|---|---|---|
 | `documents` | ruta, nombre, tamaño, fechas, hash de contenido | saber qué indexar, detectar cambios, abrir el fichero | hasta que el fichero desaparece o se olvida/reconstruye | `privacy forget <ruta>`, `diagnose repair all` | No |
-| `documents_fts` | texto extraído (nunca el binario), máx. 2 MB por documento; **en correo: remitentes, asunto y cuerpo legible, nunca los adjuntos** (fase 033) | búsqueda y fragmentos | con la fila del documento | `forget`, o `index` tras borrar el fichero | No |
+| `documents_fts` | texto extraído (nunca el binario), máx. 2 MB por documento; **en correo: remitentes, asunto y cuerpo legible, nunca los adjuntos** (fase 033); **en un `.zip`: el texto de los miembros de formato texto, nunca los binarios ni los anidados** (fase 034) | búsqueda y fragmentos | con la fila del documento | `forget`, o `index` tras borrar el fichero | No |
 | `document_intelligence` | idioma, encabezados, 24 términos, 16 pares | documentos relacionados (fase 014) | hasta reconstruir, limpiar u olvidar | `intelligence clear` | No |
 | `document_graph_*` | nodos, postings acotados, aristas con evidencia local y metadata de versión/dirty markers/referencias | descubrir documentos relacionados (fase 022); nunca modifica el ranking | hasta reconstruir, limpiar u olvidar | `intelligence clear`, `privacy forget` o reconstrucción; las referencias directas y reverses se limpian en la misma transacción | No |
 | `document_fuzzy_*` | como mucho 64 trigramas de carácter por documento, como huellas de bloqueo; nunca decide una coincidencia | proponer candidatos para consultas con erratas o parciales (fase 031); la coincidencia siempre se verifica contra el texto | hasta reconstruir, olvidar o eliminar el índice | `privacy forget`, `FuzzyIndex.remove_all()` o reconstrucción completa | No |
@@ -89,6 +89,11 @@ reconstrucciones destructivas requieren confirmación explícita.
   —sus bytes no se materializan y su contenido no entra en el índice— y su
   número se declara como advertencia en el documento. `.msg` (OLE de Microsoft)
   queda fuera de alcance y se trata como binario desconocido.
+- **Un `.zip` se indexa por su contenido** (fase 034): si se indexa una
+  carpeta con archivos comprimidos, el índice contendrá el texto de los
+  miembros de formato texto. Los miembros con nombres de ruta peligrosa, los
+  que superan el límite de tamaño o expansión y los binarios se rechazan y se
+  declaran como aviso. Nada se escribe en disco al hacerlo.
 - **El log de la GUI** puede incluir rutas (metadatos), nunca contenido.
   Las rutas son datos personales potenciales: por eso el diagnóstico los
   limita a tres ejemplos.

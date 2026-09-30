@@ -45,6 +45,15 @@ lives in the UI.
   as untrusted (sanitized and length-bounded), and reports a lost body part
   as PARTIAL rather than as a whole message. `.msg` is an OLE compound file,
   is not registered, and is never opened.
+  Phase 034 added `archive.py`: `.zip` only, reusing the phase-025
+  `member_problem()` and `read_member_bounded()` rather than writing a
+  second, weaker set of rules. Members are read in memory (nothing is
+  written to disk) only when their suffix is a registered text format,
+  there is no recursion into nested archives, and each member is
+  labelled with its name so a text hit can be traced to a member. An
+  archive is **one** document, not one per member — enumerating members
+  as virtual documents needs a provider layer and an open-result action
+  that can materialize a member, which is future work.
 - **Domain** (`universal_search/domain/`): `Document` and the stable
   identity `document_id_for(source, path)`.
 - **Index** (`universal_search/index/`):

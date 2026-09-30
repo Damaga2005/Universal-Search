@@ -1,0 +1,77 @@
+{
+  "phase": "034",
+  "verdicts": [
+    {
+      "gate": "T1 archive recall",
+      "measured": 1.0,
+      "threshold": 1.0,
+      "passed": true,
+      "detail": "4/4 dentro de manual.zip"
+    },
+    {
+      "gate": "T2 hostile tokens indexed",
+      "measured": 0,
+      "threshold": 0,
+      "passed": true,
+      "detail": "zip-slip, ruta absoluta y ratio de expansion"
+    },
+    {
+      "gate": "T3 refused members declared",
+      "measured": 4,
+      "threshold": 1,
+      "passed": true,
+      "detail": "avisos: [\"refused: unsafe member name: '../../windows/system32/travieso.txt'\", \"refused: unsafe member name: '/raiz/equis.txt'\"]"
+    },
+    {
+      "gate": "T4 binary members indexed",
+      "measured": 0,
+      "threshold": 0,
+      "passed": true,
+      "detail": "un .exe dentro del zip no se decodifica"
+    },
+    {
+      "gate": "T5 nested content indexed",
+      "measured": 0,
+      "threshold": 0,
+      "passed": true,
+      "detail": "un zip dentro de un zip no se abre"
+    },
+    {
+      "gate": "T6 labelled documents lost",
+      "measured": 0,
+      "threshold": 0,
+      "passed": true,
+      "detail": "MRR 0.8333 -> 0.8333"
+    },
+    {
+      "gate": "T7 ms per archive",
+      "measured": 17.989600000873907,
+      "threshold": 250.0,
+      "passed": true,
+      "detail": "peor de cinco, con un zip de 7 miembros"
+    },
+    {
+      "gate": "T8 new runtime dependencies",
+      "measured": 0,
+      "threshold": 0,
+      "passed": true,
+      "detail": "declaradas: ['pypdf', 'watchdog']"
+    },
+    {
+      "gate": "T9 expansion bound holds",
+      "measured": 1.0,
+      "threshold": 100.0,
+      "passed": true,
+      "detail": "con ratio 10x el miembro bomba se rechaza entero"
+    }
+  ],
+  "warnings": [
+    "refused: unsafe member name: '../../windows/system32/travieso.txt'",
+    "refused: unsafe member name: '/raiz/equis.txt'",
+    "refused: part 'bomba.txt' exceeds the 100x expansion limit (1160000 bytes from 2855 compressed)",
+    "1 nested archive(s) not opened (no recursion)",
+    "1 non-text member(s) skipped",
+    "3 member(s) refused"
+  ],
+  "misses": []
+}
