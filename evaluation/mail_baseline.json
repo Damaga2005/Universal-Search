@@ -1,0 +1,86 @@
+{
+  "phase": "033",
+  "verdicts": [
+    {
+      "gate": "T1 mail recall",
+      "measured": 1.0,
+      "threshold": 1.0,
+      "passed": true,
+      "detail": "7/7 terminos hallados"
+    },
+    {
+      "gate": "T2 attachment hits",
+      "measured": 0,
+      "threshold": 0,
+      "passed": true,
+      "detail": "el token del adjunto no aparece en los resultados"
+    },
+    {
+      "gate": "T3 script text hits",
+      "measured": 0,
+      "threshold": 0,
+      "passed": true,
+      "detail": "el contenido de <script> no se indexa"
+    },
+    {
+      "gate": "T4 labelled documents lost",
+      "measured": 0,
+      "threshold": 0,
+      "passed": true,
+      "detail": "ningun documento salio del top-5; MRR 0.8333 -> 0.7778 (delta +0.0556)"
+    },
+    {
+      "gate": "T5 ms per mail document",
+      "measured": 3.8199000009626616,
+      "threshold": 60.0,
+      "passed": true,
+      "detail": "peor de cinco extracciones"
+    },
+    {
+      "gate": "T6 new runtime dependencies",
+      "measured": 0,
+      "threshold": 0,
+      "passed": true,
+      "detail": "declaradas: ['pypdf', 'watchdog']"
+    },
+    {
+      "gate": "T7 attachment payloads stored",
+      "measured": 0,
+      "threshold": 0,
+      "passed": true,
+      "detail": "el adjunto ocupa 9640 bytes y el indice guarda 114 chars del mensaje, sin su contenido"
+    }
+  ],
+  "expected": [
+    {
+      "query": "tercer trimestre",
+      "path": "correo/presupuesto.eml"
+    },
+    {
+      "query": "Ana Ruiz",
+      "path": "correo/presupuesto.eml"
+    },
+    {
+      "query": "proveedores",
+      "path": "correo/informe.html.eml"
+    },
+    {
+      "query": "Luis Mora",
+      "path": "correo/informe.html.eml"
+    },
+    {
+      "query": "nomina",
+      "path": "correo/con-adjunto.eml"
+    },
+    {
+      "query": "calendario",
+      "path": "correo/buzon.mbox"
+    },
+    {
+      "query": "Marta Gil",
+      "path": "correo/con-adjunto.eml"
+    }
+  ],
+  "misses": [],
+  "attachment_size_bytes": 9640
+}

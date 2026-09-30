@@ -22,6 +22,7 @@ from universal_search.domain.extraction import (
     ExtractionResult,
 )
 from universal_search.extractors.base import CancelCheck
+from universal_search.extractors.mail import MAIL_EXTENSIONS, read_mail
 from universal_search.extractors.office import read_docx, read_pptx, read_xlsx
 from universal_search.extractors.pdf import read_pdf
 from universal_search.extractors.text import (
@@ -71,6 +72,16 @@ EXTRACTOR_SPECS: tuple[ExtractorSpec, ...] = (
             "limits enforced"
         ),
     ),
+    ExtractorSpec(
+        key="mail",
+        extensions=MAIL_EXTENSIONS,
+        max_chars=MAX_CONTENT_CHARS,
+        binary_safe=True,
+        note=(
+            "stdlib email parser; headers indexed, HTML flattened to text, "
+            "attachments never read"
+        ),
+    ),
 )
 
 EXTRACTORS: dict[str, ExtractFunction] = {
@@ -82,6 +93,10 @@ EXTRACTORS.update({
     ".xlsx": read_xlsx,
     ".xlsm": read_xlsx,
     ".pptx": read_pptx,
+    ".eml": read_mail,
+    ".mbox": read_mail,
+    ".mbx": read_mail,
+    ".email": read_mail,
 })
 
 SUPPORTED_EXTENSIONS: frozenset[str] = frozenset(EXTRACTORS)
@@ -189,6 +204,7 @@ __all__ = [
     "DEFAULT_LIMITS",
     "EXTRACTORS",
     "EXTRACTOR_SPECS",
+    "MAIL_EXTENSIONS",
     "MAX_CONTENT_CHARS",
     "SUPPORTED_EXTENSIONS",
     "TEXT_EXTENSIONS",

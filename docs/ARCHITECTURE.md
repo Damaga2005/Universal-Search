@@ -38,7 +38,13 @@ lives in the UI.
   per-part bytes, expansion ratio) is enforced before unbounded reads on
   every path, truncation is always flagged, and extraction diagnostics are
   persisted in `document_intelligence` (derived, rebuild-preserving,
-  privacy-deletable).
+  privacy-deletable). Phase 033 added `mail.py`: `.eml`/`.mbox`/`.mbx`/
+  `.email` through the stdlib `email` parser only. It composes text
+  deliberately — participants, date, subject, then body — flattens HTML to
+  text with tags as word breaks, **never reads attachments**, treats headers
+  as untrusted (sanitized and length-bounded), and reports a lost body part
+  as PARTIAL rather than as a whole message. `.msg` is an OLE compound file,
+  is not registered, and is never opened.
 - **Domain** (`universal_search/domain/`): `Document` and the stable
   identity `document_id_for(source, path)`.
 - **Index** (`universal_search/index/`):

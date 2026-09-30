@@ -234,10 +234,11 @@ def test_identity_is_stable_and_source_path_is_unique(tmp_path: Path):
 
 def test_extractor_registry_is_inspectable():
     described = {info.key: info for info in extractors.infos()}
-    assert set(described) == {"text", "pdf", "office"}
+    assert set(described) == {"text", "pdf", "office", "mail"}
     assert ".pdf" in described["pdf"].extensions
     assert ".docx" in described["office"].extensions
     assert ".md" in described["text"].extensions
+    assert ".eml" in described["mail"].extensions
     for info in described.values():
         assert info.max_chars > 0
         assert info.note
