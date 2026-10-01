@@ -1,47 +1,57 @@
-# 045 — Search Quality v3
+# 045 — Search Quality & Relevance
 
 ## Objective
-Improve retrieval quality using evidence from real failure cases rather than adding arbitrary ranking signals.
+Improve retrieval quality only in response to reproducible failure cases discovered after the 041–044 product work.
+
+This phase extends the existing evaluation and ranking infrastructure from phases 013, 030, 038 and 040. It must not become a second generic ranking redesign.
 
 ## Evaluation
-Expand the fixed evaluation corpus with:
-- technical university documents;
+Maintain a fixed, versioned evaluation corpus covering relevant Universal Search workloads:
+
+- university/technical documents;
 - code;
-- PDFs;
-- Office documents;
+- PDFs and Office documents;
 - duplicated material;
-- short documents;
-- long documents;
+- short and long documents;
 - filenames with abbreviations;
-- multilingual documents where supported.
+- multilingual documents where supported;
+- realistic local search queries.
 
 Measure:
+
 - Precision@1/5/10;
 - Recall@5/10;
 - MRR;
 - exact-match accuracy;
 - filter accuracy;
-- zero-result accuracy.
+- zero-result accuracy;
+- interactive search latency where relevant.
 
 ## Error analysis
-Classify misses:
+Classify misses as:
+
 - lexical mismatch;
-- morphology;
+- morphology/fuzzy behavior;
 - phrase handling;
 - filename/path;
 - extraction;
 - ranking;
 - filtering;
-- semantic retrieval;
-- stale index.
+- semantic fallback;
+- stale index;
+- interaction/UI behavior.
 
-Every ranking change must correspond to an observed failure class.
+Every material search-quality change must correspond to an observed failure class.
 
 ## Regression control
 Maintain a fixed baseline and prevent improvements in one class from silently degrading another.
 
+Exact filename and explicit query intent remain protected.
+
+If no reproducible failure justifies a ranking change, do not change the ranking.
+
 ## Acceptance
-Search quality improves on documented failure cases without sacrificing exact-match correctness.
+Documented search failures are reduced without sacrificing exact-match correctness, filter correctness or deterministic behavior.
 
 ## Ready-to-copy implementation prompt
-Implement Phase 045 — Search Quality v3. Perform evidence-driven retrieval improvement using a fixed evaluation corpus and explicit error taxonomy. Do not add ranking signals without measuring their effect. Report Precision@K, Recall@K, MRR, exact/filter correctness and zero-result behavior before and after each material change. Preserve exact-match guarantees and keep the evaluation reproducible. Do not push unless explicitly instructed.
+Implement Phase 045 — Search Quality & Relevance. Use the existing evaluation corpus and extend it only for justified missing cases. Classify real failures before changing retrieval or ranking. Report Precision@K, Recall@K, MRR, exact/filter correctness and zero-result behavior before and after every material change. Preserve exact-match guarantees and reproducibility. If evidence does not justify a ranking change, leave the ranking unchanged. Do not push unless explicitly instructed.
