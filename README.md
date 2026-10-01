@@ -1,4 +1,4 @@
-﻿# Universal Search
+# Universal Search
 
 Local-first universal search for Windows.
 
@@ -68,7 +68,7 @@ phase 023 adds a separate indexing control center with typed source actions,
 health/storage/derived-data state and explicit safety confirmations. The
 phase 024 formalised the provider contract (streaming `iter_files`, bounded errors, cancellation, capability/interface negotiation), made the provider key the canonical source discriminator with a `(source, path)` uniqueness migration, and added mounted-path NAS/removable providers plus mixed-provider indexing with per-provider failure isolation. Phase 025 added a versioned extraction contract with bounded PDF/Office resources and visible truncation diagnostics. Phase 026 measured a fixed lexical baseline and shipped a dependency-free, versioned n-gram fallback only where the evidence gate justified it; phase 027 added DPI awareness, `open`/`reveal` commands and reversible per-user Explorer integration. Phase 028 added bounded redacted JSON events, a seven-area `diagnose self-test`, a support bundle that declares what it does not contain, and four named recovery cases that never touch source files. Phase 029 made the CI gates a verified contract and the packaged smoke a real gate; that smoke found and fixed a semantic-layer defect (a zero idf on a one-document index, and a precision gate that rejected morphological variants), re-measured with no metric regression. Phase 030 closed the line with an executable gate: `python -m evaluation.gate` runs thirteen local invariants, including a behavioural proof that no repair can touch a user's files.
 
-Current test count: 1097 tests collected (1094 passed, 3 skipped).
+Current test count: 1131 tests collected.
 
 ## Known limitations
 
@@ -137,6 +137,7 @@ Read this before expecting more than the program does.
 | 034 | Contenido dentro de `.zip`, con rechazo de zip-slip (034) | ✅ |
 | 035 | Operaciones por lotes sobre la selección (035) | ✅ |
 | 036 | Agrupar, ordenar y búsquedas guardadas (036) | ✅ |
+| 037 | Distribución: modo portable y ejecutable único (037) | ✅ |
 
 Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
 by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).
@@ -226,11 +227,55 @@ and a content snippet; ranking is documented in `docs/RANKING.md`.
 
 ```bash
 pip install ".[build]"                       # pyinstaller
-python -m PyInstaller packaging/universal-search.spec
-# dist/UniversalSearch/UniversalSearch.exe   windowed GUI
-# dist/UniversalSearch/universal-search.exe  console CLI + background indexer + optional tray
+powershell -File packaging\build.ps1          # both builds, then smoke-tests them
+# dist/UniversalSearch/UniversalSearch.exe       windowed GUI
+# dist/UniversalSearch/universal-search.exe      console CLI + background indexer + tray
+# dist/UniversalSearch-onefile/UniversalSearch.exe   single file, no folder
 powershell -File packaging/make-shortcut.ps1 -TargetExe "dist\UniversalSearch\UniversalSearch.exe"
 ```
+
+Two builds, because they are two different products. **One-dir** is the
+installed copy: it starts fast and carries both the window and the console
+executable. **One-file** is the portable copy: one `.exe` you can put on a USB
+stick, at the cost of unpacking its runtime on every launch.
+
+`build.ps1` runs what it built — including copying the single-file
+executable to an empty folder and running it there — because the 2.0.0
+release shipped two bare `.exe` files that did not start
+(`PYI-8: Failed to load Python DLL`): a one-dir build needs its `_internal/`
+folder. Only run it if you meant to; use `-SkipSmoke` to build without testing.
+
+### Portable mode
+
+By default the index, configuration and logs live in
+`%LOCALAPPDATA%\Universal Search`, so uninstalling never leaves your index
+behind and two accounts never share one. **Portable mode** moves all of it
+next to the executable instead, for the cases where that is the only sensible
+layout: a USB stick that must carry the index to another PC, a corporate
+machine where nothing may be written outside a network share, or an
+environment where `%LOCALAPPDATA%` is managed by someone else.
+
+```bash
+universal-search portable status          # where do my data live, and why?
+universal-search portable on              # write the marker, start using it next launch
+universal-search portable off             # back to %LOCALAPPDATA%
+```
+
+Portable mode is switched on by either the marker file `portable.txt` beside
+the executable or `UNIVERSAL_SEARCH_PORTABLE=1`, and the data goes to a
+`UniversalSearch-data` folder next to it. Two things it deliberately does not
+do:
+
+- **It never moves an existing index.** Switching mode writes a marker and
+  tells you where to look. Relocating hours of indexing work silently would
+  either duplicate it or lose it.
+- **It never falls back.** If the portable folder cannot be written, the
+  application says so and stops, instead of quietly writing to
+  `%LOCALAPPDATA%` — an index in a place you do not know about is worse than
+  one that refuses to start.
+
+`UNIVERSAL_SEARCH_HOME` still overrides everything, which is how the
+background worker passes its resolved location to the child process.
 
 ## Development
 

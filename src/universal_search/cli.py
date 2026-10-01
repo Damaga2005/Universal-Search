@@ -274,6 +274,36 @@ def main() -> None:
         help="index database (default: the user data directory)",
     )
 
+    # -- portable deployment (phase 037) ---------------------------------------
+    portable = sub.add_parser(
+        "portable",
+        # argparse runs help strings through %-formatting, so a literal
+        # %LOCALAPPDATA% here would raise at parser construction time.
+        help="keep every byte next to the executable instead of the "
+             "per-user data directory",
+    )
+    portable_sub = portable.add_subparsers(
+        dest="portable_command", required=True
+    )
+    portable_status = portable_sub.add_parser(
+        "status", help="show whether this copy is portable and where its data is"
+    )
+    portable_status.add_argument(
+        "--data", action="store_true",
+        help="also list what is inside the portable data directory",
+    )
+    portable_on = portable_sub.add_parser(
+        "on", help="switch this copy to portable mode (writes a marker)"
+    )
+    portable_on.add_argument(
+        "--base", type=Path, default=None,
+        help="directory to mark (default: the folder of the executable)",
+    )
+    portable_off = portable_sub.add_parser(
+        "off", help="return to the per-user data directory"
+    )
+    portable_off.add_argument("--base", type=Path, default=None)
+
     # -- privacy ----------------------------------------------------------------
     privacy = sub.add_parser(
         "privacy", help="what is stored, where, and how to remove it"
@@ -286,6 +316,7 @@ def main() -> None:
         "--database", type=Path, default=default_database,
         help="index database (default: the user data directory)",
     )
+    
     privacy_forget = privacy_sub.add_parser(
         "forget", help="stop indexing one file and delete its derived data"
     )
@@ -386,6 +417,10 @@ def main() -> None:
         if records and records[-1].get("kind") == "index":
             last = records[-1]
             print(f"elapsed={last['duration_s']}s db_writes={last['db_writes']}")
+    elif args.command == "portable":
+        code = _portable_command(args)
+        if code:
+            raise SystemExit(code)
     elif args.command == "privacy":
         code = _privacy_command(args)
         if code:
@@ -637,6 +672,53 @@ def main() -> None:
                     print(f"  {item.name}")
 
 
+def _portable_command(args) -> int:
+    """Portable deployment control (phase 037).
+
+    Switching modes only writes or removes one marker file; it never moves or
+    copies an index. Moving an index between layouts silently would either
+    duplicate hours of work or lose it, and neither is a decision this command
+    may take for someone. The report below says exactly where to look.
+    """
+    from universal_search import portable
+
+    command = args.portable_command
+    if command == "on":
+        try:
+            home = portable.enable(args.base)
+        except portable.PortableUnavailable as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        print(f"modo portable activado. Los datos irán a: {home}")
+        print(
+            "El índice actual no se mueve: sigue donde está. Usa "
+            "'diagnose summary' para ver cuál es el que se está usando."
+        )
+        return 0
+    if command == "off":
+        try:
+            removed = portable.disable(args.base)
+        except portable.PortableUnavailable as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        if removed:
+            print("modo portable desactivado. Los datos vuelven a %LOCALAPPDATA%.")
+        else:
+            print("esta copia ya no estaba en modo portable.")
+        print("El índice portable no se borra: sigue en su carpeta.")
+        return 0
+    current = portable.status()
+    print(f"modo:     {'portable' if current.portable else 'instalado'}")
+    print(f"datos:    {current.home}")
+    print(f"motivo:   {current.reason}")
+    if args.data and current.portable and current.home.is_dir():
+        print("contenido:")
+        for entry in sorted(current.home.iterdir()):
+            marker = "/" if entry.is_dir() else ""
+            print(f"  {entry.name}{marker}")
+    return 0
+
+
 def _privacy_command(args) -> int:
     """Data inventory and per-document removal (spec 018)."""
     from universal_search.privacy import forget, inventory_report
@@ -667,6 +749,16 @@ def _privacy_command(args) -> int:
     report = inventory_report(database)
     print(f"index:            {report['index']}")
     print(f"application home: {report['application_home']}")
+    # Phase 037: which layout this copy is using is part of the inventory, not
+    # an implementation detail. Someone asking "what do you store, and where"
+    # is asking this too.
+    from universal_search import portable
+
+    current = portable.status()
+    print(
+        f"deployment:       {'portable' if current.portable else 'instalado'}"
+        f" ({current.reason})"
+    )
     print("sizes:")
     for name, size in (report["bytes"] or {}).items():
         print(f"  {name:<8} {_format_bytes(size)}")

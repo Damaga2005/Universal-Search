@@ -50,9 +50,47 @@ def test_self_test_covers_every_declared_area(tmp_path) -> None:
         "extractors",
         "worker",
         "storage",
+        # Phase 037: where the data lives is an area of the self-test, because
+        # "my index vanished" is the first question when a portable copy is
+        # involved.
+        "deployment",
     }
     assert all(check.status in {"ok", "warning", "fatal"} for check in report.checks)
     assert report.as_dict()["storage"]["free_bytes"] >= 0
+
+
+def test_self_test_declares_an_installed_deployment(tmp_path) -> None:
+    paths = AppPaths(tmp_path / "home")
+    paths.ensure()
+    SearchDatabase(paths.database)
+
+    check = next(c for c in self_test(paths).checks if c.name == "deployment")
+    assert check.status == "ok"
+    assert str(paths.home) in check.detail
+
+
+def test_self_test_reports_a_portable_deployment(tmp_path) -> None:
+    """A portable copy must be able to name its own data directory."""
+    home = tmp_path / "stick" / "UniversalSearch-data"
+    paths = AppPaths(home, portable=True)
+    paths.ensure()
+    SearchDatabase(paths.database)
+
+    check = next(c for c in self_test(paths).checks if c.name == "deployment")
+    assert check.status == "ok"
+    assert "portable" in check.detail
+    assert str(home) in check.detail
+
+
+def test_self_test_fails_when_a_portable_folder_cannot_be_written(tmp_path) -> None:
+    """Refusing to run is the promise; a quiet fallback would be the bug."""
+    occupied = tmp_path / "occupied"
+    occupied.write_text("a file, not a folder", encoding="utf-8")
+    paths = AppPaths(occupied / "UniversalSearch-data", portable=True)
+    SearchDatabase(tmp_path / "index.db")
+
+    check = next(c for c in self_test(paths).checks if c.name == "deployment")
+    assert check.status == "fatal"
 
 
 def test_support_bundle_is_json_sanitized_and_explicit(tmp_path) -> None:

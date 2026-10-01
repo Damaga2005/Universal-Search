@@ -145,7 +145,22 @@ def _check(name: str, operation) -> CheckResult:
 def self_test(paths: AppPaths | None = None) -> SelfTestReport:
     """Exercise every local subsystem the support bundle reports on."""
     paths = paths or AppPaths.discover()
-    paths.ensure()
+    try:
+        paths.ensure()
+    except Exception as exc:
+        # A self-test that crashes on the very condition it exists to
+        # diagnose is the failure mode itself. In a portable copy with an
+        # unwritable folder, report it and stop: every remaining check would
+        # fail for the same reason and would bury the one line that matters.
+        return SelfTestReport(
+            (
+                CheckResult(
+                    "deployment", "fatal",
+                    f"{type(exc).__name__}: {exc}"[:MAX_FIELD_CHARS],
+                ),
+            ),
+            {"free_bytes": 0, "total_bytes": 0},
+        )
     from universal_search import extractors
     from universal_search.background_service import BackgroundService
     from universal_search.index.database import SCHEMA_VERSION, SearchDatabase
@@ -194,7 +209,28 @@ def self_test(paths: AppPaths | None = None) -> SelfTestReport:
     storage = {"free_bytes": int(usage.free), "total_bytes": int(usage.total)}
     status = "ok" if storage["free_bytes"] > 0 else "fatal"
     checks.append(CheckResult("storage", status, f"free={storage['free_bytes']}"))
+    # Phase 037: which layout this copy writes to is the first thing to know
+    # when an index "disappears", so it belongs in the self-test rather than
+    # in a document nobody has open at the time. Portable mode with an
+    # unwritable folder is a fatal here, not a warning: refusing to run is the
+    # promised behaviour and a fallback to %LOCALAPPDATA% would be the bug.
+    checks.append(_deployment_check(paths))
     return SelfTestReport(tuple(checks), storage)
+
+
+def _deployment_check(paths: AppPaths) -> CheckResult:
+    """Report the data layout, and whether it can actually be written."""
+    from universal_search.portable import PortableUnavailable, ensure_writable
+
+    if not paths.portable:
+        return CheckResult(
+            "deployment", "ok", f"installed layout at {paths.home}"
+        )
+    try:
+        ensure_writable(paths.home)
+    except PortableUnavailable as exc:
+        return CheckResult("deployment", "fatal", str(exc))
+    return CheckResult("deployment", "ok", f"portable at {paths.home}")
 
 
 @dataclass(frozen=True, slots=True)

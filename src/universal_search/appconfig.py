@@ -18,24 +18,52 @@ from universal_search.providers.ignore import IgnoreRules
 log = logging.getLogger("universal_search.config")
 
 
-def default_home() -> Path:
-    """Per-user application data directory (overridable for tests)."""
-    override = os.environ.get("UNIVERSAL_SEARCH_HOME")
-    if override:
-        return Path(override)
+def per_user_home() -> Path:
+    """The installed layout: one index per user, outside the program folder.
+
+    Split out from :func:`default_home` because phase 037 makes "where the data
+    lives" a *decision* with more than one answer, and the diagnostics need to
+    report the installed location without going through that decision.
+    """
     if sys.platform == "win32":
         base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
         return Path(base) / "Universal Search"
     return Path.home() / ".universal-search"
 
 
+def default_home() -> Path:
+    """Application home: an explicit override, else portable, else installed.
+
+    The order matters and is asserted by tests. An explicit
+    ``UNIVERSAL_SEARCH_HOME`` wins because the background worker passes it to
+    its child and a test that sets it means exactly what it says; portable mode
+    comes next because it is a property of the deployment, not of the
+    environment; and only then does the installed layout apply.
+    """
+    override = os.environ.get("UNIVERSAL_SEARCH_HOME")
+    if override:
+        return Path(override)
+    from universal_search import portable
+
+    return portable.resolve() if portable.requested()[0] else per_user_home()
+
+
 @dataclass(frozen=True, slots=True)
 class AppPaths:
     home: Path
+    # Phase 037: true only for a *discovered* portable deployment. An explicit
+    # ``AppPaths(tmp_path)`` in a test is never portable, so portability is a
+    # property of how the paths were found, not of the folder they point at.
+    portable: bool = False
 
     @classmethod
     def discover(cls, home: Path | None = None) -> "AppPaths":
-        return cls(Path(home) if home else default_home())
+        if home is not None:
+            return cls(Path(home))
+        from universal_search import portable
+
+        current = portable.status()
+        return cls(current.home, portable=current.portable)
 
     @property
     def database(self) -> Path:
@@ -132,6 +160,18 @@ class AppPaths:
         return self.control_state_file
 
     def ensure(self) -> None:
+        """Create the application home, or fail with a nameable reason.
+
+        Every writer goes through here, which makes this the single place where
+        portable mode can refuse to run instead of scattering the check: a
+        portable deployment whose folder is read-only must say so once, at the
+        moment it matters, rather than half-indexing somewhere else.
+        """
+        if self.portable:
+            from universal_search.portable import ensure_writable
+
+            ensure_writable(self.home)
+            return
         self.home.mkdir(parents=True, exist_ok=True)
 
 

@@ -1,4 +1,4 @@
-﻿# Roadmap
+# Roadmap
 
 ## v0.1
 - [x] Project skeleton
@@ -54,7 +54,7 @@
 - [x] Content inside archives (034)
 - [x] GUI batch operations (035)
 - [x] Grouping, sorting and saved searches (036)
-- [ ] Distribution: portable mode and single executable (037)
+- [x] Distribution: portable mode and single executable (037)
 - [ ] Reproducible performance gate (038)
 - [ ] Accessibility and interface (039)
 - [ ] Universal Search v3 quality gate (040)
@@ -76,7 +76,7 @@
 
 ---
 
-Phases 001–036 are implemented and documented (per-phase reports in
+Phases 001–037 are implemented and documented (per-phase reports in
 `docs/development/`). The v2 quality gate is an executable instrument, not a
 promise: `python -m evaluation.gate` runs thirteen local invariants —
 dependency budget, no network or model imports, a platform-independent data
@@ -90,4 +90,4 @@ exact-match correctness 1.0, no top-1 regression, nonsense queries still
 empty) after the packaged smoke exposed and fixed a zero-idf degeneracy and an
 exact-token precision gate.
 
-Current test count: 1097 tests collected (1094 passed, 3 skipped).
+Current test count: 1131 tests collected.

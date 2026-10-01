@@ -7,6 +7,73 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 037 - Distribution: portable mode and a single executable
+- **Portable mode** (`portable status|on|off`): index, configuration, logs and
+  every coordination file live in a `UniversalSearch-data` folder next to the
+  executable, and **nothing at all is written under `%LOCALAPPDATA%`**. For the
+  three cases where that is the only sensible layout: a USB stick that has to
+  carry the index, a corporate machine that forbids writing outside a share,
+  and an environment where `%LOCALAPPDATA%` is managed by someone else.
+  Switched on by the `portable.txt` marker beside the executable or
+  `UNIVERSAL_SEARCH_PORTABLE=1`; `UNIVERSAL_SEARCH_HOME` always wins, which is
+  how the background worker passes its resolved home to its child process.
+- Two things portable mode deliberately does **not** do: it does not move an
+  existing index (that is a decision about hours of work, so the command
+  writes a marker and says where to look), and it never falls back. If the
+  folder cannot be written it says so and stops, because an index in a place
+  the user does not know about is worse than one that refuses to start. Every
+  writer goes through `AppPaths.ensure()`, so there is one place where it can
+  refuse.
+- **A real single-file build.** `packaging/universal-search-onefile.spec`
+  produces one `.exe` with no `_internal/` folder, for the copies that get
+  copied somewhere. The two-dir build remains the installed copy: it starts
+  fast and carries both the windowed and the console executable.
+- **`packaging/build.ps1`** builds both and then runs what it built — for the
+  single-file build, copied to an empty folder first. The 2.0.0 release
+  published two bare `.exe` files that **did not start** (`PYI-8: Failed to
+  load Python DLL`) because a one-dir build needs its sibling `_internal/`.
+  The cause was procedural — a sequence of steps with nothing checking the
+  result — so the check is now part of the build and of CI.
+- The single-file build is a **console** build, deliberately. The first version
+  was windowed and the smoke caught what that costs: `--version` and the exit
+  codes worked, but `search` printed nothing at all, because a windowed
+  PyInstaller build has no stdout. The cost paid instead is a console window
+  behind the search window on double-click.
+- **Bug found by this phase's own gate, in phase 031.** The fuzzy layer was
+  reachable but empty on a freshly built index: nothing ever marked it stale,
+  so `transisto` retrieved nothing until somebody ran the rebuild by hand.
+  The indexer now marks the blocking fingerprints dirty after a pass that
+  changed documents, next to the line that already did it for the semantic
+  layer. Phase 031's own tests missed it because they call `rebuild()`
+  explicitly — a test that sets the scenario up cannot find a scenario nobody
+  set up.
+- The gate's first version failed for the wrong reason (it compared against a
+  directory the executable was not in). The fix was to run the gate from the
+  folder it is pretending to be the copy in, rather than add a production
+  switch that exists only to make a test comfortable.
+- The gate then leaked its own simulation: it left `LOCALAPPDATA` pointing into
+  its temporary workspace and stayed inside the fake stick folder, so three
+  tests in other modules failed with an index that had appeared next to the
+  repository. The same failure the phase exists to prevent, aimed at the suite.
+  Both the working directory and the environment are now restored by a context
+  manager, including when a measurement raises, and two tests fix that. Three
+  of the new tests had the same leak in a smaller form, writing `os.environ`
+  instead of using `monkeypatch`.
+- `diagnose self-test` gains a `deployment` area, and it is the whole report
+  when a portable folder is unwritable: a self-test that crashes on the
+  condition it exists to diagnose is the failure mode itself. `privacy show`
+  now declares the deployment too.
+- Evidence gate `python -m evaluation.distribution_gate`: **11/11 PASS**.
+  `packaging/build.ps1` verified on Windows 11, Python 3.14.6: one-dir 4.1 MB
+  per executable, single-file **15.1 MB**, both answering `--version`, index
+  and search from a folder with nothing else in it.
+- Full suite: **1 failed, 1127 passed, 3 skipped** (1131 collected). The failure
+  is `test_gui_ux`'s Tk `pump` timeout and it **fails identically without this
+  code**, checked by stashing the whole phase and re-running the suite; it
+  passes in isolation (18/18). Recorded with the evidence rather than smoothed
+  over.
+- `tests/test_distribution.py`: 31 tests. `tests/test_observability.py`: +3.
+
 ### Phase 036 - Grouping, sorting and saved searches
 - `--sort {relevance,name,modified,size}`, `--group
   {none,folder,type,source,date}`, and `--save` / `--use` / `--delete-saved`

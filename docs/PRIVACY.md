@@ -49,6 +49,7 @@ quedar vieja) y se muestra con `universal-search privacy show`.
 | **Procesos concurrentes** | WAL para lectores/escritores; leases del SO para locks y reclamaciones; identidad PID/generación/creación; marcador de parada por generación; PID de ventana con instancia única | `test_background`, `test_worker_ownership`, `test_platforms` |
 | **Fuga por el registro** | Mensajes acotados a 500 caracteres; ninguna ruta de código registra texto de documento ni consultas | `test_privacy` (secreto + consulta privada) |
 | **Windows multiusuario** | Todo vive bajo `%LOCALAPPDATA%` del usuario; ningún dato compartido ni claves de HKLM | `test_release` |
+| **Copia portable** (fase 037) | El modo portable mueve índice, configuración y registros a una carpeta `UniversalSearch-data` junto al ejecutable, **sin nada** bajo `%LOCALAPPDATA%`. Se activa con `portable on` o el marcador `portable.txt`; `UNIVERSAL_SEARCH_HOME` siempre manda. No mueve un índice existente y nunca cae a `%LOCALAPPDATA%` en silencio: si la carpeta no se puede escribir, avisa y se niega a arrancar. | `test_distribution` (29 tests), `evaluation.distribution_gate` |
 | **Integridad de paquetes** | Fuera del alcance de la aplicación: la verificación de firmas del instalador es responsabilidad de la cadena de distribución | ver *Limitaciones* |
 | **Rutas accidentales sensibles** (`.ssh`, gestores de contraseñas) | Reglas de exclusión configurables (fase 002) + `privacy forget` | `test_providers` / `test_privacy` |
 
@@ -59,7 +60,8 @@ quedar vieja) y se muestra con `universal-search privacy show`.
   con aislamiento.
 - El índice no está cifrado en reposo: está en el perfil del usuario y el
   disco del equipo puede estar cifrado (BitLocker), pero la aplicación no
-  añade su propia capa.
+  añade su propia capa. En modo portable pasa a estar en el medio donde vive
+  el ejecutable (un pendrive, por ejemplo), y ese medio sale del equipo con él.
 - La extracción de PDF/DOCX/XLSX/PPTX confía en `pypdf` y `python-docx`;
   un archivo hostil puede agotar el proceso, no ejecutar código. Aislar la
   extracción en un proceso separado es trabajo futuro.

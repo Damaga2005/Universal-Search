@@ -1,0 +1,84 @@
+{
+  "phase": "037",
+  "verdicts": [
+    {
+      "gate": "T1 state stays in the portable folder",
+      "measured": 0,
+      "threshold": 0,
+      "passed": true,
+      "detail": "todo dentro de UniversalSearch-data/; nada fuera"
+    },
+    {
+      "gate": "T2 search works portable",
+      "measured": 1,
+      "threshold": 1,
+      "passed": true,
+      "detail": "'transisto' encuentra nota.md desde el indice portable"
+    },
+    {
+      "gate": "T3 forget works portable",
+      "measured": 1,
+      "threshold": 1,
+      "passed": true,
+      "detail": "receta.md sale del indice portable"
+    },
+    {
+      "gate": "T4 files written under LOCALAPPDATA",
+      "measured": 0,
+      "threshold": 0,
+      "passed": true,
+      "detail": "0 escrituras en el directorio por usuario"
+    },
+    {
+      "gate": "T5 user documents untouched",
+      "measured": 1,
+      "threshold": 1,
+      "passed": true,
+      "detail": "forget no borra ficheros"
+    },
+    {
+      "gate": "T6 explicit home wins",
+      "measured": 1,
+      "threshold": 1,
+      "passed": true,
+      "detail": "UNIVERSAL_SEARCH_HOME manda sobre el marcador"
+    },
+    {
+      "gate": "T7 installed copy unchanged",
+      "measured": 1,
+      "threshold": 1,
+      "passed": true,
+      "detail": "sin marcador: C:\\Users\\dmart\\AppData\\Local\\Universal Search"
+    },
+    {
+      "gate": "T8 silent fallbacks",
+      "measured": 2,
+      "threshold": 0,
+      "passed": true,
+      "detail": "una carpeta inutilizable da error, no se cambia de sitio"
+    },
+    {
+      "gate": "T9 one version in both specs",
+      "measured": 1,
+      "threshold": 1,
+      "passed": true,
+      "detail": "icono y recurso de version en los dos .spec"
+    },
+    {
+      "gate": "T10 one-file spec is one file",
+      "measured": 1,
+      "threshold": 1,
+      "passed": true,
+      "detail": "sin COLLECT: los binarios van dentro del .exe"
+    },
+    {
+      "gate": "T11 one-file answers --version",
+      "measured": 1.0,
+      "threshold": 1,
+      "passed": true,
+      "detail": "universal-search 2.0.0 | solo en la carpeta: ['UniversalSearch.exe']"
+    }
+  ],
+  "portable_home": "C:\\Users\\dmart\\AppData\\Local\\Temp\\universal-search-037-1tama35d\\UniversalSearch\\UniversalSearch-data",
+  "onefile_exercised": true
+}

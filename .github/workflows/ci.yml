@@ -121,6 +121,15 @@ jobs:
       - name: Build the executables
         run: python -m PyInstaller packaging/universal-search.spec --noconfirm
 
+      # Phase 037: the single-file build is a second artefact, and the 2.0.0
+      # release shipped two bare .exe files that did not run (PYI-8: Failed to
+      # load Python DLL) because a one-dir build needs _internal/. So it is
+      # built here and then executed *alone*, from a folder with no siblings.
+      - name: Build the single-file executable
+        run: |
+          python -m PyInstaller packaging/universal-search-onefile.spec `
+            --noconfirm --distpath dist/UniversalSearch-onefile
+
       - name: Smoke test the packaged CLI
         shell: pwsh
         run: |
@@ -147,10 +156,41 @@ jobs:
           if ($process.HasExited) { throw "GUI executable exited immediately" }
           Stop-Process -Id $process.Id -Force
 
+      - name: Smoke test the single-file executable alone
+        shell: pwsh
+        run: |
+          # Copied somewhere with nothing else in the folder: if this fails,
+          # the artefact we publish is one that does not start.
+          $built = "dist\UniversalSearch-onefile\UniversalSearch.exe"
+          if (-not (Test-Path $built)) { throw "single-file executable missing" }
+          $alone = Join-Path $env:RUNNER_TEMP "onefile-alone"
+          New-Item -ItemType Directory -Force -Path $alone | Out-Null
+          $lonely = Join-Path $alone "UniversalSearch.exe"
+          Copy-Item $built $lonely
+          $env:UNIVERSAL_SEARCH_HOME = Join-Path $alone "home"
+          & $lonely --version
+          if ($LASTEXITCODE -ne 0) { throw "the single-file executable did not answer --version" }
+          $docs = Join-Path $alone "docs"
+          New-Item -ItemType Directory -Force -Path $docs | Out-Null
+          "transistor bjt polarizacion" | Out-File -Encoding utf8 "$docs\nota.md"
+          & $lonely index $docs --database "$alone\index.db"
+          # -match is a FILTER operator on an array, so join first; otherwise
+          # this throws whenever any line of output lacks the file name.
+          $found = (& $lonely search "transisto" --database "$alone\index.db") -join "`n"
+          if ($found -notmatch "nota\.md") {
+            throw "the single-file executable did not retrieve the indexed document"
+          }
+          # Portable mode has to work from the folder the executable sits in.
+          & $lonely portable on --base $alone
+          $status = & $lonely portable status
+          if (($status -join " ") -notmatch [regex]::Escape($alone)) {
+            throw "portable status did not report the portable data directory"
+          }
+
       - name: Record artifact hashes
         shell: pwsh
         run: |
-          Get-FileHash dist\UniversalSearch\*.exe -Algorithm SHA256 |
+          Get-FileHash dist\UniversalSearch\*.exe, dist\UniversalSearch-onefile\*.exe -Algorithm SHA256 |
             ForEach-Object { "$($_.Hash)  $($_.Path)" } |
             Out-File -Encoding ascii artifacts.sha256
           Get-Content artifacts.sha256
@@ -171,6 +211,7 @@ jobs:
           name: universal-search-windows
           path: |
             dist/UniversalSearch/*.exe
+            dist/UniversalSearch-onefile/*.exe
             artifacts.sha256
             artifacts-support.json
           retention-days: 30

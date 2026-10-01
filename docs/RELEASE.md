@@ -46,16 +46,48 @@ que el documento y su texto siguen ahí.
 
 ## 3. Construcción
 
-```bash
-python -m pip install -e ".[build]"      # incluye pyinstaller
-python -m PyInstaller packaging/universal-search.spec --noconfirm
+```powershell
+python -m pip install -e ".[build]"       # incluye pyinstaller
+powershell -File packaging\build.ps1      # ambos builds, y los arranca
 ```
 
-- Salida: `dist/UniversalSearch/universal-search.exe` (CLI, con consola) y
-  `UniversalSearch.exe` (ventana, sin consola), más `_internal/`.
+`build.ps1` es el procedimiento **de referencia** desde la fase 037, porque la
+auditoría de 2.0.0 publicó dos `.exe` sueltos que no arrancaban y nadie lo
+comprobó. Construye y luego ejecuta lo construido; para el ejecutable de un
+solo fichero lo copia antes a una carpeta vacía.
+
+| Build | Spec | Salida | Uso |
+|---|---|---|---|
+| one-dir | `universal-search.spec` | `dist/UniversalSearch/` (CLI con consola + ventana sin consola + `_internal/`) | instalado |
+| one-file | `universal-search-onefile.spec` | `dist/UniversalSearch-onefile/UniversalSearch.exe` | portátil |
+
 - El `.spec` fija el icono y el recurso de versión desde
-  `packaging/version_file.txt`.
+  `packaging/version_file.txt`. Los dos `.spec` declaran la **misma** versión
+  (`test_release`, puerta T9).
+- El spec one-file necesita su propio `--distpath`: escribe el `.exe` suelto
+  donde se le indique y sin carpeta propia.
 - Dependencias en tiempo de ejecución: `pypdf`, `watchdog`. Nada más.
+- `-SkipSmoke` construye sin probar. **No se publica nada construido con esa
+  opción sin haber ejecutado el humo a mano.**
+
+### Qué artefacto se publica
+
+El bundle one-dir es un **zip del árbol completo**. Publicar los `.exe` sueltos
+no funciona (`PYI-8: Failed to load Python DLL`). El one-file sí se publica
+suelto, porque es un fichero y es lo que hace.
+
+## 3 bis. Modo portable (fase 037)
+
+La instalación escribe en `%LOCALAPPDATA%\Universal Search`. Una copia portátil
+escribe en `UniversalSearch-data` junto al ejecutable y **nada** bajo
+`%LOCALAPPDATA%`; se activa con el marcador `portable.txt` al lado del
+ejecutable o con `UNIVERSAL_SEARCH_PORTABLE=1`, y `UNIVERSAL_SEARCH_HOME` manda
+siempre. Para publicar una copia portátil se adjunta **la carpeta `data`
+completa** si se quiere conservar el índice; si no, se adjunta solo el
+ejecutable y quien lo reciba indexa desde cero.
+
+El cambio de modo **no mueve un índice existente** y **no cae** a
+`%LOCALAPPDATA%` si la carpeta no se puede escribir.
 
 ## 4. Instalador
 
@@ -93,7 +125,7 @@ python -m PyInstaller packaging/universal-search.spec --noconfirm
 |---|---|---|---|
 | `quality` | windows-latest | sí | pyflakes, suite completa, migraciones, fiabilidad, calidad de búsqueda, seguridad, observabilidad/recuperación, shell, contrato de release |
 | `core-portability` | ubuntu-latest | **no** (sondeo) | suite sin los tests de GUI/atajo/instalador, para medir la independencia del núcleo |
-| `package` | windows-latest | sí (tras `quality`) | build con PyInstaller, prueba de humo del CLI **y del ejecutable GUI**, hashes y paquete de soporte |
+| `package` | windows-latest | sí (tras `quality`) | build con PyInstaller (one-dir **y one-file**), prueba de humo del CLI, del ejecutable GUI y del ejecutable único **alone**, hashes y paquete de soporte |
 
 El trabajo de Ubuntu es deliberadamente no bloqueante: el núcleo es
 independiente de la plataforma (fase 016), pero GUI, registro, atajo global
@@ -150,7 +182,8 @@ antes del `PyInstaller` en la lista, y también en CI.
       y comprobar que `evaluation/semantic_baseline.json` describe el modelo
       que se envía (`NGRAM_VERSION`) y que las consultas "debe recuperar
       nada" siguen vacías.
-7. [ ] `python -m PyInstaller packaging/universal-search.spec --noconfirm`.
+7. [ ] `powershell -File packaging\build.ps1` (ambos builds + humo de los
+       tres ejecutables, incluido el one-file copiado a una carpeta vacía).
 8. [ ] Prueba de humo del empaquetado (abajo), con los dos ejecutables:
       el CLI y la ventana, que debe abrir y cerrarse.
 8 bis. [ ] `universal-search diagnose self-test` y `diagnose export` sobre el
@@ -164,7 +197,8 @@ antes del `PyInstaller` en la lista, y también en CI.
        instalar esta, y comprobar que los documentos siguen (migraciones).
 12. [ ] Probar el desinstalado: el verbo Explorer desaparece y los datos
        sobreviven sin flag.
-13. [ ] `Get-FileHash` de los ejecutables; publicarlos con las notas.
+13. [ ] `Get-FileHash` de los ejecutables (los tres, incluido el one-file);
+        publicarlos con las notas. El one-dir se publica **empaquetado**.
 14. [ ] Notas de versión: cambios, migraciones, problemas conocidos,
        hashes.
 15. [ ] Publicar (push) **solo** con instrucción explícita.
@@ -195,6 +229,10 @@ Ejecutado en Windows 11, Python 3.14.6, 2026-09-23.
 - **Tk intermitente**: con la máquina muy ocupada, el runtime de Tcl/Tk
   puede no leer su propia biblioteca durante un instante. Los tests de
   GUI se omiten con el motivo en ese caso, en vez de fallar.
+- **Inno Setup sin validar**: `installer.iss` está versionado y sincronizado, y
+  **no entra en CI** (haría falta una dependencia de compilación que el
+  proyecto no tiene). El instalador de referencia sigue siendo
+  `packaging/install.ps1`, verificado por `tests/test_release.py`.
 - **Actualización manual**: sin autoactualizador (decisión, no carencia
   de tiempo).
 - **Sin firma digital**: los ejecutables no están firmados.

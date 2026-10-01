@@ -356,6 +356,51 @@ the manual update strategy (no auto-updater, by decision), the release
 checklist, the final quality gate with recorded results, and the known
 issues. `CHANGELOG.md` records what changed in phases 011–022.
 
+## Where the data lives (phase 037)
+
+One index, one location. Which location is a decision with three answers, and
+`portable.py` owns it:
+
+| Precedence | Rule | Home |
+|---|---|---|
+| 1 | `UNIVERSAL_SEARCH_HOME` set | exactly that |
+| 2 | `portable.txt` marker or `UNIVERSAL_SEARCH_PORTABLE=1` | `<executable dir>/UniversalSearch-data` |
+| 3 | neither | `%LOCALAPPDATA%\Universal Search` |
+
+The explicit home comes first because the background worker passes its resolved
+home to its child process: portable mode has to survive a process boundary, and
+an environment variable is the only thing that does.
+
+Two properties this ordering guarantees, both asserted in
+`tests/test_distribution.py`:
+
+- **Portable never falls back.** `AppPaths.ensure()` proves the folder is
+  writable and raises `PortableUnavailable` if it is not. Every writer goes
+  through `ensure()`, so there is one place where the mode refuses to run.
+  Silently writing to `%LOCALAPPDATA%` would put the index somewhere the user
+  does not know about — worse than refusing to start.
+- **Portable is visible.** `portable status`, `privacy show` and the
+  `deployment` area of `diagnose self-test` all name the directory and the rule
+  that chose it.
+
+Portable mode does **not** relocate an existing index. Switching writes the
+marker and reports where to look; moving hours of indexing work is the user's
+decision, not a side effect.
+
+## Distribution
+
+Two builds, because they are two products:
+
+| Build | Spec | Output | Use |
+|---|---|---|---|
+| one-dir | `packaging/universal-search.spec` | `dist/UniversalSearch/` (windowed + console `.exe` + `_internal/`) | installed |
+| one-file | `packaging/universal-search-onefile.spec` | one `.exe` | portable |
+
+`packaging/build.ps1` builds both and then **runs what it built** — for the
+one-file build, copied to an empty folder first, which is the reproduction of
+the 2.0.0 defect (two bare `.exe` files that did not start because a one-dir
+build needs its `_internal/` sibling).
+
 ## Data, dependencies, non-goals
 
 - Storage: local SQLite (FTS5). No Elasticsearch, Redis, Docker, cloud, AI,
@@ -366,5 +411,9 @@ issues. `CHANGELOG.md` records what changed in phases 011–022.
 - The tray is an optional per-user UI over the independent worker, not a
   privileged daemon. Settings and diagnostics stay in the existing window;
   autostart remains the worker's `indexer run` command.
+- A portable deployment keeps its index, config and logs in a folder next to the
+  executable, which means those bytes sit on whatever medium the copy lives on.
+  `privacy show` and `diagnose self-test` name the directory; see the table
+  above.
 - Delivered phases plug into this layering without moving core logic into a
-  frontend. Still open: planned phases 023–030.
+  frontend. Still open: planned phases 038–040.

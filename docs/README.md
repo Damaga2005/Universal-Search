@@ -1,4 +1,4 @@
-﻿# Universal Search — Roadmap & Documentation
+# Universal Search — Roadmap & Documentation
 
 Índice de documentación con el estado real del roadmap, fase a fase.
 El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
@@ -43,6 +43,7 @@ El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
 | 034 | Contenido dentro de `.zip` | ✅ Completada | — | [informe](development/034-archive-content-report.md) |
 | 035 | Operaciones por lotes sobre la selección | ✅ Completada | — | [informe](development/035-batch-operations-report.md) |
 | 036 | Agrupar, ordenar y búsquedas guardadas | ✅ Completada | — | [informe](development/036-organize-report.md) |
+| 037 | Distribución: modo portable y ejecutable único | ✅ Completada | — | [informe](development/037-distribution-report.md) |
 
 Verificado en la fase 010: **208 tests en verde**
 (`.venv\Scripts\python -m pytest`), E2E completo de indexador, CLI, GUI e
@@ -58,7 +59,7 @@ nombrados, puertas de CI verificadas por test y un gate v2 ejecutable de 13
 invariantes (`python -m evaluation.gate`); detalles y límites en el
 [informe de la fase 030](development/030-v2-quality-gate-report.md).
 
-Current test count: 1097 tests collected (1094 passed, 3 skipped).
+Current test count: 1131 tests collected.
 
 ## Cómo ejecutar
 

@@ -569,6 +569,7 @@ class Indexer:
             self._invalidate_graph(graph_touched)
         if stats.created or stats.updated or stats.deleted:
             self._mark_semantic_dirty()
+            self._mark_fuzzy_dirty()
         record_index(time.perf_counter() - started, stats.as_dict(), db_writes)
         return stats
 
@@ -586,6 +587,25 @@ class Indexer:
             SemanticIndex(self.database).mark_dirty()
         except Exception:
             log.exception("semantic index marked dirty deferred to rebuild")
+            return
+
+    def _mark_fuzzy_dirty(self) -> None:
+        """Mark the blocking fingerprints stale after a pass (phase 031).
+
+        Found by the phase-037 evidence gate: the fuzzy layer was reachable but
+        empty on a freshly built index, because nothing ever flagged it stale.
+        ``transisto`` returned nothing until somebody ran the rebuild by hand —
+        the exact failure phase 031 was written to remove, invisible to its own
+        tests because they call ``rebuild()`` explicitly.
+
+        Same contract as the semantic layer: flag only, never fail the pass.
+        """
+        try:
+            from universal_search.fuzzy.index import FuzzyIndex
+
+            FuzzyIndex(self.database).mark_dirty()
+        except Exception:
+            log.exception("fuzzy index marked dirty deferred to rebuild")
             return
 
     def index_sources(
