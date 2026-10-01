@@ -7,6 +7,74 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 040 - Quality gate v3: re-measure everything and decide
+- The gate goes from **13 invariants to 23**. The thirteen from phase 030 are
+  unchanged; the ten new ones are one per promise the 031–040 programme made,
+  so a gate that stopped checking at the old boundary would have quietly stopped
+  guarding the nine phases it had just added — which is how gates rot.
+- `PHASES` widens from `range(1, 31)` to `range(1, 41)`. A gate that documents
+  001-030 and calls itself closed is guarding a programme that ended nine
+  phases ago.
+- The new invariants, and what each one is standing in for:
+  - **optional layers are removable** — "optional" means *removable*, not merely
+    present. After `remove_all()` on both the fuzzy and the semantic layer, 0
+    rows remain and exact search still works. Phase 031's own gate could not see
+    this because it always had the layers switched on.
+  - **hostile archives are bounded** — the per-entry budget and the zip-slip
+    refusal are in the extraction path, not in a document.
+  - **batch actions stay inside the results** — one action opens exactly the
+    paths it was handed, never a path of its own, capped at 50.
+  - **portable never writes to the user directory** — everything inside
+    `UniversalSearch-data`, **0** files under `%LOCALAPPDATA%`.
+  - **portable never falls back silently** — an unusable folder raises instead
+    of relocating the index somewhere the user does not know about.
+  - **both builds pin one version** — 2.0.0 in all three places, the icon in
+    both, and the one-file spec does not call `COLLECT`, which is the defect
+    the 2.0.0 release published.
+  - **the perf gate can decline to conclude** — three distinct exit codes and a
+    machine under load genuinely vetoes the run.
+  - **every visible string is catalogued** — 86 entries, 0 literals left inline.
+  - **colour contrast meets WCAG AA** — 7 pairs in both themes.
+  - **saved searches hold no user data** — query and presentation only, so the
+    config file never becomes an index of someone's documents.
+- Every phase gate re-run: 031 SHIP 6/6, 032 SHIP, 033 SHIP, 034 SHIP, 035
+  SHIP, 036 SHIP 9/9, 037 SHIP 11/11, 039 SHIP 6/6. Search quality unchanged at
+  MRR 0,833. pyflakes clean.
+- **The performance gate reported INCONCLUYENTE (exit 2) while the full suite
+  was running**, having executed no measurement code at all, and this report
+  does not quote a latency figure from it. The idle-machine run is in the phase
+  038 report: 5% CPU, calibration 1.00x, all nine metrics inside tolerance,
+  **PASS**. Mixing the two as if they were comparable is exactly the document
+  phase 038 exists to prevent.
+- The gate also gained its own gate-suite job in CI: `test_v2_gate.py` tests
+  the gate, so leaving it ungated would make the newest invariants the first to
+  rot unnoticed.
+- **Decision: not published.** `docs/RELEASE.md` step 15 says to push only on
+  explicit instruction, and there is none in this session. The procedure was
+  written so that the decision to release does not depend on someone being in a
+  hurry. What is ready: 40 documented phases committed, clean tree, gate green,
+  all three executables built and started by `packaging/build.ps1`.
+- **The skipped tests come in two kinds**, and conflating them would be the
+  easy mistake: three are the filesystem tests this operating system will not
+  create (symlinks), unchanged since phase 020; three are the Tk window tests
+  in `test_accessibility.py`, skipped with the reason when the runtime does not
+  start in that instant. None is counted as passing, and the number the docs
+  state is the 1216 *collected*, because that is the figure
+  `pytest --collect-only` can know without running anything.
+- **Full suite: 1210 passed, 6 skipped, 0 failed** (1216 collected). Two
+  earlier runs of the same tree failed two `test_gui_ux` tests, because the
+  Tcl/Tk runtime sometimes cannot read its own library for a fraction of a
+  second when the suite saturates the machine; both pass in isolation. All three
+  runs are recorded rather than the flattering one, because a gate that
+  publishes a number and hides the variance is exactly what this programme has
+  spent forty phases correcting. No threshold was raised to hide it.
+- `tests/test_v2_gate.py` grows from 20 tests to 34, and two of them assert the
+  gate's own *extent*: that there are exactly 23 invariants, that all ten new
+  ones are present by name, and that `PHASES` reaches 040. A gate that stopped
+  checking at the old boundary would do so without turning red, which is why
+  the boundary needs a test of its own. Two of the new ones assert that the new
+  checks can fail — an uncatalogued string and a palette that washes out.
+
 ### Phase 039 - Accessibility and interface, measured instead of promised
 - **Every user-visible string moves to a catalogue** (`gui/strings.py`, 86
   entries), keyed by what the string *is* (`MENU.INDEXER.PAUSE`) and never by

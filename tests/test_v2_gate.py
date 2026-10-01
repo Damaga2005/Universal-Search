@@ -8,6 +8,7 @@ is cheap, asserts that the check *can* fail.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -43,6 +44,148 @@ def test_gate_report_is_serializable():
 
     assert json.loads(json.dumps(payload))["ok"] is True
     assert len(payload["checks"]) == len(gate.CHECKS)
+
+
+def test_the_gate_covers_the_whole_v2x_programme():
+    """Phase 040 widened the gate from 13 to 23 invariants.
+
+    The point of the test is the *count and the names*: a gate that stops
+    checking at the old boundary would quietly stop guarding the nine phases it
+    had just added, and it would do so without turning red.
+    """
+    names = {check.name for check in gate.run_all().checks}
+
+    assert len(gate.CHECKS) == 23, (
+        f"the v3 gate should have 23 invariants, it has {len(gate.CHECKS)}"
+    )
+    for phase_040 in (
+        "optional layers are removable",
+        "hostile archives are bounded",
+        "batch actions stay inside the results",
+        "portable never writes to the user directory",
+        "portable never falls back silently",
+        "both builds pin one version",
+        "perf gate can decline to conclude",
+        "every visible string is catalogued",
+        "colour contrast meets WCAG AA",
+        "saved searches hold no user data",
+    ):
+        assert phase_040 in names, f"{phase_040} is missing from the v3 gate"
+
+
+def test_every_phase_of_the_programme_is_in_range():
+    """Phase 040 widened PHASES from 30 to 40. A gate that documents 001-030
+    and calls itself closed is guarding a programme that ended nine phases ago.
+    """
+    assert gate.PHASES.start == 1
+    assert gate.PHASES.stop == 41, gate.PHASES
+    assert max(gate.PHASES) == 40
+
+
+# -- the ten invariants phase 040 added ---------------------------------------
+
+
+def test_optional_layers_are_removable_behaviourally():
+    result = gate.check_optional_layers_are_removable()
+
+    assert result.ok, result.detail
+    assert "0" in result.detail
+
+
+def test_hostile_archives_are_bounded_by_construction():
+    result = gate.check_hostile_archives_are_bounded()
+
+    assert result.ok, result.detail
+
+
+def test_batch_actions_stay_inside_the_results():
+    result = gate.check_batch_actions_stay_inside_the_results()
+
+    assert result.ok, result.detail
+
+
+def test_portable_never_writes_to_the_user_directory(tmp_path, monkeypatch):
+    """Behavioural, and it restores what it rewrites.
+
+    Phase 037's own gate leaked its simulation and made three unrelated tests
+    fail, so the restoration is the thing most worth asserting here.
+    """
+    before_environment = dict(os.environ)
+    before_directory = Path.cwd()
+
+    result = gate.check_portable_never_writes_to_the_user_directory()
+
+    assert result.ok, result.detail
+    assert dict(os.environ) == before_environment
+    assert Path.cwd() == before_directory
+
+
+def test_portable_never_falls_back_silently():
+    assert gate.check_portable_never_falls_back_silently().ok
+
+
+def test_both_builds_pin_one_version():
+    result = gate.check_both_builds_pin_one_version()
+
+    assert result.ok, result.detail
+
+
+def test_perf_gate_can_decline_to_conclude():
+    result = gate.check_perf_gate_can_decline_to_conclude()
+
+    assert result.ok, result.detail
+
+
+def test_every_visible_string_is_catalogued():
+    result = gate.check_every_visible_string_is_catalogued()
+
+    assert result.ok, result.detail
+
+
+def test_colour_contrast_meets_wcag_aa():
+    result = gate.check_colour_contrast_meets_wcag_aa()
+
+    assert result.ok, result.detail
+
+
+def test_saved_searches_hold_no_user_data():
+    result = gate.check_saved_searches_hold_no_user_data()
+
+    assert result.ok, result.detail
+
+
+# -- and the ten must be able to fail -----------------------------------------
+
+
+def test_an_uncatalogued_string_fails_the_v3_gate(tmp_path: Path, monkeypatch):
+    """Falsifiable, like every other check in this file."""
+    from universal_search.gui import strings
+
+    monkeypatch.setattr(
+        strings, "untranslated_literals", lambda root: {"Salir": ["app.py"]}
+    )
+
+    result = gate.check_every_visible_string_is_catalogued()
+
+    assert result.ok is False
+    assert "Salir" in result.detail
+
+
+def test_a_contrasting_palette_failure_is_detected():
+    """A palette that fails AA must be caught, or the check is decoration."""
+    import dataclasses
+
+    from universal_search.gui import theme as theme_module
+    from universal_search.gui.accessibility import contrast_report
+
+    # Two colours that differ by far too little to read.
+    washed = dataclasses.replace(
+        theme_module.LIGHT, foreground="#fbfbfb", background="#ffffff"
+    )
+    failures = [check for check in contrast_report(washed) if not check.ok]
+
+    assert failures, "a near-white foreground on white should fail AA"
+    assert all(check.ratio < 4.5 for check in failures)
 
 
 # -- the individual invariants -------------------------------------------------

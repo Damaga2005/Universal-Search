@@ -72,6 +72,12 @@ jobs:
       - name: Release contract (CI gates, version pinning, dependency budget)
         run: python -m pytest tests/test_ci_gates.py -q
 
+      # Phase 040: the gate grew to 23 invariants. The suite that tests the
+      # gate has to be gated too, or the invariants added last are the first
+      # to rot unnoticed.
+      - name: Quality gate suite (23 invariants, phase 040)
+        run: python -m pytest tests/test_v2_gate.py tests/test_perf_gate.py tests/test_accessibility.py -q
+
       # Phase 030: the v2 gate is a command, and CI runs it like any other
       # gate. It re-reads the tree it is shipped with, so a stale count or an
       # undeclared table fails the build instead of the next release.

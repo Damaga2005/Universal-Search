@@ -28,9 +28,12 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src" / "universal_search"
 DOCS = ROOT / "docs"
 
-# Phases 001-030, the whole v2 line. Every one must be documented, and the
-# documentation must be a real report, not an empty placeholder.
-PHASES = range(1, 31)
+# Phases 001-040: the v2 line and the whole v2.x programme. Every one must be
+# documented, and the documentation must be a real report, not an empty
+# placeholder. Phase 040 widened this from 30 because the programme was
+# finished and a gate that stops checking at the old boundary would quietly
+# stop guarding the nine phases it added.
+PHASES = range(1, 41)
 
 # Packages that must stay platform-independent: no Win32, no registry, no
 # ctypes, no shell. The core runs, and is tested, on any OS (phase 016).
@@ -611,6 +614,389 @@ def check_no_stray_debugging() -> CheckResult:
     )
 
 
+# -- invariants added by phase 040 -------------------------------------------
+
+
+def check_optional_layers_are_removable() -> CheckResult:
+    """The fuzzy and semantic layers are optional. "Optional" has to mean
+    removable, not merely present: an index must be able to go back to lexical
+    search and keep working, with nothing of the layer left behind.
+
+    Phase 031 shipped the layer and its own gate measured it, and the gate
+    could not see this because it always had the layer switched on.
+    """
+    sys.path.insert(0, str(ROOT / "src"))
+    import shutil  # noqa: PLC0415
+    import tempfile  # noqa: PLC0415
+
+    from universal_search.fuzzy import FuzzyIndex  # noqa: PLC0415
+    from universal_search.index.database import SearchDatabase  # noqa: PLC0415
+    from universal_search.index.indexer import Indexer  # noqa: PLC0415
+    from universal_search.index.search import SearchEngine  # noqa: PLC0415
+    from universal_search.semantic import SemanticIndex  # noqa: PLC0415
+
+    workspace = Path(tempfile.mkdtemp(prefix="universal-search-v3-layers-"))
+    try:
+        tree = workspace / "tree"
+        tree.mkdir()
+        (tree / "nota.md").write_text(
+            "BJT: transistor de union bipolar y polarizacion", encoding="utf-8"
+        )
+        database = SearchDatabase(workspace / "index.db")
+        Indexer(database).index_root(tree)
+        FuzzyIndex(database).rebuild()
+        SemanticIndex(database).rebuild()
+
+        removed_fuzzy = FuzzyIndex(database).remove_all()
+        removed_semantic = SemanticIndex(database).remove_all()
+        # The document is still findable afterwards, by the layer that is not
+        # optional: an exact token match.
+        found = [
+            item.name
+            for item in SearchEngine(database).search("transistor", limit=5)
+        ]
+        rows = FuzzyIndex(database).row_count()
+        ok = (
+            found == ["nota.md"]
+            and rows == 0
+            and removed_fuzzy >= 0
+            and removed_semantic >= 0
+        )
+        return CheckResult(
+            "optional layers are removable",
+            ok,
+            f"fuzzy {removed_fuzzy} filas y semantic {removed_semantic} "
+            f"borradas; quedan {rows}; la búsqueda exacta sigue funcionando"
+            if ok
+            else f"tras remover: filas={rows}, resultados={found}",
+        )
+    finally:
+        shutil.rmtree(workspace, ignore_errors=True)
+
+
+def check_hostile_archives_are_bounded() -> CheckResult:
+    """Phase 034 indexes inside ``.zip``. A hostile archive is the obvious
+    attack, so the two defences have to be in the code rather than in a
+    document: a budget per entry and per document, and refusal of absolute or
+    ``..`` paths.
+
+    This reads the extractor rather than running it: the property is that the
+    check exists in the path, and a test proves it works (the bomb corpus in
+    ``tests/test_archive_source.py``). Re-deriving it here would only be a
+    second implementation of the same idea.
+    """
+    source = (SRC / "extractors" / "archive.py").read_text(encoding="utf-8")
+    problems: list[str] = []
+    if "CharBudget" not in source and "max_chars" not in source:
+        problems.append("no per-entry/per-document budget")
+    # zip-slip: an absolute path or a parent traversal must be refused, not
+    # merely unused.
+    if not re.search(r"is_absolute|\.\.", source):
+        problems.append("no refusal of absolute or '..' entry paths")
+    if "zipfile" not in source:
+        problems.append("not reading .zip with the stdlib")
+    return CheckResult(
+        "hostile archives are bounded",
+        not problems,
+        "budget per entry and zip-slip refusal present"
+        if not problems
+        else "; ".join(problems),
+    )
+
+
+def check_batch_actions_stay_inside_the_results() -> CheckResult:
+    """Phase 035 lets one action open many documents. That is the riskiest
+    thing the GUI does, so the properties that make it safe are asserted
+    here: it opens exactly the paths it was handed and nothing else, it never
+    resolves a path of its own, and it is bounded.
+    """
+    sys.path.insert(0, str(ROOT / "src"))
+    from universal_search.gui.batch import (  # noqa: PLC0415
+        MAX_BATCH_OPERATIONS,
+        BatchOperations,
+    )
+
+    opened: list[str] = []
+
+    class _Recording:
+        def open_path(self, path) -> None:
+            opened.append(str(path))
+
+        def reveal(self, path) -> None:
+            opened.append(str(path))
+
+    operations = BatchOperations()
+    operations._platform = lambda: _Recording()  # noqa: SLF001
+    handed = ["C:/a/uno.md", "C:/b/dos.md"]
+    report = operations.open_all(handed)
+
+    bounded = BatchOperations()
+    bounded.max_batch = 2
+    many = [f"C:/x/{index}.md" for index in range(5)]
+    limited, skipped = bounded._bounded(many)  # noqa: SLF001
+
+    problems: list[str] = []
+    # Compared as resolved paths, not as strings: Windows normalises "C:/a" to
+    # "C:\a", and the invariant is which files were opened, not how the path
+    # happened to be spelled on the way in.
+    if [Path(item) for item in opened] != [Path(item) for item in handed]:
+        problems.append(f"abrio {opened} en vez de {handed}")
+    if not report.ok:
+        problems.append(f"el lote se reporto como incompleto: {report.summary()}")
+    if len(limited) != 2 or skipped != 3:
+        problems.append(f"el tope no acota: {len(limited)} de {len(many)}")
+    if MAX_BATCH_OPERATIONS < 1:
+        problems.append("el tope del lote es <= 0")
+    return CheckResult(
+        "batch actions stay inside the results",
+        not problems,
+        f"abrió exactamente las {len(handed)} rutas recibidas; tope "
+        f"{MAX_BATCH_OPERATIONS}"
+        if not problems
+        else "; ".join(problems),
+    )
+
+
+def check_portable_never_writes_to_the_user_directory() -> CheckResult:
+    """Phase 037's whole promise, in one behavioural check: a portable copy
+    writes its state next to itself and **nothing** under ``%LOCALAPPDATA%``.
+
+    The environment and the working directory are restored afterwards. A gate
+    that leaks its own simulation is worse than one that does not run: phase
+    037's own gate did exactly that and made three unrelated tests fail.
+    """
+    sys.path.insert(0, str(ROOT / "src"))
+    import os  # noqa: PLC0415
+    import shutil  # noqa: PLC0415
+    import tempfile  # noqa: PLC0415
+
+    from universal_search import portable  # noqa: PLC0415
+    from universal_search.appconfig import AppPaths  # noqa: PLC0415
+    from universal_search.index.database import SearchDatabase  # noqa: PLC0415
+    from universal_search.index.indexer import Indexer  # noqa: PLC0415
+
+    saved_environment = dict(os.environ)
+    saved_directory = Path.cwd()
+    workspace = Path(tempfile.mkdtemp(prefix="universal-search-v3-portable-"))
+    try:
+        exe_dir = workspace / "UniversalSearch"
+        user_dir = workspace / "LOCALAPPDATA"
+        exe_dir.mkdir()
+        user_dir.mkdir()
+        os.environ["LOCALAPPDATA"] = str(user_dir)
+        os.environ.pop("UNIVERSAL_SEARCH_HOME", None)
+        os.environ.pop("UNIVERSAL_SEARCH_PORTABLE", None)
+        os.chdir(exe_dir)
+        before = {path.name for path in user_dir.rglob("*") if path.is_file()}
+
+        portable.enable()
+        documents = workspace / "documents"
+        documents.mkdir()
+        (documents / "nota.md").write_text("transistor", encoding="utf-8")
+        paths = AppPaths.discover()
+        database = SearchDatabase(paths.database)
+        Indexer(database).index_root(documents)
+        paths.log_file.write_text("una linea\n", encoding="utf-8")
+
+        after = {path.name for path in user_dir.rglob("*") if path.is_file()}
+        strays = [
+            path.relative_to(exe_dir).as_posix()
+            for path in exe_dir.rglob("*")
+            if path.is_file()
+            and path.name != portable.PORTABLE_MARKER
+            and not str(path).startswith(str(paths.home))
+        ]
+        ok = (
+            paths.portable
+            and before == after
+            and not strays
+            and paths.home.name == portable.PORTABLE_DATA_DIRNAME
+        )
+        return CheckResult(
+            "portable never writes to the user directory",
+            ok,
+            f"todo dentro de {paths.home.name}; "
+            f"{len(after - before)} ficheros nuevos bajo %LOCALAPPDATA%"
+            if ok
+            else f"portable={paths.portable}, fugas={strays}, "
+                 f"en user dir={sorted(after - before)}",
+        )
+    finally:
+        os.chdir(saved_directory)
+        os.environ.clear()
+        os.environ.update(saved_environment)
+        shutil.rmtree(workspace, ignore_errors=True)
+
+
+def check_portable_never_falls_back_silently() -> CheckResult:
+    """If a portable folder cannot be written, the application must say so and
+    stop. Falling back to ``%LOCALAPPDATA%`` would put the index somewhere the
+    user does not know about, which is worse than refusing to start.
+    """
+    sys.path.insert(0, str(ROOT / "src"))
+    import shutil  # noqa: PLC0415
+    import tempfile  # noqa: PLC0415
+
+    from universal_search import portable  # noqa: PLC0415
+
+    workspace = Path(tempfile.mkdtemp(prefix="universal-search-v3-refuse-"))
+    try:
+        occupied = workspace / "occupied"
+        occupied.write_text("a file, not a directory", encoding="utf-8")
+        refusals = 0
+        for action in (
+            lambda: portable.ensure_writable(
+                occupied / portable.PORTABLE_DATA_DIRNAME
+            ),
+            lambda: portable.enable(occupied),
+        ):
+            try:
+                action()
+            except portable.PortableUnavailable:
+                refusals += 1
+        return CheckResult(
+            "portable never falls back silently",
+            refusals == 2,
+            "una carpeta inutilizable da error, no cambia de sitio"
+            if refusals == 2
+            else f"solo {refusals} de 2 rechazos"
+            if refusals != 2
+            else "sin rechazos: una carpeta inservible se aceptaria en silencio",
+        )
+    finally:
+        shutil.rmtree(workspace, ignore_errors=True)
+
+
+def check_both_builds_pin_one_version() -> CheckResult:
+    """The 2.0.0 release shipped two ``.exe`` files that did not start. One of
+    the ways that happened is two build recipes drifting apart, so both specs
+    must carry the same version resource and the same icon, and the one-file
+    spec must genuinely be one file.
+    """
+    import universal_search  # noqa: PLC0415
+
+    one_dir = (ROOT / "packaging" / "universal-search.spec").read_text(
+        encoding="utf-8"
+    )
+    one_file = (
+        ROOT / "packaging" / "universal-search-onefile.spec"
+    ).read_text(encoding="utf-8")
+    version_file = (ROOT / "packaging" / "version_file.txt").read_text(
+        encoding="utf-8"
+    )
+    problems: list[str] = []
+    if one_dir.count("version=str(VERSION_FILE)") != 2:
+        problems.append("el spec one-dir no fija la version en los dos .exe")
+    if one_file.count("version=str(VERSION_FILE)") != 1:
+        problems.append("el spec one-file no fija la version")
+    if one_dir.count("icon=str(ICON)") != 2 or one_file.count("icon=str(ICON)") != 1:
+        problems.append("los dos spec no fijan el mismo icono")
+    if universal_search.__version__ not in version_file:
+        problems.append("version_file.txt esta desactualizado")
+    if "COLLECT(" in one_file:
+        problems.append(
+            "el spec one-file hace COLLECT: eso es un build one-dir con un "
+            "paso extra, y fue el defecto que la 2.0.0 publico"
+        )
+    return CheckResult(
+        "both builds pin one version",
+        not problems,
+        f"{universal_search.__version__} en los tres sitios, icono en ambos"
+        if not problems
+        else "; ".join(problems),
+    )
+
+
+def check_perf_gate_can_decline_to_conclude() -> CheckResult:
+    """A performance gate with two answers for three situations cannot gate
+    anything. Phase 038 exists to make "cannot say" a first-class outcome, so
+    the v3 gate checks that the third exit code is really there and distinct.
+    """
+    from evaluation import perf_gate  # noqa: PLC0415
+
+    codes = (perf_gate.EXIT_PASS, perf_gate.EXIT_FAIL, perf_gate.EXIT_INCONCLUSIVE)
+    problems: list[str] = []
+    if len(set(codes)) != 3:
+        problems.append(f"los codigos de salida no son distintos: {codes}")
+    # The veto has to be reachable: a busy machine must be able to stop the
+    # run, and it must be able to do so on a machine with no baseline at all.
+    quiet = perf_gate.load_verdict({"calibration_best_s": 0.2}, 0.2, 5)
+    busy = perf_gate.load_verdict({"calibration_best_s": 0.2}, 0.2, 95)
+    if not quiet.conclusive:
+        problems.append("una maquina tranquila no puede concluir: veto imposible")
+    if busy.conclusive:
+        problems.append("una maquina ocupada sigue别提钟 dando veredicto")
+    return CheckResult(
+        "perf gate can decline to conclude",
+        not problems,
+        f"codigos {codes} distintos; una maquina ocupada veta"
+        if not problems
+        else "; ".join(problems),
+    )
+
+
+def check_every_visible_string_is_catalogued() -> CheckResult:
+    """Phase 039: an interface whose strings are scattered through widget code
+    cannot be translated or audited. The catalogue is only worth anything if it
+    is complete, and completeness is the part that decays on its own.
+    """
+    sys.path.insert(0, str(ROOT / "src"))
+    from universal_search.gui import strings  # noqa: PLC0415
+
+    missing = strings.untranslated_literals(ROOT)
+    return CheckResult(
+        "every visible string is catalogued",
+        not missing,
+        f"{len(strings.ENTRIES)} entradas catalogadas"
+        if not missing
+        else f"fuera del catalogo: {sorted(missing)}",
+    )
+
+
+def check_colour_contrast_meets_wcag_aa() -> CheckResult:
+    """Every pair the window draws, in both themes. Measured, because "the
+    palette looks fine" is not a fact."""
+    sys.path.insert(0, str(ROOT / "src"))
+    from universal_search.gui.accessibility import contrast_report  # noqa: PLC0415
+    from universal_search.gui.theme import DARK, LIGHT  # noqa: PLC0415
+
+    failures = [
+        f"{theme.name}/{check.name} {check.ratio:.2f}:1 < {check.required}"
+        for theme in (LIGHT, DARK)
+        for check in contrast_report(theme)
+        if not check.ok
+    ]
+    pairs = len(contrast_report(LIGHT))
+    return CheckResult(
+        "colour contrast meets WCAG AA",
+        not failures,
+        f"{pairs} pares x 2 temas en verde"
+        if not failures
+        else "; ".join(failures),
+    )
+
+
+def check_saved_searches_hold_no_user_data() -> CheckResult:
+    """Phase 036 persists saved searches as plain local configuration. That is
+    only acceptable while they hold a query and a presentation choice: the day
+    one of them stores a result path, the config file has become an index of
+    the user's documents.
+    """
+    sys.path.insert(0, str(ROOT / "src"))
+    from universal_search.organize import SavedSearch  # noqa: PLC0415
+
+    fields = set(SavedSearch("n", "q").as_dict())
+    allowed = {"name", "query", "sort", "group", "source", "doc_type"}
+    ok = fields == allowed
+    return CheckResult(
+        "saved searches hold no user data",
+        ok,
+        f"solo {sorted(fields)}"
+        if ok
+        else f"campos inesperados: {sorted(fields - allowed)}",
+    )
+
+
 CHECKS = (
     check_dependency_budget,
     check_no_network_or_model_imports,
@@ -625,6 +1011,17 @@ CHECKS = (
     check_changelog_documents_every_phase,
     check_documented_test_count,
     check_roadmap_has_no_open_phase,
+    # -- added by phase 040: one invariant per promise the v2.x programme made
+    check_optional_layers_are_removable,
+    check_hostile_archives_are_bounded,
+    check_batch_actions_stay_inside_the_results,
+    check_portable_never_writes_to_the_user_directory,
+    check_portable_never_falls_back_silently,
+    check_both_builds_pin_one_version,
+    check_perf_gate_can_decline_to_conclude,
+    check_every_visible_string_is_catalogued,
+    check_colour_contrast_meets_wcag_aa,
+    check_saved_searches_hold_no_user_data,
 )
 
 

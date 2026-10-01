@@ -46,6 +46,7 @@ El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
 | 037 | Distribución: modo portable y ejecutable único | ✅ Completada | — | [informe](development/037-distribution-report.md) |
 | 038 | Puerta de rendimiento reproducible | ✅ Completada | — | [informe](development/038-performance-gate-report.md) |
 | 039 | Accesibilidad e interfaz (teclado, nombres, contraste, catálogo) | ✅ Completada | — | [informe](development/039-accessibility-report.md) |
+| 040 | Puerta de calidad v3 (23 invariantes) y decisión de publicación | ✅ Completada | — | [informe](development/040-v3-quality-gate-report.md) |
 
 Verificado en la fase 010: **208 tests en verde**
 (`.venv\Scripts\python -m pytest`), E2E completo de indexador, CLI, GUI e
@@ -61,7 +62,7 @@ nombrados, puertas de CI verificadas por test y un gate v2 ejecutable de 13
 invariantes (`python -m evaluation.gate`); detalles y límites en el
 [informe de la fase 030](development/030-v2-quality-gate-report.md).
 
-Current test count: 1202 tests collected.
+Current test count: 1216 tests collected.
 
 ## Cómo ejecutar
 

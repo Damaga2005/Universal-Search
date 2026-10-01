@@ -153,19 +153,28 @@ universal-search diagnose recover orphan-derived
 documentos, ni texto de consultas, ni credenciales. Adjuntarlo a un reporte es
 seguro por construcción, no por confianza.
 
-## 6 ter. Puerta de calidad v2 (fase 030)
+## 6 ter. Puerta de calidad v3 (fases 030 y 040)
 
 ```bash
-python -m evaluation.gate      # 13 invariantes locales, salida 0/1
+python -m evaluation.gate      # 23 invariantes locales, salida 0/1
 ```
 
-Es la pregunta "¿puede este árbol llamarse Universal Search v2?" con
+Es la pregunta "¿puede este árbol llamarse Universal Search v2.x?" con
 evidencia: presupuesto de dependencias, ausencia de red o modelos en el
 paquete, camino de datos independiente de la plataforma, puntos de contacto
 Win32 declarados con su motivo, inventario de privacidad completo, repairs que
 no tocan ficheros del usuario (prueba de comportamiento, no un regex),
-versionado con fuente única, y documentación que coincide con el código. Va
-antes del `PyInstaller` en la lista, y también en CI.
+versionado con fuente única, y documentación que coincide con el código.
+
+Desde la fase 040 hay **diez invariantes más**, uno por cada promesa del
+programa 031–040: que las capas opcionales se puedan quitar, que los
+comprimidos hostiles estén acotados, que las acciones por lote no salgan de los
+resultados, que el modo portable no escriba bajo `%LOCALAPPDATA%` ni caiga en
+silencio, que los dos builds fijen una versión, que la puerta de rendimiento
+pueda no concluir, que toda cadena visible esté catalogada, que el contraste
+cumpla WCAG AA, y que una búsqueda guardada no guarde datos del usuario.
+
+Va antes del `PyInstaller` en la lista, y también en CI.
 
 ## 7. Lista de release (reproducible)
 
@@ -174,7 +183,7 @@ antes del `PyInstaller` en la lista, y también en CI.
 2. [ ] Añadir las entradas de la versión a `CHANGELOG.md`.
 3. [ ] `python -m pytest tests -q` en verde.
 4. [ ] `python -m pyflakes src tests benchmarks evaluation` sin salida.
-5. [ ] `python -m evaluation.gate` → `VERDICT: PASS` (13/13).
+5. [ ] `python -m evaluation.gate` → `VERDICT: PASS` (23/23).
 6. [ ] `python -m benchmarks --profile 1000` y anotar los números.
 6. [ ] `python -m evaluation` y confirmar que el baseline sigue igual
       (si cambia, el cambio se justifica en el informe de la fase).
@@ -182,6 +191,10 @@ antes del `PyInstaller` en la lista, y también en CI.
       y comprobar que `evaluation/semantic_baseline.json` describe el modelo
       que se envía (`NGRAM_VERSION`) y que las consultas "debe recuperar
       nada" siguen vacías.
+6 ter. [ ] `python -m evaluation.perf_gate` — y leer el veredicto entero.
+      Si dice INCONCLUYENTE (salida 2), **no hay ningún número que anotar**:
+      la máquina está ocupada y la medición describe el trabajo de otro. Se
+      repite con el equipo en reposo, como se explica en la fase 038.
 7. [ ] `powershell -File packaging\build.ps1` (ambos builds + humo de los
        tres ejecutables, incluido el one-file copiado a una carpeta vacía).
 8. [ ] Prueba de humo del empaquetado (abajo), con los dos ejecutables:

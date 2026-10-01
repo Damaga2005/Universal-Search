@@ -66,9 +66,9 @@ phase 022 added a versioned, bounded local relationship graph with explainable
 signals, incremental maintenance and a small related-documents list in the GUI;
 phase 023 adds a separate indexing control center with typed source actions,
 health/storage/derived-data state and explicit safety confirmations. The
-phase 024 formalised the provider contract (streaming `iter_files`, bounded errors, cancellation, capability/interface negotiation), made the provider key the canonical source discriminator with a `(source, path)` uniqueness migration, and added mounted-path NAS/removable providers plus mixed-provider indexing with per-provider failure isolation. Phase 025 added a versioned extraction contract with bounded PDF/Office resources and visible truncation diagnostics. Phase 026 measured a fixed lexical baseline and shipped a dependency-free, versioned n-gram fallback only where the evidence gate justified it; phase 027 added DPI awareness, `open`/`reveal` commands and reversible per-user Explorer integration. Phase 028 added bounded redacted JSON events, a seven-area `diagnose self-test`, a support bundle that declares what it does not contain, and four named recovery cases that never touch source files. Phase 029 made the CI gates a verified contract and the packaged smoke a real gate; that smoke found and fixed a semantic-layer defect (a zero idf on a one-document index, and a precision gate that rejected morphological variants), re-measured with no metric regression. Phase 030 closed the line with an executable gate: `python -m evaluation.gate` runs thirteen local invariants, including a behavioural proof that no repair can touch a user's files.
+phase 024 formalised the provider contract (streaming `iter_files`, bounded errors, cancellation, capability/interface negotiation), made the provider key the canonical source discriminator with a `(source, path)` uniqueness migration, and added mounted-path NAS/removable providers plus mixed-provider indexing with per-provider failure isolation. Phase 025 added a versioned extraction contract with bounded PDF/Office resources and visible truncation diagnostics. Phase 026 measured a fixed lexical baseline and shipped a dependency-free, versioned n-gram fallback only where the evidence gate justified it; phase 027 added DPI awareness, `open`/`reveal` commands and reversible per-user Explorer integration. Phase 028 added bounded redacted JSON events, a seven-area `diagnose self-test`, a support bundle that declares what it does not contain, and four named recovery cases that never touch source files. Phase 029 made the CI gates a verified contract and the packaged smoke a real gate; that smoke found and fixed a semantic-layer defect (a zero idf on a one-document index, and a precision gate that rejected morphological variants), re-measured with no metric regression. Phase 030 closed the line with an executable gate: `python -m evaluation.gate` runs local invariants, including a behavioural proof that no repair can touch a user's files. Phases 031–040 then added the features the gate could not yet check, and phase 040 extended it to twenty-three: one invariant per promise the programme made, from removable optional layers to WCAG AA contrast and the strings catalogue.
 
-Current test count: 1202 tests collected.
+Current test count: 1216 tests collected.
 
 ## Known limitations
 
@@ -140,6 +140,7 @@ Read this before expecting more than the program does.
 | 037 | Distribución: modo portable y ejecutable único (037) | ✅ |
 | 038 | Puerta de rendimiento reproducible: sabe cuándo no concluir (038) | ✅ |
 | 039 | Accesibilidad: teclado, nombres, contraste medido y catálogo de textos (039) | ✅ |
+| 040 | Puerta de calidad v3: 23 invariantes, y no se publica sin instrucción (040) | ✅ |
 
 Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
 by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).
@@ -149,7 +150,7 @@ by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 ```bash
 pip install -e .
 universal-search --version         # universal-search 2.0.0
-python -m evaluation.gate          # the v2 quality gate (13 invariants)
+python -m evaluation.gate          # the quality gate (23 invariants)
 universal-search diagnose self-test # same checks, from the installed app
 universal-search index C:\Users\me\Documents
 universal-search search "meeting notes" --limit 20
