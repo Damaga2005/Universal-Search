@@ -1,57 +1,59 @@
-# 041 — Product UX Redesign
+# 041 — Product Experience & UX
 
 ## Objective
-Evolve Universal Search from a technically complete Windows utility into a modern 2026 desktop product.
+Evolve Universal Search from a technically complete Windows utility into a coherent, modern Windows desktop product.
 
-The goal is not cosmetic restyling. Rework the primary user experience around fast search, clear hierarchy, keyboard-first interaction, modern Windows conventions and understandable system state.
+This is a product-experience phase, not a second implementation of the accessibility, theme, DPI or state foundations already delivered in phases 017 and 039.
 
 ## Scope
-Audit the complete current GUI before changing it.
+Audit the complete current GUI and redesign the primary experience around:
 
-Design and implement:
-- modern search launcher;
-- prominent search field;
+- launch -> search -> results -> selection -> open/reveal;
+- clear visual hierarchy for filename, path, source, type and snippet;
 - keyboard-first navigation;
-- compact result cards/rows;
-- clear filename, path, source, type and snippet hierarchy;
-- loading/indexing states;
-- empty/no-results states;
-- error states;
-- light/dark themes;
-- DPI/scaling behavior;
+- compact, information-dense result presentation;
+- responsive loading, indexing, empty and error states;
+- coherent light/dark appearance;
 - consistent spacing, typography and controls;
-- accessible focus states;
-- settings and diagnostics surfaces consistent with the main product.
+- settings and diagnostics surfaces that feel part of the same product;
+- Windows-native interaction conventions where they improve usability.
+
+Reuse and extend the existing accessibility, focus, DPI and state infrastructure. Do not recreate phase 039 from scratch.
 
 Do not turn the application into a web dashboard.
 
+## Non-goals
+- no new search backend;
+- no new ranking model;
+- no new provider architecture;
+- no cloud AI;
+- no unrelated backend features.
+
 ## Interaction
 Primary flow:
+
 launch -> type -> results -> keyboard selection -> open/reveal.
 
-Target fast perceived response. Search must never block the UI thread.
-
-## Windows
-Use native Windows conventions where they improve usability, while preserving the existing platform boundary.
+Search must never block the UI thread.
 
 ## Validation
-Create a manual UX checklist with screenshots or reproducible steps where appropriate.
+Create a reproducible Windows UX checklist and test:
 
-Test:
 - keyboard-only use;
 - mouse use;
 - high DPI;
 - light/dark;
-- empty results;
-- long filenames;
-- long paths;
+- empty and zero-result states;
+- long filenames and paths;
 - large snippets;
 - indexing in progress;
-- errors;
-- accessibility focus order.
+- provider/index errors;
+- focus order and existing accessibility contracts.
+
+Measure perceived and actual interaction latency where practical.
 
 ## Acceptance
-The application should look and behave like a contemporary Windows desktop product rather than a legacy Tk/Windows-95-style utility.
+The application has one coherent primary experience that builds on, rather than duplicates, the phase 039 accessibility/interface foundation.
 
 ## Ready-to-copy implementation prompt
-Implement Phase 041 — Product UX Redesign. Audit the existing GUI and redesign the complete primary experience for a modern 2026 Windows desktop application. Prioritize search speed, hierarchy, keyboard interaction, accessibility, DPI/scaling, light/dark themes and clear system states. Preserve the search/indexing core and platform boundaries. Do not add unrelated backend features. Add automated UI/service coverage plus a documented Windows manual UX checklist, build the packaged application, perform real smoke testing and document measurable UX/performance effects. Do not push unless explicitly instructed.
+Implement Phase 041 — Product Experience & UX. Audit the existing Windows GUI and redesign the primary product experience around fast search, hierarchy, keyboard interaction, clear system states and modern Windows conventions. Reuse the existing accessibility, DPI, theme and state infrastructure from phases 017/039 instead of recreating it. Preserve the search/indexing core and platform boundaries. Do not add unrelated backend features. Add automated coverage plus a documented Windows manual UX checklist, build the packaged application, perform real smoke testing and document measurable UX effects. Do not push unless explicitly instructed.
