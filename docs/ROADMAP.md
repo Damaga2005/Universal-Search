@@ -46,7 +46,7 @@
 - [x] Provider & extension architecture (019)
 - [x] Production release & reliability (020)
 
-## v2.x (phases 031–040)
+## v2.x — completed (phases 031–040)
 
 - [x] Robust search: typos and partial words (031)
 - [x] Query suggestions (032)
@@ -74,9 +74,23 @@
 - [x] Release engineering & CI (029)
 - [x] Universal Search v2 quality gate (030)
 
+
+## v3.x — planned (phases 041–050)
+
+- [ ] Product UX redesign (041)
+- [ ] Search experience v2 (042)
+- [ ] Settings & personalization (043)
+- [ ] Local learning v2 (044)
+- [ ] Search quality v3 (045)
+- [ ] Indexing performance v3 (046)
+- [ ] Storage & data lifecycle (047)
+- [ ] Portability & environment matrix (048)
+- [ ] Distribution & installation v2 (049)
+- [ ] Universal Search v3 product gate (050)
+
 ---
 
-Phases 001–040 are implemented and documented (per-phase reports in
+Phases 001–040 are implemented and documented; phases 041–050 are planned (per-phase documentation in
 `docs/development/`). The quality gate is an executable instrument, not a
 promise: `python -m evaluation.gate` runs **23 local invariants** — the thirteen
 from phase 030 (dependency budget, no network or model imports, a
