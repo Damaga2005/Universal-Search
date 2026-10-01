@@ -78,15 +78,15 @@
 ## v3.x — planned (phases 041–050)
 
 - [ ] Product UX redesign (041)
-- [ ] Search experience v2 (042)
-- [ ] Settings & personalization (043)
+- [ ] Interactive Search Experience (042)
+- [ ] Settings & Configuration (043)
 - [ ] Local learning v2 (044)
-- [ ] Search quality v3 (045)
-- [ ] Indexing performance v3 (046)
+- [ ] Search Quality & Relevance (045)
+- [ ] Indexing Scalability & Performance (046)
 - [ ] Storage & data lifecycle (047)
-- [ ] Portability & environment matrix (048)
-- [ ] Distribution & installation v2 (049)
-- [ ] Universal Search v3 product gate (050)
+- [ ] Windows & Environment Matrix (048)
+- [ ] Windows Distribution & Installation (049)
+- [ ] Universal Search 3.x Product Gate (050)
 
 ---
 
