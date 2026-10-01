@@ -141,16 +141,16 @@ Read this before expecting more than the program does.
 | 038 | Puerta de rendimiento reproducible: sabe cuándo no concluir (038) | ✅ |
 | 039 | Accesibilidad: teclado, nombres, contraste medido y catálogo de textos (039) | ✅ |
 | 040 | Puerta de calidad v3: 23 invariantes, y la decisión de publicar (040) | ✅ |
-| 041 | Rediseño UX de producto | ⬜ | [roadmap](docs/development/041-product-ux-redesign.md) |
-| 042 | Experiencia de búsqueda v2 | ⬜ | [roadmap](docs/development/042-search-experience-v2.md) |
-| 043 | Configuración y personalización | ⬜ | [roadmap](docs/development/043-settings-and-personalization.md) |
+| 041 | Experiencia de producto y UX | ⬜ | [roadmap](docs/development/041-product-ux-redesign.md) |
+| 042 | Experiencia interactiva de búsqueda | ⬜ | [roadmap](docs/development/042-search-experience-v2.md) |
+| 043 | Configuración y ajustes | ⬜ | [roadmap](docs/development/043-settings-and-personalization.md) |
 | 044 | Aprendizaje local v2 | ⬜ | [roadmap](docs/development/044-local-learning-v2.md) |
-| 045 | Calidad de búsqueda v3 | ⬜ | [roadmap](docs/development/045-search-quality-v3.md) |
-| 046 | Rendimiento de indexación v3 | ⬜ | [roadmap](docs/development/046-indexing-performance-v3.md) |
+| 045 | Calidad y relevancia de búsqueda | ⬜ | [roadmap](docs/development/045-search-quality-v3.md) |
+| 046 | Escalabilidad y rendimiento de indexación | ⬜ | [roadmap](docs/development/046-indexing-performance-v3.md) |
 | 047 | Almacenamiento y ciclo de vida | ⬜ | [roadmap](docs/development/047-storage-and-data-lifecycle.md) |
-| 048 | Portabilidad y matriz de entornos | ⬜ | [roadmap](docs/development/048-portability-and-environment-matrix.md) |
-| 049 | Distribución e instalación v2 | ⬜ | [roadmap](docs/development/049-distribution-and-installation-v2.md) |
-| 050 | Puerta de calidad v3 del producto | ⬜ | [roadmap](docs/development/050-product-v3-gate.md) |
+| 048 | Windows y matriz de entornos | ⬜ | [roadmap](docs/development/048-portability-and-environment-matrix.md) |
+| 049 | Distribución e instalación Windows | ⬜ | [roadmap](docs/development/049-distribution-and-installation-v2.md) |
+| 050 | Puerta de producto Universal Search 3.x | ⬜ | [roadmap](docs/development/050-product-v3-gate.md) |
 
 Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
 by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).
