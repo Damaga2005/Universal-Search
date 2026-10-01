@@ -103,6 +103,12 @@ def _sync(path: Path) -> None:
 
 
 def main() -> int:
+    # Windows consoles default to a legacy code page, and these gates print
+    # the interface's own strings. Never crash while reporting (the CLI has
+    # done this since phase 005; a gate that dies printing is worse than one
+    # that reports a failure).
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="replace")
     corpus_module.assert_labels_are_consistent()
     workspace = Path(tempfile.mkdtemp(prefix="universal-search-031-"))
     tree = workspace / "tree"

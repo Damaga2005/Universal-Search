@@ -96,18 +96,22 @@ precisamente el documento que la 038 existe para impedir.
 
 ### Sobre los omitidos
 
-Son de dos tipos, y conviene no mezclarlos:
+Son seis, y **no son del mismo tipo**, que es justo lo que hace fácil
+confundirlos al contarlos:
 
-- **Los tres del sistema de archivos** que el sistema operativo de esta máquina
-  no permite crear (symlinks). No son tests nuevos ni tests rotos; se omiten
-  condicionalmente y el motivo queda registrado. Son los mismos tres desde la
-  fase 020.
-- **Los tres de la ventana de Tk** de `test_accessibility.py`, omitidos con el
-  motivo cuando el runtime no arranca en ese instante.
+| Motivo | Cuántos | Dónde |
+|---|---|---|
+| Symlinks: el sistema operativo no permite crearlos | 2 | `test_privacy`, `test_provider_expansion` |
+| Humo nativo de la bandeja, activable a propósito | 1 | `test_windows_tray` (`UNIVERSAL_SEARCH_TRAY_NATIVE_SMOKE=1`) |
+| La ventana de Tk no arranca en ese instante | 3 | `test_accessibility` |
 
-Ninguno se cuenta como pasado. Los omitidos son 6, y el recuento que la
-documentación declara son los **1216 recogidos**, precisamente porque esa es la
-cifra que `pytest --collect-only` puede saber sin ejecutar nada.
+Los dos de symlinks son los mismos desde la fase 020. El de la bandeja es
+**opt-in por diseño**: pintar un icono real en la bandeja del sistema es una
+prueba que no tiene sentido en una suite automática.
+
+Ninguno se cuenta como pasado, y el número que la documentación declara son los
+**1216 recogidos**, porque esa es la única cifra que `pytest --collect-only`
+puede saber sin ejecutar nada.
 
 ### Sobre la intermitencia de Tk
 
@@ -139,7 +143,32 @@ límite necesita un test propio.
 Dos más comprueban que los checks nuevos **saben decir que no**: una cadena sin
 catalogar y una paleta casi blanca sobre blanco.
 
-## Privacidad y seguridad
+## Dos defectos que encontró la re-medición
+
+**Una puerta que se caía al escribir en una tubería.** La puerta de
+accesibilidad imprime las cadenas de la propia interfaz, y una de ellas
+contiene `U+25BE` («Recientes ▾»), que la consola cp1252 de Windows no sabe
+codificar. Al canalizar la salida —que es exactamente como la ejecutan CI y el
+propio test que la verifica— `print()` lanzaba `UnicodeEncodeError` a mitad del
+informe y **la puerta no informaba de nada**.
+
+No salía por sí sola, y por eso importa el detalle: `cli.py` lleva
+`sys.stdout.reconfigure(errors="replace")` desde la fase 005, y las nueve
+puertas de fase lo escribieron sin él. Una puerta que muere mientras informa es
+peor que una puerta que informa de un fallo, porque el fallo parece un fallo de
+la puerta y no de la interfaz. Corregida en las diez.
+
+**Las puertas de latencia antiguas no tienen veto de carga.** La puerta de la
+032 falló T5 con **16,47 ms** añadidos frente a su umbral de 8 ms — con un
+cliente de juego usando la máquina al 93 %. Es la misma medición que la 031 dio
+como 18,70 ms con la CPU al 94 % y 7,50 ms en reposo, y es exactamente la
+carencia que la fase 038 construyó para cerrar.
+
+Queda **abierto y declarado**: las puertas 031 y 032 miden tiempo sin comprobar
+la carga de la máquina, así que su veredicto de latencia no es fiable si el
+equipo está ocupado. Migrarlas a la metodología de `perf_gate` es trabajo
+futuro, y hasta entonces sus cifras de T5 deben leerse con la carga de CPU que
+la propia puerta imprime en la misma línea.
 
 | Comprobación | Resultado |
 |---|---|
@@ -190,5 +219,9 @@ hashes y redactar las notas de versión.
   máquina esté tranquila.** La medición en sí es el informe de la 038.
 - **Las cifras de latencia pertenecen a una CPU.** La puerta lo dice y lo
   declara en el baseline; en otra máquina el veredicto es indicativo.
+- **Las puertas 031 y 032 miden latencia sin comprobar la carga.** Es un
+  defecto conocido y declarado arriba, no una sorpresa: una cifra de T5 de esas
+  puertas sólo es válida con el equipo en reposo, y no hay forma de saberlo
+  mirando el número.
 - **Sin revisión independiente.** Ya declarado en las notas de la 2.0.0 y
   mantenido en las diez fases de este programa.

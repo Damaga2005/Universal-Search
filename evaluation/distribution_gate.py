@@ -257,6 +257,12 @@ def _single_file_gate(workspace: Path) -> tuple[float, bool, str]:
 
 
 def main() -> int:
+    # Windows consoles default to a legacy code page, and these gates print
+    # the interface's own strings. Never crash while reporting (the CLI has
+    # done this since phase 005; a gate that dies printing is worse than one
+    # that reports a failure).
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="replace")
     workspace = Path(tempfile.mkdtemp(prefix="universal-search-037-"))
 
     # Two directories that must stay untouched: the portable folder and a

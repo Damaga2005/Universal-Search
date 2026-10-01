@@ -104,6 +104,14 @@ def _build_window(tmp: Path):
 
 
 def main() -> int:
+    # The gate prints the interface's own strings, and one of them contains
+    # U+25BE ("Recientes ▾"), which the cp1252 console cannot encode. Piping the
+    # output -- which is how CI and the test suite run it -- turns that into a
+    # UnicodeEncodeError halfway through the report, and the gate reports
+    # nothing at all. Found by the test that runs it in a subprocess.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="replace")
+
     # -- T3: every visible string is catalogued (no display needed) -----------
     missing = strings.untranslated_literals(ROOT)
 

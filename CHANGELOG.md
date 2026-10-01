@@ -49,23 +49,42 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 - The gate also gained its own gate-suite job in CI: `test_v2_gate.py` tests
   the gate, so leaving it ungated would make the newest invariants the first to
   rot unnoticed.
+- **A gate that crashed while reporting.** The accessibility gate prints the
+  interface's own strings and one of them contains U+25BE ("Recientes ▾"),
+  which the Windows cp1252 console cannot encode. Piping the output — which is
+  exactly how CI and the test that verifies the gate run it — raised
+  UnicodeEncodeError halfway through the report and the gate printed nothing.
+  It did not show up by itself: `cli.py` has done
+  `sys.stdout.reconfigure(errors="replace")` since phase 005 and all ten gates
+  were written without it. A gate that dies reporting is worse than one that
+  reports a failure, because the crash looks like a broken gate rather than a
+  broken interface. Fixed in all ten.
+- **Open, declared: the 031 and 032 gates measure latency without checking the
+  machine's load.** The 032 gate failed T5 at 16.47 ms against an 8 ms
+  threshold with a game client at 93% CPU — the same measurement 031 reported
+  as 18.70 ms loaded and 7.50 ms idle, and precisely the gap phase 038 was
+  built to close. Migrating those two to `perf_gate`'s methodology is future
+  work; until then their T5 figures have to be read alongside the CPU load the
+  gate prints on the same line.
 - **Decision: not published.** `docs/RELEASE.md` step 15 says to push only on
   explicit instruction, and there is none in this session. The procedure was
   written so that the decision to release does not depend on someone being in a
   hurry. What is ready: 40 documented phases committed, clean tree, gate green,
   all three executables built and started by `packaging/build.ps1`.
-- **The skipped tests come in two kinds**, and conflating them would be the
-  easy mistake: three are the filesystem tests this operating system will not
-  create (symlinks), unchanged since phase 020; three are the Tk window tests
-  in `test_accessibility.py`, skipped with the reason when the runtime does not
-  start in that instant. None is counted as passing, and the number the docs
-  state is the 1216 *collected*, because that is the figure
-  `pytest --collect-only` can know without running anything.
+- **The six skipped tests are not all the same kind**, which is the easy thing
+  to get wrong when counting them: two are the symlink tests this operating
+  system will not create (unchanged since phase 020), one is the tray's
+  native-icon smoke (opt-in by design, behind
+  `UNIVERSAL_SEARCH_TRAY_NATIVE_SMOKE=1`), and three are the Tk window tests in
+  `test_accessibility.py`, skipped with the reason when the runtime does not
+  start in that instant. None counts as passing, and the number the docs state
+  is the 1216 *collected*, because that is the figure `pytest --collect-only`
+  can know without running anything.
 - **Full suite: 1210 passed, 6 skipped, 0 failed** (1216 collected). Two
   earlier runs of the same tree failed two `test_gui_ux` tests, because the
   Tcl/Tk runtime sometimes cannot read its own library for a fraction of a
   second when the suite saturates the machine; both pass in isolation. All three
-  runs are recorded rather than the flattering one, because a gate that
+  runs are recorded rather than only the flattering one, because a gate that
   publishes a number and hides the variance is exactly what this programme has
   spent forty phases correcting. No threshold was raised to hide it.
 - `tests/test_v2_gate.py` grows from 20 tests to 34, and two of them assert the

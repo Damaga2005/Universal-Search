@@ -507,6 +507,12 @@ def _same_machine(baseline: dict, current: dict) -> bool:
 
 
 def main() -> int:
+    # Windows consoles default to a legacy code page, and these gates print
+    # the interface's own strings. Never crash while reporting (the CLI has
+    # done this since phase 005; a gate that dies printing is worse than one
+    # that reports a failure).
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="replace")
     parser = argparse.ArgumentParser(
         prog="python -m evaluation.perf_gate",
         description="Reproducible performance gate (phase 038).",

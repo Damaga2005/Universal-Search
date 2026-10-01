@@ -925,7 +925,7 @@ def check_perf_gate_can_decline_to_conclude() -> CheckResult:
     if not quiet.conclusive:
         problems.append("una maquina tranquila no puede concluir: veto imposible")
     if busy.conclusive:
-        problems.append("una maquina ocupada sigue别提钟 dando veredicto")
+        problems.append("una maquina ocupada sigue dando veredicto")
     return CheckResult(
         "perf gate can decline to conclude",
         not problems,
@@ -1043,6 +1043,12 @@ def render(report: GateReport) -> str:
 
 
 def main() -> int:
+    # Windows consoles default to a legacy code page, and these gates print
+    # the interface's own strings. Never crash while reporting (the CLI has
+    # done this since phase 005; a gate that dies printing is worse than one
+    # that reports a failure).
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="replace")
     report = run_all()
     print(render(report))
     return 0 if report.ok else 1
