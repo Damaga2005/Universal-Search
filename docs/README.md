@@ -47,8 +47,18 @@ El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
 | 038 | Puerta de rendimiento reproducible | ✅ Completada | — | [informe](development/038-performance-gate-report.md) |
 | 039 | Accesibilidad e interfaz (teclado, nombres, contraste, catálogo) | ✅ Completada | — | [informe](development/039-accessibility-report.md) |
 | 040 | Puerta de calidad v3 (23 invariantes) y decisión de publicación | ✅ Completada | — | [informe](development/040-v3-quality-gate-report.md) |
+| 041 | Rediseño UX de producto | ⬜ Planificada | — | [plan](development/041-product-ux-redesign.md) |
+| 042 | Experiencia de búsqueda v2 | ⬜ Planificada | — | [plan](development/042-search-experience-v2.md) |
+| 043 | Configuración y personalización | ⬜ Planificada | — | [plan](development/043-settings-and-personalization.md) |
+| 044 | Aprendizaje local v2 | ⬜ Planificada | — | [plan](development/044-local-learning-v2.md) |
+| 045 | Calidad de búsqueda v3 | ⬜ Planificada | — | [plan](development/045-search-quality-v3.md) |
+| 046 | Rendimiento de indexación v3 | ⬜ Planificada | — | [plan](development/046-indexing-performance-v3.md) |
+| 047 | Almacenamiento y ciclo de vida | ⬜ Planificada | — | [plan](development/047-storage-and-data-lifecycle.md) |
+| 048 | Portabilidad y matriz de entornos | ⬜ Planificada | — | [plan](development/048-portability-and-environment-matrix.md) |
+| 049 | Distribución e instalación v2 | ⬜ Planificada | — | [plan](development/049-distribution-and-installation-v2.md) |
+| 050 | Puerta de calidad v3 del producto | ⬜ Planificada | — | [plan](development/050-product-v3-gate.md) |
 
-**Fases 031–040 cerradas.** El gate ejecutable tiene **23 invariantes**
+**Fases 031–040 cerradas. Fases 041–050 planificadas.** El gate ejecutable tiene **23 invariantes**
 (`python -m evaluation.gate`); la puerta de rendimiento sabe decir «inconcluyente»
 en vez de publicar una cifra tomada con el equipo ocupado; la puerta de
 accesibilidad comprueba teclado, nombres, contraste y catálogo de textos. Cada
@@ -102,5 +112,4 @@ Construir los ejecutables: ver «Build the Windows executables» en el
 Cada fase se considera terminada solo cuando: todos los tests pasan (los
 anteriores incluidos), hay cobertura de tests propia, se documenta en un
 informe y se marca en `ROADMAP.md`. Las fases entregadas siguen esa convención.
-El alcance pendiente desde la fase 024 hasta la 030 queda reflejado en
-`ROADMAP.md`.
+El alcance pendiente a partir de la fase 041 queda reflejado en `ROADMAP.md`.
