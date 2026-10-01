@@ -7,6 +7,76 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 038 - A reproducible performance gate that can decline to conclude
+- `python -m evaluation.perf_gate` compares indexing, search and index size
+  against the committed `evaluation/perf_baseline.json` and returns **0 PASS,
+  1 FAIL, 2 INCONCLUYENTE**. The third code exists because there are three
+  situations and two answers cannot represent them: the 2.0.0 audit had to
+  publish a footnote instead of a verdict for exactly this reason.
+- **Load is measured before the number and can veto it.** A pure-arithmetic
+  calibration workload is timed first, and the OS CPU figure is sampled (lowest
+  of three, so the gate does not veto itself against its own previous run).
+  Either being bad ends the run with nothing measured and nothing written.
+- **Every timing is the best of N, never a mean.** Interference only adds time,
+  so the minimum is the cleanest estimate of the real cost; a mean reports the
+  neighbours' workload as if it were ours.
+- **The measurement must repeat before it may conclude.** The suite runs twice
+  and the spread between the passes is a gate in its own right. Two runs of the
+  same build that disagree by more than the tolerance mean the tolerance cannot
+  resolve the question, and PASS against it would be self-deception.
+- **A busy machine cannot rewrite the baseline**, and the machine is named, so a
+  baseline from another CPU is reported as indicative rather than compared as
+  if it were comparable.
+- Two tolerances per metric, because a percentage alone is meaningless at
+  either end: a 25% regression on a 2 ms operation is not worth a red build and
+  a 25% regression on 6 s of indexing is real. The allowance is
+  `max(percentage, floor)`.
+- **The gate found three bugs in itself.** Its docstring promised that two
+  independent signals would veto and the code consulted only one: the first run
+  reported "0.98x of the reference" — conclusive — with the machine at 88% CPU.
+  Its machine comparison read `processor` at the top level of the baseline file
+  instead of inside `machine`, so it printed "different machine" while
+  displaying two identical dicts. And `db_open_mean_ms` varied 23% between runs
+  of unchanged code, because it was timing the first connection in a fresh
+  process (module load, SQLite load, WAL creation) rather than the steady open
+  a worker actually pays; it now warms up first.
+- The number this phase exists for: phase 031's own gate fails at **18.70 ms**
+  with the CPU at 94% and passes at **7.50 ms** idle. Same code, same
+  thresholds, opposite verdict.
+- Full suite: **1 failed, 1162 passed, 3 skipped** (1166 collected). The failure
+  is the same `test_gui_ux` Tk `pump` timeout as in phase 037, already shown
+  there to fail identically with this code absent.
+- `tests/test_perf_gate.py`: 34 tests over the decision logic with synthetic
+  measurements, so they run in milliseconds and do not depend on how busy the
+  machine is. Seven cover the wiring: that `main()` returns 2 without executing
+  the measurement or writing the baseline on a busy machine, that it records
+  one when there is no reference, that two identical passes return 0 *after
+  measuring twice*, that a regression returns 1, that two inconsistent passes
+  return 2 and **not** 0 even though every metric is inside its tolerance, and
+  that the inconclusive report says nothing was written. Deliberately **no test
+  runs the real benchmark**: a performance test that passes or fails depending
+  on the machine is the instrument this phase removes.
+- **The acceptance criterion "two runs on a quiet machine give comparable
+  numbers" could not be measured.** A game client external to this repository
+  held the CPU between 63% and 94% for the whole phase — the same obstacle and
+  the same cause as the 2.0.0 audit. That process was not touched. The busy
+  path *is* measured, repeatedly and with real numbers: eight runs, exit 2, no
+  measurement code executed, baseline untouched. The spread gate also fired on
+  real data (23.1% on `db_open_mean_ms`, which is how that metric was found to
+  be measuring the wrong thing). **Phase 038 is left open in the roadmap**, by
+  the same rule that made the phase applicable to itself: nothing enters
+  without its measured gate, and the gate that was measured here said "cannot
+  conclude". Phase 040 must run it on an idle machine.
+- **Not a blocking CI job.** A shared virtualised runner would report
+  INCONCLUYENTE nearly always. It is a local measurement, and phase 040 decides
+  its place in the release procedure.
+- The committed baseline carries `"provisional": ["db_open_mean_ms"]`: that
+  number was recorded before the measurement was corrected, so it contains
+  process startup the current code does not measure and comparing against it is
+  lenient. The gate prints the warning next to the metric and a test asserts the
+  declaration. Deleting it would have left the gate with no reference and the
+  first conclusive run would have recorded the same problem again.
+
 ### Phase 037 - Distribution: portable mode and a single executable
 - **Portable mode** (`portable status|on|off`): index, configuration, logs and
   every coordination file live in a `UniversalSearch-data` folder next to the

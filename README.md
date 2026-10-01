@@ -68,7 +68,7 @@ phase 023 adds a separate indexing control center with typed source actions,
 health/storage/derived-data state and explicit safety confirmations. The
 phase 024 formalised the provider contract (streaming `iter_files`, bounded errors, cancellation, capability/interface negotiation), made the provider key the canonical source discriminator with a `(source, path)` uniqueness migration, and added mounted-path NAS/removable providers plus mixed-provider indexing with per-provider failure isolation. Phase 025 added a versioned extraction contract with bounded PDF/Office resources and visible truncation diagnostics. Phase 026 measured a fixed lexical baseline and shipped a dependency-free, versioned n-gram fallback only where the evidence gate justified it; phase 027 added DPI awareness, `open`/`reveal` commands and reversible per-user Explorer integration. Phase 028 added bounded redacted JSON events, a seven-area `diagnose self-test`, a support bundle that declares what it does not contain, and four named recovery cases that never touch source files. Phase 029 made the CI gates a verified contract and the packaged smoke a real gate; that smoke found and fixed a semantic-layer defect (a zero idf on a one-document index, and a precision gate that rejected morphological variants), re-measured with no metric regression. Phase 030 closed the line with an executable gate: `python -m evaluation.gate` runs thirteen local invariants, including a behavioural proof that no repair can touch a user's files.
 
-Current test count: 1131 tests collected.
+Current test count: 1166 tests collected.
 
 ## Known limitations
 
@@ -138,6 +138,7 @@ Read this before expecting more than the program does.
 | 035 | Operaciones por lotes sobre la selección (035) | ✅ |
 | 036 | Agrupar, ordenar y búsquedas guardadas (036) | ✅ |
 | 037 | Distribución: modo portable y ejecutable único (037) | ✅ |
+| 038 | Puerta de rendimiento reproducible: sabe cuándo no concluir (038) | 🟡 pendiente la medición final |
 
 Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
 by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).
@@ -288,7 +289,17 @@ python -m venv .venv
 python -m benchmarks --profile 1000     # latency / indexing / memory (011)
 python -m evaluation                     # labelled corpus, P@K / R@K / MRR (013)
 python -m evaluation --flip recency diagrama   # headroom of one ranking weight
+python -m evaluation.perf_gate           # performance gate: 0 pass 1 fail 2 inconclusive (038)
 ```
+
+`perf_gate` is the one that knows when to keep quiet. It times a pure-arithmetic
+calibration workload before measuring anything, samples the machine's CPU load,
+runs the suite **twice** and treats the spread between the two passes as a gate
+of its own. If the machine is busy it exits **2** having measured nothing,
+because a latency number taken while someone else's program is running
+measures that program. When it does compare, it checks against a committed
+baseline recorded on a named machine, and it will not rewrite that baseline
+from a loaded one.
 
 Development prompts live in `docs/development/`, with a per-phase report for
 each completed phase, and `CHANGELOG.md` summarises the releases.

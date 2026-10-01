@@ -382,7 +382,13 @@ def main() -> int:
     }
     out = ROOT / "evaluation" / "distribution_baseline.json"
     out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    print(f"\nregistro escrito en {out.relative_to(ROOT)}")
+    # relative_to raises when the path has been redirected, and a diagnostic
+    # that crashes at the end of a successful run is a bad diagnostic.
+    try:
+        where = out.relative_to(ROOT)
+    except ValueError:
+        where = out
+    print(f"\nregistro escrito en {where}")
     failed = [v for v in verdicts if not v.passed]
     print("VEREDICTO:", "SHIP" if not failed else f"NO SHIP ({len(failed)} puertas)")
     return 0 if not failed else 1

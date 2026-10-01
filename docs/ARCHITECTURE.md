@@ -341,6 +341,36 @@ wheel and never run at runtime:
 Both are deterministic (no RNG, no clock in the data) and the test suite
 imports them, so `pythonpath = ["."]` is set in the pytest configuration.
 
+### The performance gate (phase 038)
+
+`evaluation/perf_gate.py` is a third kind of instrument: the two above produce
+numbers, and this one produces a **verdict, which may be the absence of one**.
+
+```bash
+python -m evaluation.perf_gate              # 0 PASS · 1 FAIL · 2 INCONCLUYENTE
+python -m evaluation.perf_gate --record     # accept a new baseline
+python -m evaluation.perf_gate --profile 10000
+```
+
+It compares against the committed `evaluation/perf_baseline.json` and holds to
+five rules:
+
+- **load first.** A pure-arithmetic calibration workload is timed before
+  anything else, and the OS CPU figure is sampled (lowest of three). Either one
+  bad, and the run ends with INCONCLUYENTE having executed nothing;
+- **best of N, never a mean.** Contention only ever adds time;
+- **repeat before concluding.** The suite runs twice and the spread between
+  the passes is itself a gate, because a tolerance that the same build fails to
+  reproduce cannot resolve a difference between two builds;
+- **a busy machine cannot rewrite the baseline**;
+- **the machine is named**, so a baseline from another CPU is reported as
+  indicative rather than compared as if it were comparable.
+
+The gate is not a blocking CI job: a shared virtualised runner would report
+INCONCLUYENTE nearly always, and a red job nobody can fix teaches people to
+ignore the instrument. It is a local measurement, and phase 040 is where its
+place in the release procedure is decided.
+
 ## Continuous integration and release
 
 `.github/workflows/ci.yml` gates Windows on quality (pyflakes, the full
