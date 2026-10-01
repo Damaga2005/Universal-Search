@@ -66,11 +66,19 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
   built to close. Migrating those two to `perf_gate`'s methodology is future
   work; until then their T5 figures have to be read alongside the CPU load the
   gate prints on the same line.
-- **Decision: not published.** `docs/RELEASE.md` step 15 says to push only on
-  explicit instruction, and there is none in this session. The procedure was
-  written so that the decision to release does not depend on someone being in a
-  hurry. What is ready: 40 documented phases committed, clean tree, gate green,
-  all three executables built and started by `packaging/build.ps1`.
+- **Decision: published.** `docs/RELEASE.md` step 15 says to push only on
+  explicit instruction, and when this phase was written there was none — so the
+  recorded decision was *not* to publish, which was the right answer then. The
+  instruction arrived afterwards and explicit, and the decision changes with
+  it. That is what a procedure written as a rule is for: not a promise to
+  release, but a condition to be checked. Pushed to `main` after the gate
+  reported 23/23, the tree was clean, and all three executables had been built
+  and started by `packaging/build.ps1`.
+- **Deliberately not in that push**, because they are separate steps with their
+  own checks in the release list: the version tag, publishing the artefacts
+  with their hashes, and the release notes. The version stays `2.0.0`; this
+  work does not bump it, because raising it is a decision about what the
+  software is, not a side effect of finishing a programme of phases.
 - **The six skipped tests are not all the same kind**, which is the easy thing
   to get wrong when counting them: two are the symlink tests this operating
   system will not create (unchanged since phase 020), one is the tray's

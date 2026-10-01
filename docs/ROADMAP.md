@@ -97,6 +97,11 @@ re-measured semantic layer (hybrid failure R@5 0.762, exact-match correctness
 1.0, no top-1 regression, nonsense queries still empty) after the packaged smoke
 exposed and fixed a zero-idf degeneracy and an exact-token precision gate. The
 v3 gate re-measured all ten phases of the programme on Windows 11, Python
-3.14.6: every phase gate SHIP, MRR unchanged at 0,833, pyflakes clean.
+3.14.6: **every phase gate SHIP**, MRR unchanged at 0,833, pyflakes clean, and
+the full suite at **1210 passed, 6 skipped, 0 failed** over 1216 collected. The
+programme's ten phases were pushed to `main` on explicit instruction; the
+version tag, the artefact publication and the release notes are separate steps
+that follow the release list. The version is still `2.0.0` — finishing a
+programme of phases is not a reason to rename the software.
 
 Current test count: 1216 tests collected.

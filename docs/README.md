@@ -48,6 +48,14 @@ El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
 | 039 | Accesibilidad e interfaz (teclado, nombres, contraste, catálogo) | ✅ Completada | — | [informe](development/039-accessibility-report.md) |
 | 040 | Puerta de calidad v3 (23 invariantes) y decisión de publicación | ✅ Completada | — | [informe](development/040-v3-quality-gate-report.md) |
 
+**Fases 031–040 cerradas.** El gate ejecutable tiene **23 invariantes**
+(`python -m evaluation.gate`); la puerta de rendimiento sabe decir «inconcluyente»
+en vez de publicar una cifra tomada con el equipo ocupado; la puerta de
+accesibilidad comprueba teclado, nombres, contraste y catálogo de textos. Cada
+fase 031–040 tiene su informe con la puerta que la midió. El resultado y la
+decisión de publicación están en el
+[informe de la fase 040](development/040-v3-quality-gate-report.md).
+
 Verificado en la fase 010: **208 tests en verde**
 (`.venv\Scripts\python -m pytest`), E2E completo de indexador, CLI, GUI e
 instalador. Posteriormente, pasada de auditoría + optimización con

@@ -180,26 +180,32 @@ la propia puerta imprime en la misma línea.
 | Búsquedas guardadas sin datos del usuario | invariante 23 |
 | Cargas maliciosas | invariante 15: presupuesto y rechazo de zip-slip |
 
-## Decisión: **no se publica**
-
-**No se publica, y la razón es una regla del proyecto, no una carencia.**
+## Decisión: **se publica**
 
 `docs/RELEASE.md` dice en el paso 15 de su lista: *publicar (push) **solo** con
-instrucción explícita*. El prompt de esta fase dice «decidir qué se publica y
-publicarlo, o explicar por qué no», y no hay ninguna instrucción de publicar en
-esta sesión. El procedimiento fue escrito para que la decisión de publicar no
+instrucción explícita*. Cuando se redactó esta fase **no había ninguna
+instrucción**, así que la decisión anotada fue no publicar, y esa era la
+respuesta correcta: el procedimiento existe para que la decisión de publicar no
 dependa de que alguien tenga prisa un viernes.
 
-Lo que **sí** está listo, y es lo que la fase tenía que dejar:
+La instrucción llegó después, explícita, y la decisión cambia con ella. Eso es
+justo lo que un procedimiento escrito como regla quiere: no una promesa de
+publicar, sino una condición que se comprueba.
+
+**Lo que se comprueba antes de publicar**, todo medido y con su comando:
 
 - las 40 fases commiteadas, cada una con su informe;
-- el árbol limpio y el gate en verde;
-- los tres artefactos de `packaging/build.ps1` construidos y arrancados;
-- las puertas por fase, todas en SHIP.
+- el árbol limpio y el gate v3 en verde (23/23);
+- los tres artefactos de `packaging/build.ps1` construidos **y arrancados**;
+- las puertas por fase, todas en SHIP;
+- pyflakes limpio, MRR sin cambios respecto a la línea base.
 
-Queda pendiente, y está escrito en la lista del release, lo que requiere una
-decisión humana: subir a `main`, etiquetar, publicar los artefactos con sus
-hashes y redactar las notas de versión.
+Se publica el código a `main`. **Queda deliberadamente fuera de este push**,
+porque son pasos distintos con sus propias comprobaciones en la lista del
+release: el tag de versión, la publicación de los artefactos con sus hashes y
+las notas de versión. La versión sigue siendo `2.0.0` y este trabajo no la
+sube: subirla es una decisión sobre qué es este software, no un efecto
+colateral de haber terminado un programa de fases.
 
 ## Limitaciones
 

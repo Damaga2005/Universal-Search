@@ -140,7 +140,7 @@ Read this before expecting more than the program does.
 | 037 | Distribución: modo portable y ejecutable único (037) | ✅ |
 | 038 | Puerta de rendimiento reproducible: sabe cuándo no concluir (038) | ✅ |
 | 039 | Accesibilidad: teclado, nombres, contraste medido y catálogo de textos (039) | ✅ |
-| 040 | Puerta de calidad v3: 23 invariantes, y no se publica sin instrucción (040) | ✅ |
+| 040 | Puerta de calidad v3: 23 invariantes, y la decisión de publicar (040) | ✅ |
 
 Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
 by version: [`docs/ROADMAP.md`](docs/ROADMAP.md).
