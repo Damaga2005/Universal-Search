@@ -130,30 +130,49 @@ def test_two_identical_runs_repeat() -> None:
 
 def test_two_different_runs_of_the_same_code_are_inconclusive() -> None:
     """This is the gate the phase is for. If the same build measured twice
-    differs by more than the tolerance, a difference of that size between two
-    *different* builds says nothing, and PASS would be self-deception."""
-    verdict = spread_verdict(_run(), _run(db_open_mean_ms=14.0))
+    differs by more than what it would tolerate from another build, a
+    difference of that size between two *different* builds says nothing, and
+    PASS would be self-deception."""
+    verdict = spread_verdict(_run(), _run(initial_index_s=6.5))
     assert not verdict.repeatable
-    assert "db_open_mean_ms" in verdict.worst
+    assert "indexado inicial" in verdict.worst
 
 
 def test_a_small_difference_between_runs_is_tolerated() -> None:
     assert spread_verdict(_run(), _run(search_p50_ms=17.5)).repeatable
 
 
-def test_index_size_is_excluded_from_the_spread_check() -> None:
-    """Two runs produce the same bytes or one of them is broken. A percentage
-    on a byte count is noise, and treating it as spread would veto every
-    machine for no reason."""
-    verdict = spread_verdict(_run(), _run(index_size_mib=9.9))
-    assert verdict.repeatable
+def test_the_spread_allowance_is_the_same_one_a_regression_gets() -> None:
+    """If a change smaller than the tolerance would not fail the build, two
+    runs of the *same* code must be allowed to differ by that much too.
+
+    A flat 10% got this wrong for ``db_open_mean_ms``: an operation that takes
+    about 4 ms, where one scheduler hiccup is a 100% "difference" and an
+    irrelevant one. Found by running the gate on an idle machine.
+    """
+    metric = next(m for m in METRICS if m.key == "db_open_mean_ms")
+    allowance = metric.allowed_change(4.0)
+    # Half the allowance passes; double it does not.
+    assert spread_verdict(
+        _run(db_open_mean_ms=4.0), _run(db_open_mean_ms=4.0 + allowance / 2)
+    ).repeatable
+    assert not spread_verdict(
+        _run(db_open_mean_ms=4.0), _run(db_open_mean_ms=4.0 + allowance * 2)
+    ).repeatable
+
+
+def test_index_size_must_be_identical_between_runs() -> None:
+    """Two runs produce the same bytes or one of them is broken, so this is an
+    equality and not a tolerance."""
+    assert spread_verdict(_run(), _run()).repeatable
+    assert not spread_verdict(_run(), _run(index_size_mib=9.9)).repeatable
 
 
 def test_the_spread_names_the_worst_metric() -> None:
     verdict = spread_verdict(
-        _run(), _run(search_p95_ms=40.0, db_open_mean_ms=11.0)
+        _run(), _run(search_p95_ms=40.0, incremental_s=0.30)
     )
-    assert "search_p95_ms" in verdict.worst
+    assert "búsqueda p95" in verdict.worst
 
 
 # -- comparing against the baseline ------------------------------------------
@@ -247,16 +266,22 @@ def test_the_baseline_declares_the_machine_it_came_from() -> None:
 
 
 def test_the_baseline_declares_metrics_it_does_not_yet_trust() -> None:
-    """``db_open_mean_ms`` was recorded before the measurement was corrected,
-    so its reference carries process startup the current code no longer
-    measures. Comparing against it is lenient -- it can only hide a regression
-    in that one metric -- so the baseline says so out loud rather than leaving
-    a known-wrong number to be trusted."""
+    """A baseline may name metrics whose reference it does not stand behind.
+
+    The first recorded baseline did exactly that with ``db_open_mean_ms``,
+    which had been measured before the warm-up fix and so carried process
+    startup the current code does not measure. The file says so out loud, and
+    the gate prints the warning next to the metric.
+    """
     payload = json.loads(
         (ROOT / "evaluation" / "perf_baseline.json").read_text(encoding="utf-8")
     )
-    assert "db_open_mean_ms" in payload["provisional"]
-    assert set(payload["provisional"]) <= set(payload["numbers"])
+    provisional = payload.get("provisional", [])
+    assert set(provisional) <= set(payload["numbers"]), (
+        "a metric marked provisional must exist in the baseline"
+    )
+    if provisional:
+        assert payload.get("note"), "a provisional reference must explain itself"
 
 
 def test_a_baseline_from_another_machine_is_recognised() -> None:

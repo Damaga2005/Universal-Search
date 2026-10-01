@@ -55,9 +55,8 @@
 - [x] GUI batch operations (035)
 - [x] Grouping, sorting and saved searches (036)
 - [x] Distribution: portable mode and single executable (037)
-- [ ] Reproducible performance gate (038) — instrument done, final idle-machine
-      measurement pending (a game client held the CPU for the whole phase)
-- [ ] Accessibility and interface (039)
+- [x] Reproducible performance gate (038)
+- [x] Accessibility and interface (039)
 - [ ] Universal Search v3 quality gate (040)
 
 ---
@@ -77,7 +76,7 @@
 
 ---
 
-Phases 001–038 are implemented and documented (per-phase reports in
+Phases 001–039 are implemented and documented (per-phase reports in
 `docs/development/`). The v2 quality gate is an executable instrument, not a
 promise: `python -m evaluation.gate` runs thirteen local invariants —
 dependency budget, no network or model imports, a platform-independent data
@@ -91,4 +90,4 @@ exact-match correctness 1.0, no top-1 regression, nonsense queries still
 empty) after the packaged smoke exposed and fixed a zero-idf degeneracy and an
 exact-token precision gate.
 
-Current test count: 1166 tests collected.
+Current test count: 1202 tests collected.

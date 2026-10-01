@@ -50,12 +50,17 @@ tenía código.
    sistema. En otra máquina las mismas cifras son indicativas, no comparables,
    y la puerta lo dice en vez de insinuar un veredicto que no puede sostener.
 
-### Dos tolerancias, porque un porcentaje solo no significa nada
+#### Dos tolerancias, porque un porcentaje solo no significa nada
 
 Una regresión del 25 % sobre una operación de 2 ms es medio milisegundo y no
 justifica romper una build; una del 25 % sobre 6 s de indexado es real. El
 cambio permitido es `max(porcentaje, suelo)`: el suelo es el cambio más pequeño
 que merece mención, y el porcentaje es lo que escala.
+
+Y la misma regla rige la comprobación de dispersión, por el mismo motivo.
+
+La fase **queda cerrada**: el criterio de aceptación se comprobó con el equipo
+en reposo y la puerta dio **PASS con salida 0**.
 
 ## La puerta encontró tres fallos en sí misma
 
@@ -92,23 +97,39 @@ queda fuera de la comprobación de dispersión (dos pasadas producen los mismos
 bytes o una está rota); todas las métricas tienen tolerancia y no hay claves
 repetidas; y la línea base commiteada declara la máquina de la que salió.
 
-## Lo que quedó sin medir, y por qué
+## La medición que faltaba, y dos cosas que encontró
 
-**El criterio de aceptación «dos ejecuciones con el equipo tranquilo dan números
-comparables» no se ha podido comprobar en esta máquina.** Durante toda la fase
-un cliente de juego ajeno a este repositorio mantuvo la CPU entre el 63 % y el
-94 % — el mismo obstáculo, y la misma causa, que en la auditoría de 2.0.0. No
-se ha tocado ese proceso.
+Durante casi toda la fase un cliente de juego ajeno a este repositorio mantuvo
+la CPU entre el 63 % y el 94 %. Al cerrarse, la máquina quedó al **5–19 %** y la
+puerta se ejecutó de verdad:
 
-Lo que sí está medido, con números reales:
+```
+carga:        calibración 1.00× de la referencia, CPU del sistema 5%
+repetición:   indexado inicial: 4.227 frente a 3.959 (difiere 0.268, permitido 0.634)
+9 métricas    PASS, la peor es +21,1% en actualización masiva sobre un suelo de 0,050 s
+VEREDICTO:    PASS   (salida 0)
+```
 
-| Puerta | Estado | Evidencia |
-|---|---|---|
-| Un equipo ocupado no mide nada | **medida** | ocho ejecuciones, salida **2**, cero código de medición ejecutado, línea base intacta |
-| La línea base registra la máquina | **medida** | `evaluation/perf_baseline.json`, 9 métricas |
-| La dispersión detecta ruido real | **medida** | `db_open_mean_ms` varió **23,1 %** entre dos pasadas, y por eso esa métrica se corrigió |
-| Veredicto PASS con el benchmark real | **sin medir** | requiere la máquina en reposo |
-| Veredicto FAIL | **medida** | `evaluation/perf_gate.py` sobre números sintéticos, y el estado intermedio sin línea base previa |
+Antes de esa ejecución, la propia puerta encontró dos cosas más:
+
+**El p95 estaba mal muestreado.** Con 15 repeticiones por consulta (60 muestras)
+el p95 es el valor 57 de ordenados, y dos pasadas del mismo código discrepaban
+un **11,4 %** con la máquina al 15 %. Eso no es ruido de carga: es muestreo
+insuficiente. La respuesta correcta es medir mejor, no ampliar el umbral hasta
+que el ruido quepa, así que ahora son 40 repeticiones (160 muestras) y el p95
+cae en el valor 152. Con eso la dispersión bajó y dejó de ser la métrica peor.
+
+**La dispersión usaba un porcentaje plano, y eso es un error deprincipio.**
+`db_open_mean_ms` tardaba unos 4 ms, así que un solo tropiezo del planificador
+era un «100 % de diferencia» y absolutamente irrelevante. Ahora la dispersión usa
+**la misma autorización que la comparación**, `max(porcentaje, suelo)`, y el
+argumento es directo: si un cambio menor que la tolerancia no rompería la build,
+dos pasadas del mismo código deben poder discrepar en esa misma magnitud. El
+índice, que no es un tiempo, se exige idéntico y no «casi igual».
+
+Con la máquina ya tranquila, la referencia de `db_open_mean_ms` pudo
+re-grabarse con el método correcto: **16,9 ms → 3,9 ms**, y la marca de
+referencia provisional desaparece del baseline.
 
 La fase **queda abierta en el roadmap** por esto. Es la misma regla del
 proyecto que la hizo aplicable a sí misma: nada entra sin su puerta de evidencia
@@ -130,7 +151,7 @@ dice es peor que una que se sabe incorrecta y lo dice.
 
 ## Pruebas
 
-`tests/test_perf_gate.py`, **34 tests**. La carga veta por calibración y por
+`tests/test_perf_gate.py`, **36 tests**. La carga veta por calibración y por
 figura del SO, y una figura desconocida **no** veta (negarse a medir donde no
 hay número sería tan deshonesto como ignorar uno que sí hay); la ausencia de
 referencia previa no es un veto; la carga de calibración es determinista, no

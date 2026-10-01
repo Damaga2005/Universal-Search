@@ -24,8 +24,11 @@ from universal_search.index.search import SearchResult
 def test_theme_is_centralised_and_complete():
     for name, palette in theme_module.THEMES.items():
         assert palette.name == name
+        # "surface" was removed in phase 039: declared in both palettes and
+        # drawn by no widget. A colour nothing renders is a colour nobody
+        # audited, and the accessibility contrast table must cover every field.
         for attribute in (
-            "background", "surface", "foreground", "muted", "accent",
+            "background", "foreground", "muted", "accent",
             "selection_background", "selection_foreground", "busy", "danger",
         ):
             value = getattr(palette, attribute)
@@ -34,6 +37,29 @@ def test_theme_is_centralised_and_complete():
     # A dark theme must not reuse the light foreground, or text disappears.
     assert light.foreground != dark.foreground
     assert light.background != dark.background
+
+
+def test_every_palette_colour_is_drawn_somewhere():
+    """A colour with no widget using it is dead weight that looks like a
+    design decision. This is what caught ``surface``."""
+    gui_root = Path(__file__).resolve().parents[1] / "src" / "universal_search" / "gui"
+    used: set[str] = set()
+    for path in gui_root.glob("*.py"):
+        if path.name in {"theme.py", "accessibility.py", "strings.py"}:
+            continue
+        source = path.read_text(encoding="utf-8")
+        for field in theme_module.LIGHT.__dataclass_fields__:
+            if field in {"name", "dark"}:
+                continue
+            if f"theme.{field}" in source or f"self.theme.{field}" in source:
+                used.add(field)
+    declared = {
+        field for field in theme_module.LIGHT.__dataclass_fields__
+        if field not in {"name", "dark"}
+    }
+    assert declared - used == set(), (
+        f"colores declarados y nunca dibujados: {sorted(declared - used)}"
+    )
 
 
 def test_theme_resolution_honours_configuration_and_never_returns_none():

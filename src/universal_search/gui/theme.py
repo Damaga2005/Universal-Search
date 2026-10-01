@@ -5,6 +5,11 @@ Scattering `#666` through widget code is how a dark mode ends up with
 unreadable text in three places; a single frozen record with one place to
 change is the only way this stays maintainable.
 
+Phase 039 removed the ``surface`` colour: it was declared here and in both
+palettes and drawn by no widget. A colour nothing renders is a colour nobody
+audited, and `evaluation.accessibility_gate` now fails if a palette field is
+not used somewhere.
+
 Pure data and arithmetic: nothing in this module touches Tk, so the theme
 contract is testable without a display.
 """
@@ -30,12 +35,16 @@ PATH_PARTS = 2
 
 @dataclass(frozen=True, slots=True)
 class Theme:
-    """One complete palette plus its type scale."""
+    """One complete palette plus its type scale.
+
+    Every colour here is drawn by the window. Phase 039 removed ``surface``:
+    it was declared in both palettes and rendered nowhere, and a colour with no
+    contrast requirement and no widget using it is a colour nobody audited.
+    """
 
     name: str
     dark: bool
     background: str
-    surface: str
     foreground: str
     muted: str
     accent: str
@@ -59,7 +68,6 @@ LIGHT = Theme(
     name="light",
     dark=False,
     background="#ffffff",
-    surface="#f4f5f7",
     foreground="#1b1b1b",
     muted="#5d6470",
     accent="#1a5fb4",
@@ -73,7 +81,6 @@ DARK = Theme(
     name="dark",
     dark=True,
     background="#1e1f22",
-    surface="#2b2d30",
     foreground="#e8e8e8",
     muted="#a6adb8",
     accent="#7aa7e8",

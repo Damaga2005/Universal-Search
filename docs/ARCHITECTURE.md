@@ -431,6 +431,32 @@ one-file build, copied to an empty folder first, which is the reproduction of
 the 2.0.0 defect (two bare `.exe` files that did not start because a one-dir
 build needs its `_internal/` sibling).
 
+### The interface layer (phase 039)
+
+Three modules sit next to the widgets, and none of them touches Tk:
+
+- **`gui/strings.py`** — every user-visible string, keyed by what it *is*
+  (`MENU.INDEXER.PAUSE`), never by what it says. `untranslated_literals()`
+  scans the AST of the GUI for literals written inline, so a new button without
+  a catalogue entry fails the suite instead of shipping untranslatable. A
+  missing key raises rather than rendering nothing, and both a missing and a
+  misspelled `{placeholder}` are errors — `str.format` would put a literal
+  `{count}` on screen and say nothing.
+- **`gui/accessibility.py`** — the audit instruments. `focus_report` walks the
+  widget tree the way Tab does and reports anything left to a platform default
+  for `takefocus`; `name_report_for` reads what a screen reader would announce.
+  Tk has no `aria-label` and no `labelwidget`, and three labels in this window
+  share one parent frame, so the association is **declared** with
+  `declare_name()` where the widget is built rather than guessed from
+  position; `contrast_report` computes WCAG 2.1 ratios for the pairs the window
+  actually draws.
+- **`gui/theme.py`** — unchanged since 017 except for the removal of
+  `surface`, a palette colour no widget rendered.
+
+The evidence is `python -m evaluation.accessibility_gate`: six zero-tolerance
+gates over keyboard reachability, accessible names, catalogue coverage, WCAG AA
+contrast, undrawn palette colours, and errors that look like ordinary status.
+
 ## Data, dependencies, non-goals
 
 - Storage: local SQLite (FTS5). No Elasticsearch, Redis, Docker, cloud, AI,

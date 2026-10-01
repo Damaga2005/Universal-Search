@@ -17,7 +17,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from universal_search import __version__
 from universal_search.context import load_contexts
-from universal_search.gui import rows, services, theme as theme_module
+from universal_search.gui import rows, services, strings, theme as theme_module
 from universal_search.gui.batch import BatchOperations
 from universal_search.gui.services import (
     SearchService,
@@ -82,10 +82,11 @@ class SearchWindow(tk.Tk):
         self.minsize(680, 400)
 
         self._build_ui()
+        self._declare_accessible_names()
         self._bind_keys()
         # Publish the PID: the worker's global hotkey targets this window.
         services.register_gui_pid(self.service.paths)
-        self._set_status("Listo — escribe para buscar")
+        self._set_status(strings.get("SEARCH.READY"))
         self.query_var.trace_add("write", self._on_query_changed)
         self.entry.focus_set()
 
@@ -111,7 +112,7 @@ class SearchWindow(tk.Tk):
 
         context_bar = ttk.Frame(top, padding=(0, 6, 0, 0))
         context_bar.pack(fill="x")
-        ttk.Label(context_bar, text="Contexto:").pack(side="left")
+        ttk.Label(context_bar, text=strings.get("SEARCH.LABEL.CONTEXT")).pack(side="left")
         self.context_var = tk.StringVar()
         self.context_combo = ttk.Combobox(
             context_bar,
@@ -119,12 +120,13 @@ class SearchWindow(tk.Tk):
             state="readonly",
             width=28,
             values=self._context_values(),
+            takefocus=True,  # phase 039: never rely on a platform default
         )
         self.context_combo.pack(side="left", padx=(6, 0))
         self.context_combo.bind("<<ComboboxSelected>>", self._on_context_changed)
         self.context_var.set(self.service.config.active_context or "(todos)")
 
-        ttk.Label(context_bar, text="Fuente:").pack(side="left", padx=(12, 0))
+        ttk.Label(context_bar, text=strings.get("SEARCH.LABEL.SOURCE")).pack(side="left", padx=(12, 0))
         self.source_var = tk.StringVar(value=SOURCE_FILTER_VALUES[0])
         self.source_combo = ttk.Combobox(
             context_bar,
@@ -132,11 +134,12 @@ class SearchWindow(tk.Tk):
             state="readonly",
             width=9,
             values=SOURCE_FILTER_VALUES,
+            takefocus=True,  # phase 039: never rely on a platform default
         )
         self.source_combo.pack(side="left", padx=(6, 0))
         self.source_combo.bind("<<ComboboxSelected>>", self._on_filter_changed)
 
-        ttk.Label(context_bar, text="Tipo:").pack(side="left", padx=(12, 0))
+        ttk.Label(context_bar, text=strings.get("SEARCH.LABEL.TYPE")).pack(side="left", padx=(12, 0))
         self.type_var = tk.StringVar(value=TYPE_FILTER_VALUES[0])
         self.type_combo = ttk.Combobox(
             context_bar,
@@ -144,11 +147,16 @@ class SearchWindow(tk.Tk):
             state="readonly",
             width=8,
             values=TYPE_FILTER_VALUES,
+            takefocus=True,  # phase 039: never rely on a platform default
         )
         self.type_combo.pack(side="left", padx=(6, 0))
         self.type_combo.bind("<<ComboboxSelected>>", self._on_filter_changed)
 
-        self.recent_button = ttk.Menubutton(context_bar, text="Recientes ▾")
+        self.recent_button = ttk.Menubutton(
+            context_bar,
+            text=strings.get("SEARCH.RECENTS"),
+            takefocus=True,  # phase 039: never rely on a platform default
+        )
         self.recent_menu = tk.Menu(self.recent_button, tearoff=0)
         self.recent_button["menu"] = self.recent_menu
         self.recent_button.pack(side="right")
@@ -157,67 +165,67 @@ class SearchWindow(tk.Tk):
         menu = tk.Menu(self)
         file_menu = tk.Menu(menu, tearoff=0)
         file_menu.add_command(
-            label="Copiar ruta del resultado (Ctrl+C)", command=self._copy_path
+            label=strings.get("MENU.FILE.COPY_PATH"), command=self._copy_path
         )
         file_menu.add_separator()
-        file_menu.add_command(label="Salir", command=self._on_close)
-        menu.add_cascade(label="Archivo", menu=file_menu)
+        file_menu.add_command(label=strings.get("MENU.FILE.EXIT"), command=self._on_close)
+        menu.add_cascade(label=strings.get("MENU.FILE"), menu=file_menu)
 
         # Phase 035: batch operations over a multi-selection.
         batch_menu = tk.Menu(menu, tearoff=0)
         batch_menu.add_command(
-            label="Abrir seleccionados (Ctrl+O)", command=self._open_selected
+            label=strings.get("MENU.SELECTION.OPEN"), command=self._open_selected
         )
         batch_menu.add_command(
-            label="Mostrar seleccionados (Ctrl+R)",
+            label=strings.get("MENU.SELECTION.REVEAL"),
             command=self._reveal_selected,
         )
         batch_menu.add_command(
-            label="Copiar rutas seleccionadas (Ctrl+C)",
+            label=strings.get("MENU.SELECTION.COPY"),
             command=self._copy_selected_paths,
         )
         batch_menu.add_separator()
         batch_menu.add_command(
-            label="Olvidar seleccionados del índice (Ctrl+Shift+R)",
+            label=strings.get("MENU.SELECTION.FORGET"),
             command=self._forget_selected,
         )
-        menu.add_cascade(label="Selección", menu=batch_menu)
+        menu.add_cascade(label=strings.get("MENU.SELECTION"), menu=batch_menu)
 
         self.indexer_menu = tk.Menu(menu, tearoff=0)
         self.indexer_menu.add_command(
-            label="Iniciar indexador", command=lambda: self._indexer_action("start")
+            label=strings.get("MENU.INDEXER.START"), command=lambda: self._indexer_action("start")
         )
         self.indexer_menu.add_command(
-            label="Detener indexador", command=lambda: self._indexer_action("stop")
+            label=strings.get("MENU.INDEXER.STOP"), command=lambda: self._indexer_action("stop")
         )
         self.indexer_menu.add_command(
-            label="Pausar indexación", command=lambda: self._indexer_action("pause")
+            label=strings.get("MENU.INDEXER.PAUSE"), command=lambda: self._indexer_action("pause")
         )
         self.indexer_menu.add_command(
-            label="Reanudar indexación", command=lambda: self._indexer_action("resume")
+            label=strings.get("MENU.INDEXER.RESUME"), command=lambda: self._indexer_action("resume")
         )
         self.indexer_menu.add_separator()
         self.autostart_var = tk.BooleanVar(
             value=self.service.config.start_with_windows
         )
         self.indexer_menu.add_checkbutton(
-            label="Iniciar con Windows",
+            label=strings.get("MENU.INDEXER.AUTOSTART"),
             variable=self.autostart_var,
             command=self._toggle_autostart,
         )
-        menu.add_cascade(label="Indexador", menu=self.indexer_menu)
+        menu.add_cascade(label=strings.get("MENU.INDEXER"), menu=self.indexer_menu)
 
         diagnose_menu = tk.Menu(menu, tearoff=0)
         diagnose_menu.add_command(
-            label="Estado del índice", command=self._show_diagnostics
+            label=strings.get("MENU.DIAGNOSE.SUMMARY"), command=self._show_diagnostics
         )
         diagnose_menu.add_command(
-            label="Centro de control de indexación...", command=self._show_control_center
+            label=strings.get("MENU.DIAGNOSE.CONTROL_CENTER"), command=self._show_control_center
         )
         diagnose_menu.add_command(
-            label="Documentos relacionados...", command=self._show_related
+            label=strings.get("MENU.DIAGNOSE.RELATED"), command=self._show_related
         )
-        menu.add_cascade(label="Diagnóstico", menu=diagnose_menu)
+        menu.add_cascade(label=strings.get("MENU.DIAGNOSE"), menu=diagnose_menu)
         self.config(menu=menu)
 
         middle = ttk.Frame(self, padding=(12, 0, 12, 0))
@@ -249,9 +257,14 @@ class SearchWindow(tk.Tk):
         statusbar = ttk.Frame(self, padding=(12, 4))
         statusbar.pack(fill="x", side="bottom")
         self.status_var = tk.StringVar()
-        ttk.Label(
+        # Kept as a real widget, not a temporary: phase 039 found that `danger`
+        # and `busy` were declared in both palettes and drawn nowhere, so a
+        # failure looked exactly like an ordinary status line. Severity is a
+        # property of the text's importance, not of how loudly it failed.
+        self.status_label = ttk.Label(
             statusbar, textvariable=self.status_var, foreground=self.theme.muted
-        ).pack(side="left")
+        )
+        self.status_label.pack(side="left")
         self.indexer_var = tk.StringVar(value="indexador: …")
         ttk.Label(
             statusbar, textvariable=self.indexer_var, foreground=self.theme.muted
@@ -262,6 +275,26 @@ class SearchWindow(tk.Tk):
             font=self.fonts["body"], foreground=self.theme.muted,
         )
         self.preview.pack(fill="x", side="bottom")
+
+    def _declare_accessible_names(self) -> None:
+        """Name every interactive control (phase 039).
+
+        Tk cannot say which ``Label`` belongs to which control: three labels
+        share one parent frame here, so anything positional would announce
+        "Contexto:" for three different filters. The association is declared
+        instead, and ``gui.accessibility`` fails if a control has none.
+        """
+        from universal_search.gui import accessibility
+
+        for widget, key in (
+            (self.entry, "SEARCH.PLACEHOLDER_OR_LABEL"),
+            (self.context_combo, "SEARCH.LABEL.CONTEXT"),
+            (self.source_combo, "SEARCH.LABEL.SOURCE"),
+            (self.type_combo, "SEARCH.LABEL.TYPE"),
+            (self.recent_button, "SEARCH.RECENTS"),
+            (self.listbox, "RESULTS.LIST_LABEL"),
+        ):
+            accessibility.declare_name(widget, strings.get(key))
 
     def _bind_keys(self) -> None:
         self.entry.bind("<Return>", self._on_open)
@@ -322,7 +355,7 @@ class SearchWindow(tk.Tk):
         self.attributes("-topmost", True)
         self.after(300, lambda: self.attributes("-topmost", False))
         self.entry.focus_force()
-        self._set_status("Atajo global — escribe para buscar")
+        self._set_status(strings.get("SEARCH.HOTKEY_SHOWN"))
 
     def _indexer_action(self, action: str) -> None:
         handlers = {
@@ -335,7 +368,7 @@ class SearchWindow(tk.Tk):
             message = handlers[action](self.service.paths)
         except Exception:
             log.exception("indexer control failed: %s", action)
-            self._set_status("Error en el indexador — consulta el registro")
+            self._set_status(strings.get("INDEXER.ERROR"), "error")
             return
         self._set_status(message)
         self._poll_indexer_now()
@@ -353,7 +386,7 @@ class SearchWindow(tk.Tk):
         except Exception:
             log.exception("could not update autostart")
             self.autostart_var.set(not enabled)  # revert the checkbox
-            self._set_status("No se pudo configurar el inicio — consulta el registro")
+            self._set_status(strings.get("ERROR.AUTOSTART"), "error")
             return
         try:
             self.service.save_config(
@@ -369,7 +402,7 @@ class SearchWindow(tk.Tk):
         self._cancel_pending_search()
         if not self.query_var.get().strip():
             self._clear_results()
-            self._set_status("Listo — escribe para buscar")
+            self._set_status(strings.get("SEARCH.READY"))
             return
         self._search_job = self.after(DEBOUNCE_MS, self._run_scheduled_search)
 
@@ -472,7 +505,7 @@ class SearchWindow(tk.Tk):
             self._set_status(f"Consulta no válida: {query_error}")
             return
         if failure is not None:
-            self._set_status("Error al buscar — consulta el registro de errores")
+            self._set_status(strings.get("ERROR.SEARCH"), "error")
             return
         self._render(results)
 
@@ -490,7 +523,7 @@ class SearchWindow(tk.Tk):
             self.service.save_config(replace(self.service.config, active_context=name))
         except Exception:
             log.exception("could not persist the active context")
-            self._set_status("No se pudo guardar el contexto — consulta el registro")
+            self._set_status(strings.get("ERROR.SAVE_CONTEXT"), "error")
             return
         if self.query_var.get().strip():
             self._execute_search()
@@ -521,7 +554,7 @@ class SearchWindow(tk.Tk):
         entries = self.service.config.recent_queries
         if not entries:
             self.recent_menu.add_command(
-                label="(sin búsquedas recientes)", state="disabled"
+                label=strings.get("SEARCH.RECENTS_EMPTY"), state="disabled"
             )
             return
         for entry in entries:
@@ -559,7 +592,7 @@ class SearchWindow(tk.Tk):
                 f"Sin resultados para «{self.query_var.get().strip()}»"
             )
         else:
-            self._set_status("Listo — escribe para buscar")
+            self._set_status(strings.get("SEARCH.READY"))
         self._update_preview()
 
     @staticmethod
@@ -585,8 +618,23 @@ class SearchWindow(tk.Tk):
         self.listbox.delete(0, "end")
         self.preview.configure(text="")
 
-    def _set_status(self, text: str) -> None:
+    def _set_status(self, text: str, severity: str = "info") -> None:
+        """Show a status line, coloured by how much it matters.
+
+        Phase 039: an error used to be rendered in exactly the same muted grey
+        as "Listo — escribe para buscar", so a failure a user needed to read was
+        visually identical to a message they could ignore. ``danger`` and
+        ``busy`` were in the palette for that and nothing ever used them.
+        """
         self.status_var.set(text)
+        colour = {
+            "error": self.theme.danger,
+            "warning": self.theme.busy,
+        }.get(severity, self.theme.muted)
+        try:
+            self.status_label.configure(foreground=colour)
+        except tk.TclError:  # pragma: no cover - window already destroyed
+            pass
 
     # -- diagnostics and control center (phases 015/023) ----------------------
 
@@ -617,7 +665,7 @@ class SearchWindow(tk.Tk):
             report = self.service.diagnostics_report()
         except Exception:
             log.exception("could not build the diagnostics report")
-            self._set_status("No se pudo generar el diagnóstico")
+            self._set_status(strings.get("ERROR.DIAGNOSTICS"), "error")
             return
         window = tk.Toplevel(self)
         window.title("Diagnóstico del índice")
@@ -633,14 +681,14 @@ class SearchWindow(tk.Tk):
         if reference is None:
             index = self._selected_index()
             if index is None or not self.results:
-                self._set_status("Selecciona un resultado para ver relacionados")
+                self._set_status(strings.get("ACTION.RELATED_NEEDS_SELECTION"))
                 return
             result = self.results[index]
             reference = result.document_id or str(result.path)
         self._related_generation += 1
         generation = self._related_generation
         self._related_inflight += 1
-        self._set_status("Cargando documentos relacionados…")
+        self._set_status(strings.get("RELATED.LOADING"))
 
         def work() -> None:
             try:
@@ -667,7 +715,7 @@ class SearchWindow(tk.Tk):
             if generation != self._related_generation:
                 continue
             if failure is not None:
-                self._set_status("No se pudieron cargar los relacionados")
+                self._set_status(strings.get("ERROR.RELATED"), "error")
                 continue
             self._render_related(related)
         self._related_poll = self.after(RESULT_POLL_MS, self._poll_related)
@@ -686,13 +734,13 @@ class SearchWindow(tk.Tk):
         window.geometry("760x360")
         ttk.Label(
             window,
-            text="Relaciones locales; no cambian la relevancia de la búsqueda.",
+            text=strings.get("RELATED.NOTE"),
             padding=(10, 8),
         ).pack(anchor="w")
         frame = ttk.Frame(window, padding=(10, 0, 10, 10))
         frame.pack(fill="both", expand=True)
         if not related:
-            ttk.Label(frame, text="No hay documentos relacionados.").pack(anchor="nw")
+            ttk.Label(frame, text=strings.get("RELATED.EMPTY")).pack(anchor="nw")
             return
         listbox = tk.Listbox(
             frame,
@@ -730,7 +778,7 @@ class SearchWindow(tk.Tk):
         # Kept as a private compatibility hook for older integrations, but it
         # never performs a synchronous database operation on the Tk thread.
         self._show_control_center()
-        self._set_status("Usa el centro de control para reconstruir el índice")
+        self._set_status(strings.get("ACTION.REBUILD_HINT"))
 
     # -- selection and preview -------------------------------------------------
 
@@ -824,7 +872,7 @@ class SearchWindow(tk.Tk):
         """Forget the selected documents, after an explicit confirmation."""
         paths = self._selected_paths()
         if not paths:
-            self._set_status("Selecciona al menos un documento para olvidar")
+            self._set_status(strings.get("ACTION.FORGET_NEEDS_SELECTION"))
             return "break"
         plural = "documentos" if len(paths) > 1 else "documento"
         if not messagebox.askyesno(
@@ -832,7 +880,7 @@ class SearchWindow(tk.Tk):
             f"Se borrarán del índice {len(paths)} {plural}.\n\n"
             "Los archivos del disco no se tocan.\n¿Continuar?",
         ):
-            self._set_status("Cancelado: no se olvidó nada")
+            self._set_status(strings.get("ACTION.CANCELLED"))
             return "break"
         report = self._batch().forget_all(paths, confirm=True)
         self._set_status(report.summary())
@@ -899,7 +947,7 @@ class SearchWindow(tk.Tk):
             open_path(result.path)
         except Exception:
             log.exception("could not open %s", result.path)
-            self._set_status("No se pudo abrir el archivo — consulta el registro")
+            self._set_status(strings.get("ERROR.OPEN"), "error")
             return "break"
         # Recent queries (optional, local): recorded when the user commits
         # to a result, never on every intermediate keystroke.
@@ -918,7 +966,7 @@ class SearchWindow(tk.Tk):
             reveal_in_explorer(self.results[index].path)
         except Exception:
             log.exception("could not reveal %s", self.results[index].path)
-            self._set_status("No se pudo mostrar en el explorador")
+            self._set_status(strings.get("ERROR.REVEAL"), "error")
         return "break"
 
     def _on_escape(self, _event=None):
@@ -941,14 +989,14 @@ class SearchWindow(tk.Tk):
         return "break"
 
     def _add_root(self) -> None:
-        chosen = filedialog.askdirectory(title="Carpeta a indexar")
+        chosen = filedialog.askdirectory(title=strings.get("SEARCH.PICK_FOLDER"))
         if not chosen:
             return
         try:
             result = self.service.control_center().add_source(chosen)
         except Exception:
             log.exception("could not add source through control center")
-            self._set_status("No se pudo añadir la carpeta — consulta el registro")
+            self._set_status(strings.get("ERROR.ADD_FOLDER"), "error")
             return
         self.service.reload_config()
         self._set_status(result.message)

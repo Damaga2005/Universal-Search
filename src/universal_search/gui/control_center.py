@@ -57,6 +57,7 @@ from universal_search.diagnostics import (
     rebuild_intelligence,
     remove_indexed_source,
 )
+from universal_search.gui import strings
 from universal_search.index.database import SearchDatabase
 from universal_search.index.indexer import IndexStats, Indexer
 from universal_search.intelligence import clear as clear_intelligence
@@ -1678,14 +1679,14 @@ if tk is not None:
             self.font_map = fonts(getattr(self.service.config, "ui_scale", 1.0))
             top = ttk.Frame(self, padding=(12, 12, 12, 6))
             top.pack(fill="x")
-            ttk.Label(top, text="Indexación y fuentes", font=self.font_map["body"]).pack(
+            ttk.Label(top, text=strings.get("CONTROL.TITLE"), font=self.font_map["body"]).pack(
                 side="left"
             )
-            ttk.Button(top, text="Actualizar", command=self.refresh).pack(side="right")
+            ttk.Button(top, text=strings.get("CONTROL.REFRESH"), command=self.refresh).pack(side="right")
             self.technical_var = tk.BooleanVar(value=False)
             ttk.Checkbutton(
                 top,
-                text="Detalles técnicos",
+                text=strings.get("CONTROL.TECHNICAL_DETAILS"),
                 variable=self.technical_var,
                 command=self._render_details,
             ).pack(side="right", padx=(0, 12))
@@ -1734,56 +1735,56 @@ if tk is not None:
 
             actions = ttk.Frame(self, padding=(12, 4, 12, 8))
             actions.pack(fill="x")
-            ttk.Button(actions, text="Añadir carpeta…", command=self.add_source).pack(
+            ttk.Button(actions, text=strings.get("CONTROL.ADD_SOURCE"), command=self.add_source).pack(
                 side="left"
             )
-            ttk.Button(actions, text="Quitar fuente", command=self.remove_source).pack(
+            ttk.Button(actions, text=strings.get("CONTROL.REMOVE_SOURCE"), command=self.remove_source).pack(
                 side="left", padx=(6, 0)
             )
-            ttk.Button(actions, text="Reexplorar", command=self.rescan).pack(
+            ttk.Button(actions, text=strings.get("CONTROL.RESCAN"), command=self.rescan).pack(
                 side="left", padx=(6, 0)
             )
-            ttk.Button(actions, text="Reintentar fallos", command=self.retry_failures).pack(
+            ttk.Button(actions, text=strings.get("CONTROL.RETRY_FAILURES"), command=self.retry_failures).pack(
                 side="left", padx=(6, 0)
             )
-            ttk.Button(actions, text="Pausar", command=self.pause).pack(
+            ttk.Button(actions, text=strings.get("CONTROL.PAUSE"), command=self.pause).pack(
                 side="left", padx=(6, 0)
             )
-            ttk.Button(actions, text="Reanudar", command=self.resume).pack(
+            ttk.Button(actions, text=strings.get("CONTROL.RESUME"), command=self.resume).pack(
                 side="left", padx=(6, 0)
             )
 
             maintenance = ttk.Frame(self, padding=(12, 0, 12, 8))
             maintenance.pack(fill="x")
-            ttk.Label(maintenance, text="Mantenimiento:").pack(side="left")
+            ttk.Label(maintenance, text=strings.get("CONTROL.MAINTENANCE")).pack(side="left")
             ttk.Button(
                 maintenance,
-                text="Reconstruir FTS",
+                text=strings.get("CONTROL.REBUILD_FTS"),
                 command=lambda: self.rebuild("fts"),
             ).pack(side="left", padx=(6, 0))
             ttk.Button(
                 maintenance,
-                text="Reconstruir metadatos",
+                text=strings.get("CONTROL.REBUILD_METADATA"),
                 command=lambda: self.rebuild("intelligence"),
             ).pack(side="left", padx=(6, 0))
             ttk.Button(
                 maintenance,
-                text="Reconstruir relaciones",
+                text=strings.get("CONTROL.REBUILD_RELATIONS"),
                 command=lambda: self.rebuild("relationships"),
             ).pack(side="left", padx=(6, 0))
             ttk.Button(
                 maintenance,
-                text="Reconstruir todo",
+                text=strings.get("CONTROL.REBUILD_ALL"),
                 command=lambda: self.rebuild("all"),
             ).pack(side="left", padx=(6, 0))
             ttk.Button(
                 maintenance,
-                text="Autodiagnóstico",
+                text=strings.get("CONTROL.SELFTEST"),
                 command=self.self_test,
             ).pack(side="left", padx=(18, 0))
             ttk.Button(
                 maintenance,
-                text="Paquete de soporte…",
+                text=strings.get("CONTROL.SUPPORT_BUNDLE"),
                 command=self.support_bundle,
             ).pack(side="left", padx=(6, 0))
 
@@ -1934,7 +1935,7 @@ if tk is not None:
             self._render_details()
 
         def add_source(self) -> None:
-            chosen = filedialog.askdirectory(title="Añadir carpeta a indexar")
+            chosen = filedialog.askdirectory(title=strings.get("CONTROL.ADD_FOLDER"))
             if chosen:
                 self._submit("action", lambda: self.service.add_source(chosen))
 
@@ -1992,7 +1993,7 @@ if tk is not None:
         def support_bundle(self) -> None:
             destination = filedialog.asksaveasfilename(
                 parent=self,
-                title="Guardar paquete de soporte",
+                title=strings.get("CONTROL.SAVE_SUPPORT"),
                 defaultextension=".json",
                 initialfile="universal-search-support.json",
                 filetypes=[("JSON", "*.json")],

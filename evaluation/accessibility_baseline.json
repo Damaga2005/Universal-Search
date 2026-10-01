@@ -1,0 +1,139 @@
+{
+  "phase": "039",
+  "verdicts": [
+    {
+      "gate": "T1 controls unreachable by keyboard",
+      "measured": 0,
+      "threshold": 0,
+      "passed": true,
+      "detail": "6 controles en el anillo: ['Entry', 'Combobox', 'Combobox', 'Combobox', 'Menubutton', 'Listbox']"
+    },
+    {
+      "gate": "T2 controls with no accessible name",
+      "measured": 0,
+      "threshold": 0,
+      "passed": true,
+      "detail": "Entry=Búsqueda, Combobox=Contexto:, Combobox=Fuente:, Combobox=Tipo:, Menubutton=Recientes ▾, Listbox=Resultados"
+    },
+    {
+      "gate": "T3 visible strings outside the catalogue",
+      "measured": 0,
+      "threshold": 0,
+      "passed": true,
+      "detail": "86 entradas catalogadas"
+    },
+    {
+      "gate": "T4 WCAG AA contrast failures",
+      "measured": 0,
+      "threshold": 0,
+      "passed": true,
+      "detail": "7 pares x 2 temas, cuerpo 4.5:1"
+    },
+    {
+      "gate": "T5 palette colours never drawn",
+      "measured": 0,
+      "threshold": 0,
+      "passed": true,
+      "detail": "8 colores, todos usados"
+    },
+    {
+      "gate": "T6 errors that look like ordinary status",
+      "measured": 0,
+      "threshold": 0,
+      "passed": true,
+      "detail": "estado #a6adb8 vs error #f28b82; danger declarado #a51d2d"
+    }
+  ],
+  "window_checked": true,
+  "window_reason": null,
+  "contrast": {
+    "light": [
+      {
+        "pair": "body text",
+        "ratio": 17.22,
+        "required": 4.5,
+        "ok": true
+      },
+      {
+        "pair": "secondary text",
+        "ratio": 5.96,
+        "required": 4.5,
+        "ok": true
+      },
+      {
+        "pair": "links and focus",
+        "ratio": 6.29,
+        "required": 4.5,
+        "ok": true
+      },
+      {
+        "pair": "selected row",
+        "ratio": 13.2,
+        "required": 4.5,
+        "ok": true
+      },
+      {
+        "pair": "warning",
+        "ratio": 4.92,
+        "required": 4.5,
+        "ok": true
+      },
+      {
+        "pair": "error",
+        "ratio": 7.46,
+        "required": 4.5,
+        "ok": true
+      },
+      {
+        "pair": "focus ring",
+        "ratio": 6.29,
+        "required": 3.0,
+        "ok": true
+      }
+    ],
+    "dark": [
+      {
+        "pair": "body text",
+        "ratio": 13.45,
+        "required": 4.5,
+        "ok": true
+      },
+      {
+        "pair": "secondary text",
+        "ratio": 7.29,
+        "required": 4.5,
+        "ok": true
+      },
+      {
+        "pair": "links and focus",
+        "ratio": 6.69,
+        "required": 4.5,
+        "ok": true
+      },
+      {
+        "pair": "selected row",
+        "ratio": 8.25,
+        "required": 4.5,
+        "ok": true
+      },
+      {
+        "pair": "warning",
+        "ratio": 8.28,
+        "required": 4.5,
+        "ok": true
+      },
+      {
+        "pair": "error",
+        "ratio": 6.9,
+        "required": 4.5,
+        "ok": true
+      },
+      {
+        "pair": "focus ring",
+        "ratio": 6.69,
+        "required": 3.0,
+        "ok": true
+      }
+    ]
+  }
+}

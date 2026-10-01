@@ -7,20 +7,16 @@
     "python": "3.14.6",
     "cpu_count": 12
   },
-  "calibration_best_s": 0.22966880000058154,
+  "calibration_best_s": 0.22771610000017972,
   "numbers": {
-    "initial_index_s": 5.2312035999993896,
-    "incremental_s": 0.20482860000083747,
-    "single_update_s": 0.2390544999998383,
-    "bulk_update_s": 0.27689939999982016,
-    "deletion_s": 0.24440549999962968,
-    "db_open_mean_ms": 16.901819999930012,
-    "search_p50_ms": 17.477600000347593,
-    "search_p95_ms": 23.913600000014412,
-    "index_size_mib": 3.77734375
-  },
-  "provisional": [
-    "db_open_mean_ms"
-  ],
-  "note": "db_open_mean_ms se registro antes de corregir la medicion: la referencia incluye el arranque en frio del proceso (~7 ms) que el codigo actual ya no mide. Sustituir con --record en una maquina en reposo."
+    "initial_index_s": 3.830423299999893,
+    "incremental_s": 0.13860559999920952,
+    "single_update_s": 0.19610850000026403,
+    "bulk_update_s": 0.2038577000002988,
+    "deletion_s": 0.18171199999960663,
+    "db_open_mean_ms": 3.90545000000202,
+    "search_p50_ms": 12.567899999339716,
+    "search_p95_ms": 16.071699999884004,
+    "index_size_mib": 3.76953125
+  }
 }

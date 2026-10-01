@@ -7,6 +7,68 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 039 - Accessibility and interface, measured instead of promised
+- **Every user-visible string moves to a catalogue** (`gui/strings.py`, 86
+  entries), keyed by what the string *is* (`MENU.INDEXER.PAUSE`) and never by
+  what it says. `untranslated_literals()` scans the AST of the GUI for literals
+  still written inline, so a new button with its label in the code fails the
+  suite instead of shipping untranslatable. A missing key raises rather than
+  rendering an empty label, and both a missing and a **misspelled**
+  `{placeholder}` are errors — `str.format` would put a literal `{count}` on
+  screen and say nothing.
+- **Accessibility is an instrument, not a claim.** `gui/accessibility.py`
+  walks the widget tree the way Tab does, reads what a screen reader would
+  announce, and computes WCAG 2.1 contrast ratios for the pairs the window
+  actually draws. Evidence: `python -m evaluation.accessibility_gate`, **6/6
+  PASS**, zero tolerance on every gate.
+- **Four defects found and fixed, all in the shipped window**:
+  - the three comboboxes and the recents button relied on the platform default
+    for `takefocus`, so their keyboard reachability depended on the style. The
+    entry and the listbox had declared it since phase 017; these four had not.
+  - an error was drawn in exactly the same muted grey as "Listo — escribe para
+    buscar", so a failure a user needed to read looked like a message they could
+    ignore. `_set_status` now takes a severity, and `danger` and `busy` — which
+    were in both palettes and drawn nowhere — finally have a use.
+  - `surface` was declared in both palettes and rendered by no widget. Rather
+    than invent a contrast requirement for it, it was removed, and a gate now
+    fails if a palette colour is not used somewhere.
+  - `cget("text")` on a `ttk` widget configured with `textvariable=` returns the
+    **Tcl variable name** (`PY_VAR16`), which the first draft of
+    `accessible_name` would have announced as an accessible name. And a
+    combobox showing "(todos)" is called "Tipo:", not "(todos)".
+- **Accessible names are declared, not guessed.** Tk has no `aria-label` and no
+  `labelwidget`, and three labels in this window share one parent frame, so any
+  positional heuristic would name three different filters "Contexto:". The
+  association is declared where the widget is built, and the audit fails if an
+  interactive control has none. That is also the data a real screen-reader
+  bridge would consume.
+- The catalogue's own `note` field was removed: the key already says where a
+  string appears, and a second copy of that information is a second copy to
+  forget.
+- **Two bugs in the coverage detector itself**, both found by using it. It
+  compared the call's *name* against the keyword names, so it never inspected a
+  single widget label and reported the interface as covered when it had checked
+  nothing; the rule is about the argument, not the constructor. And its
+  `col_offset` is a **UTF-8 byte** offset, not a character offset, which
+  corrupted every line with an accent — the rewrite script refused to write
+  because it validates with `ast.parse` first, which is the only reason that
+  was a near miss rather than a disaster.
+- `tests/test_accessibility.py`: 34 tests (1 skipped where the window has no OS
+  focus, with the reason), including the whole journey with no mouse — type,
+  arrow down, open — with no `invoke()` and no `<Button-1>` anywhere.
+- The gate is exercised **in a subprocess**, and the reason is worth stating:
+  its first version called `main()` in-process, and the destroyed Tk
+  interpreter left the process unable to create another ("Can't find a usable
+  init.tcl"), quietly turning fourteen later tests in the same file into skips.
+- **Not measured: a real screen reader.** No Narrator or NVDA was available on
+  this machine. The names are prepared and verified where a bridge would read
+  them; hearing one announce them is the check that is still missing.
+- Full suite: **3 failed, 1196 passed, 3 skipped** (1202 collected). All three
+  are the known Tk `pump` flake under load — two in `test_gui_ux`, and the gate
+  subprocess (which builds a real window) in `test_accessibility`. Each passes
+  in isolation, and `test_gui_ux` + `test_accessibility` together are green.
+  Recorded with the evidence rather than smoothed over.
+
 ### Phase 038 - A reproducible performance gate that can decline to conclude
 - `python -m evaluation.perf_gate` compares indexing, search and index size
   against the committed `evaluation/perf_baseline.json` and returns **0 PASS,
@@ -56,26 +118,31 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
   that the inconclusive report says nothing was written. Deliberately **no test
   runs the real benchmark**: a performance test that passes or fails depending
   on the machine is the instrument this phase removes.
-- **The acceptance criterion "two runs on a quiet machine give comparable
-  numbers" could not be measured.** A game client external to this repository
-  held the CPU between 63% and 94% for the whole phase — the same obstacle and
-  the same cause as the 2.0.0 audit. That process was not touched. The busy
-  path *is* measured, repeatedly and with real numbers: eight runs, exit 2, no
-  measurement code executed, baseline untouched. The spread gate also fired on
-  real data (23.1% on `db_open_mean_ms`, which is how that metric was found to
-  be measuring the wrong thing). **Phase 038 is left open in the roadmap**, by
-  the same rule that made the phase applicable to itself: nothing enters
-  without its measured gate, and the gate that was measured here said "cannot
-  conclude". Phase 040 must run it on an idle machine.
+- **The acceptance criterion was eventually measured and the phase is closed.**
+  A game client external to this repository held the CPU between 63% and 94% for
+  most of the phase — the same obstacle and the same cause as the 2.0.0 audit,
+  and it was not touched — so the phase was committed but left open in the
+  roadmap, by the same rule that made it applicable to itself. When the machine
+  came free the gate ran for real: **PASS, exit 0**, calibration 1.00x of its
+  reference at 5% CPU, all nine metrics inside tolerance and the spread between
+  the two passes smaller than a regression would be tolerated.
+- **Running it on an idle machine found two more defects.** With 15 repetitions
+  per query the p95 sat on the 57th ordered sample, and two runs of the same
+  code disagreed by 11.4% at 15% CPU — not noise, under-sampling. The honest
+  response was to sample more, not to widen the threshold until the noise fit:
+  40 repetitions now, so the p95 lands on the 152nd value. And the spread check
+  used a flat percentage, which is simply wrong for an operation that takes
+  about 4 ms; it now uses **the same allowance as the comparison**, on the
+  argument that if a change smaller than the tolerance would not fail the
+  build, two runs of the same code must be allowed to differ by that much too.
 - **Not a blocking CI job.** A shared virtualised runner would report
   INCONCLUYENTE nearly always. It is a local measurement, and phase 040 decides
   its place in the release procedure.
-- The committed baseline carries `"provisional": ["db_open_mean_ms"]`: that
-  number was recorded before the measurement was corrected, so it contains
-  process startup the current code does not measure and comparing against it is
-  lenient. The gate prints the warning next to the metric and a test asserts the
-  declaration. Deleting it would have left the gate with no reference and the
-  first conclusive run would have recorded the same problem again.
+- The committed baseline carried `"provisional": ["db_open_mean_ms"]` while its
+  reference was still the pre-fix measurement; once the machine came free the
+  reference was re-recorded with the corrected method (**16.9 ms -> 3.9 ms**)
+  and the marker is gone. The mechanism stays, and a test still asserts that any
+  metric marked provisional exists in the baseline and explains itself.
 
 ### Phase 037 - Distribution: portable mode and a single executable
 - **Portable mode** (`portable status|on|off`): index, configuration, logs and

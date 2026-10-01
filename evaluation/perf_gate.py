@@ -105,6 +105,10 @@ OS_LOAD_VETO_PERCENT = 60
 OS_LOAD_SAMPLES = 3
 OS_LOAD_GAP_S = 0.3
 
+# Search repetitions per query. p95 of 60 samples sits on the 57th ordered
+# value and is not repeatable; 160 puts it on the 152nd, which is.
+SEARCH_REPETITIONS = 40
+
 
 def _calibration_workload(rounds: int = _CALIBRATION_ROUNDS) -> int:
     """Deterministic pure-CPU work: xorshift64 plus an accumulator."""
@@ -326,9 +330,15 @@ def _measure_once(profile: int) -> Run:
         for query in ("bjt", "mux cmos", '"ebers moll"', "zzznotfound"):
             engine.search(query, limit=20)
 
+        # 40 repetitions per query, not 15. The spread gate caught this: with
+        # 60 samples the p95 is the 57th ordered value, and two runs of the
+        # *same* code disagreed by 11.4% on it on a machine at 15% CPU. That is
+        # the instrument reporting that the metric was under-sampled, and the
+        # honest response is to sample more rather than to widen the tolerance
+        # until the noise fits. 160 samples puts p95 on the 152nd value.
         samples: list[float] = []
         for query in ("bjt", "mux cmos", '"ebers moll"', "zzznotfound"):
-            for _ in range(15):
+            for _ in range(SEARCH_REPETITIONS):
                 started = time.perf_counter()
                 engine.search(query, limit=20)
                 samples.append((time.perf_counter() - started) * 1000)
@@ -419,8 +429,7 @@ class SpreadVerdict:
     worst: str
 
 
-def spread_verdict(first: Run, second: Run,
-                   tolerance_pct: float = 10.0) -> SpreadVerdict:
+def spread_verdict(first: Run, second: Run) -> SpreadVerdict:
     """Do two runs of the same code agree?
 
     This is the gate that makes the others mean something. If the same build,
@@ -428,22 +437,48 @@ def spread_verdict(first: Run, second: Run,
     same size between two *different* builds says nothing at all — and the
     honest report is that the instrument cannot resolve the question, not that
     the build passed.
+
+    The allowance is **the same one the comparison uses**, ``max(percentage,
+    floor)``, and that is the whole argument for it: if a change smaller than
+    the tolerance would not fail the build, then two runs of the *same* code
+    must be allowed to differ by that much too. A flat 10% got this wrong for
+    ``db_open_mean_ms`` -- an operation that takes about 4 ms, where one
+    scheduler hiccup is a 100% "regression" and an irrelevant one.
     """
     worst_key = ""
-    worst_pct = 0.0
+    worst_ratio = 0.0
+    worst_detail = ""
+    repeatable = True
     for metric in METRICS:
         a = first.numbers[metric.key]
         b = second.numbers[metric.key]
         if not a:
             continue
-        pct = abs(a - b) / a * 100.0
-        if pct > worst_pct:
-            worst_pct, worst_key = pct, metric.key
-    # The index size is not a timing: two runs produce the same bytes or the
-    # run is broken, and a percentage on it is meaningless noise.
-    if worst_key == "index_size_mib":
-        worst_pct = 0.0
-    return SpreadVerdict(worst_pct <= tolerance_pct, f"{worst_key} {worst_pct:.1f}%")
+        delta = abs(a - b)
+        allowed = metric.allowed_change(a)
+        # The index size is not a timing: two runs produce the same bytes or
+        # one of them is broken, so it must match exactly rather than
+        # "closely enough".
+        if metric.key == "index_size_mib":
+            ratio = 0.0 if a == b else float("inf")
+            ok = a == b
+            allowed = 0.0
+        else:
+            ratio = delta / allowed if allowed else (
+                0.0 if delta == 0 else float("inf")
+            )
+            ok = delta <= allowed
+        if ratio > worst_ratio:
+            worst_ratio = ratio
+            worst_key = metric.key
+            worst_detail = (
+                f"{metric.label}: {a:.3f} frente a {b:.3f} "
+                f"(difiere {delta:.3f}, permitido {allowed:.3f}, "
+                f"{delta / a * 100:.1f}%)"
+            )
+        if not ok:
+            repeatable = False
+    return SpreadVerdict(repeatable, worst_detail or f"{worst_key} estable")
 
 
 def machine_fingerprint() -> dict[str, object]:
@@ -559,6 +594,7 @@ def main() -> int:
         second = _measure_once(args.profile)
 
     spread = spread_verdict(first, second)
+    print_line = f"mayor dispersión {spread.worst}"
     best = {
         metric.key: min(first.numbers[metric.key], second.numbers[metric.key])
         for metric in METRICS
@@ -576,8 +612,7 @@ def main() -> int:
     # quietly tolerated or quietly deleted.
     provisional = set(baseline.get("provisional", ()))
 
-    print(f"repetición:        dos pasadas, "
-          f"mayor dispersión {spread.worst}")
+    print(f"repetición:        dos pasadas, {print_line}")
     print("-" * 96)
     for comparison in comparisons:
         line = comparison.line()
