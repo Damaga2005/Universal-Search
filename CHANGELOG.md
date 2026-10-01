@@ -7,6 +7,12 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Roadmap 041–050 — planned
+- The former duplicate product roadmap numbered 031–040 is now the planned 041–050 programme.
+- Phases 031–040 remain the completed Universal Search 2.x programme and are not renumbered.
+- The 041–050 documents are planning only; no implementation status is implied.
+
+
 ### Phase 040 - Quality gate v3: re-measure everything and decide
 - The gate goes from **13 invariants to 23**. The thirteen from phase 030 are
   unchanged; the ten new ones are one per promise the 031–040 programme made,
