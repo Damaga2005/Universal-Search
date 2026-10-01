@@ -1,10 +1,13 @@
 # 044 — Local Learning v2
 
 ## Objective
-Improve local usage learning without turning Universal Search into an opaque recommendation engine.
+Evolve the local usage-learning capability introduced earlier into a bounded, measurable and user-controlled ranking signal.
+
+This is not a new AI system and not a recommendation engine.
 
 ## Signals
-Evaluate:
+Evaluate only local signals with measurable value, such as:
+
 - selected result;
 - opened result;
 - repeated query;
@@ -14,39 +17,39 @@ Evaluate:
 
 All signals remain local and optional.
 
-## Ranking
-Learning is a secondary signal.
+## Ranking contract
+Learning is always secondary to explicit search intent.
 
 Rules:
+
 - exact filename/phrase matches remain dominant;
 - explicit filters override learned preference;
-- new documents must not be permanently buried;
+- learning cannot permanently bury new documents;
 - deterministic baseline ranking remains available;
 - learning can be disabled;
-- learning data can be inspected and deleted.
+- learning data can be inspected and deleted;
+- a material learning-driven change should be explainable.
+
+Do not introduce opaque embeddings, cloud profiles or remote telemetry.
 
 ## Cold start
-Define behavior for users with no history.
+Define deterministic behavior for users with no interaction history.
 
-## Explainability
-When learning changes ranking materially, expose a concise reason where useful.
+## Evaluation
+Use synthetic interaction histories and the fixed retrieval corpus to measure:
 
-## Privacy
-No telemetry.
-No upload.
-No hidden user profile.
-
-## Tests
-Use synthetic interaction histories to measure:
 - ranking changes;
 - stability;
 - cold start;
 - forgetting;
 - disabled mode;
-- exact-match protection.
+- exact-match protection;
+- whether learning actually improves repeated workflows.
+
+No learning change ships without evidence of benefit and regression checks.
 
 ## Acceptance
-Learning improves repeated workflows while remaining bounded, inspectable, reversible and subordinate to explicit search intent.
+Local learning improves repeated workflows where measurable, while remaining bounded, inspectable, reversible and subordinate to explicit search intent.
 
 ## Ready-to-copy implementation prompt
-Implement Phase 044 — Local Learning v2. Audit the current local usage signals and introduce a bounded, optional and explainable learning layer only where measurable benefit exists. Keep exact matches and explicit filters dominant, support disable/inspect/delete, define cold-start behavior and add synthetic ranking evaluation. No telemetry, cloud profile or opaque recommendation model. Do not push unless explicitly instructed.
+Implement Phase 044 — Local Learning v2. Audit the existing usage-learning signals and evolve them only where measurable benefit exists. Keep exact matches and explicit filters dominant, support disable/inspect/delete, define cold-start behavior and evaluate synthetic histories against the fixed corpus. No telemetry, cloud profile or opaque recommendation model. Do not push unless explicitly instructed.
