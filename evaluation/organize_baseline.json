@@ -1,0 +1,70 @@
+{
+  "phase": "036",
+  "verdicts": [
+    {
+      "gate": "T1 documents from outside the pool",
+      "measured": 0,
+      "threshold": 0,
+      "passed": true,
+      "detail": "8 de 19 candidatos, 12 combinaciones; reordenando cambian 15 subconjuntos (es lo pedido); orden por relevancia intacto: True"
+    },
+    {
+      "gate": "T2 sort is monotonic",
+      "measured": 1,
+      "threshold": 1,
+      "passed": true,
+      "detail": "por nombre y por fecha (mas reciente primero)"
+    },
+    {
+      "gate": "T3 undated documents last",
+      "measured": 1,
+      "threshold": 1,
+      "passed": true,
+      "detail": "sin fecha no se mezclan con las que si la tienen"
+    },
+    {
+      "gate": "T4 grouping conserves results",
+      "measured": 1,
+      "threshold": 1,
+      "passed": true,
+      "detail": "8 documentos, 8 carpetas"
+    },
+    {
+      "gate": "T5 reproducible order",
+      "measured": 1,
+      "threshold": 1,
+      "passed": true,
+      "detail": "mismos resultados, mismo orden, entrada invertida"
+    },
+    {
+      "gate": "T6 pool really widened",
+      "measured": 1,
+      "threshold": 1,
+      "passed": true,
+      "detail": "pagina 8 -> conjunto 40, tope 500"
+    },
+    {
+      "gate": "T7 saved search round trip",
+      "measured": 1,
+      "threshold": 1,
+      "passed": true,
+      "detail": "consulta, orden, agrupacion y filtros en config.json"
+    },
+    {
+      "gate": "T8 saved search deletable",
+      "measured": 1,
+      "threshold": 1,
+      "passed": true,
+      "detail": "una funcion que solo anade deja basura sin quitar"
+    },
+    {
+      "gate": "T9 lexical MRR change",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "MRR sigue en 0.8333"
+    }
+  ],
+  "candidates": 19,
+  "page": 8
+}

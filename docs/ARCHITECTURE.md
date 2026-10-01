@@ -62,6 +62,18 @@ lives in the UI.
   with what was left out counted, per-item failure isolation, and a
   `skip_reason` so an unconfirmed forget never blames the size limit.
   Forgetting is destructive and requires explicit `confirm=True`.
+- **Organization** (`universal_search/organize.py`, phase 036):
+  sorting (`relevance`, `name`, `modified`, `size`), grouping (`folder`,
+  `type`, `source`, `date`) and saved searches. The contract is that
+  presentation never changes retrieval, which has one concrete consequence:
+  a non-relevance order widens the candidate pool (`SORT_POOL_MULTIPLIER`,
+  capped at `MAX_SORT_POOL`), because sorting the 20 most relevant
+  documents alphabetically is shuffling, not sorting. Every sort ends with
+  the path so ties never depend on input order, and group order follows the
+  key rather than the size so a grouping is stable. `SearchResult` carries
+  `modified_at` and `size` for this. Saved searches are plain local
+  configuration (`AppConfig.saved_searches`): no table, no migration, and a
+  delete command, because a feature that only adds leaves clutter.
 - **Domain** (`universal_search/domain/`): `Document` and the stable
   identity `document_id_for(source, path)`.
 - **Index** (`universal_search/index/`):

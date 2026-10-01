@@ -171,6 +171,9 @@ class AppConfig:
     usage_tracking: bool = False
     recent_queries: tuple[str, ...] = ()
     recent_queries_enabled: bool = True
+    # Phase 036: saved searches (query + sort + group + filters). Plain
+    # local configuration: no table, no migration, gone with the config file.
+    saved_searches: tuple[dict, ...] = ()
     hotkey: str = "ctrl+alt+s"
     hotkey_enabled: bool = True
     # Appearance (spec 017): "system" follows the Windows preference.
@@ -221,6 +224,9 @@ class AppConfig:
             ),
             recent_queries_enabled=_bool(
                 raw.get("recent_queries_enabled"), defaults.recent_queries_enabled
+            ),
+            saved_searches=_context_dicts(
+                raw.get("saved_searches"), defaults.saved_searches
             ),
             hotkey=_str(raw.get("hotkey"), defaults.hotkey),
             hotkey_enabled=_bool(

@@ -7,6 +7,64 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 036 - Grouping, sorting and saved searches
+- `--sort {relevance,name,modified,size}`, `--group
+  {none,folder,type,source,date}`, and `--save` / `--use` / `--delete-saved`
+  for saved searches. `query` is now an optional positional so `--use` can run
+  on its own; when there is neither a query nor a saved search, the error lists
+  the saved searches that do exist.
+- The contract: organizing never changes retrieval, and it has one concrete
+  consequence. A non-relevance order **widens the candidate pool** (5x, capped
+  at 500), because sorting the 20 most relevant documents alphabetically is
+  shuffling, not sorting. Without it `--sort modified` would silently return the
+  20 most relevant documents in date order.
+- Every sort ends with the path, so ties never depend on input order. Group
+  order follows the key rather than the size, so a grouping is stable when one
+  document changes. Documents with no date get their own bucket instead of
+  being dropped or filed under a wrong year.
+- `SearchResult` carries `modified_at` and `size`; the SQL already selected the
+  date and now selects the size too.
+- Saved searches are plain local configuration (`AppConfig.saved_searches`): no
+  table, no migration, gone with the config file, and they hold no results or
+  paths. They have a delete command, because a feature that only adds leaves
+  clutter the user cannot remove. Anything typed on the command line overrides
+  a saved search, so an explicit flag is never silently ignored.
+- Evidence gate `python -m evaluation.organize_gate`: **9/9 PASS** (no document
+  from outside the candidate pool, monotonic order, undated last, grouping
+  conserves results, reproducible order, pool really widened 8 -> 40,
+  round-trip and deletion, MRR unchanged at 0,8333).
+- The gate's first version asserted something false: "organizing never changes
+  which documents you get". It failed with 19 candidates and it was right --
+  asking for alphabetical order and getting the 8 most relevant documents in
+  alphabetical order is not ordering. The gate now asserts the property that
+  actually matters (same pool, nothing from outside it, relevance order
+  intact) and *publishes* the cost instead of hiding it: re-ordering changes the
+  subset in 15 of 12 combinations, which is what was asked for.
+- The gate's query was also too weak to be evidence: `informe` matches three
+  documents in the corpus, so "the pool was widened" was technically true and
+  evidentially worthless. It now uses a query with 19 candidates for an 8-item
+  page.
+- A pre-existing, load-dependent flake was confirmed while verifying this phase
+  and is **not** a phase-036 regression: `test_gui_ux.py::
+  test_keyboard_navigation_moves_and_opens` times out on `window.pump()` when
+  many modules run together. Reproduced at commit `466dcbd` with none of the
+  phase-036 code present, and bisected to a cumulative effect rather than one
+  module (the same 10-module set fails at HEAD). Added tests tip an already
+  fragile cross-module interaction over its threshold; the mechanism is in the
+  Tk fixtures, not in search. Not fixed here because it belongs to the GUI test
+  infrastructure, not to organization.
+- Known limit: grouping only prints on the command line; the GUI has no sort or
+  grouping selector yet, which is phase 039's work.
+- Phase 036 gate: 1097 collected, clean pyflakes, `python -m evaluation.gate`
+  PASS (13/13). The full-suite run behind this entry was
+  `2 failed, 1092 passed, 3 skipped`, and **both failures are
+  pre-existing**, each reproduced at an earlier commit with none of the
+  phase-036 code present: `test_background.py::
+  test_worker_keeps_index_current_and_stops_cleanly` (a timing-sensitive
+  worker test, reproduced at `7bf9122` and `466dcbd`) and `test_gui_ux.py::
+  test_keyboard_navigation_moves_and_opens` (bisected above). Recorded
+  rather than smoothed over.
+
 ### Phase 035 - Batch operations over the selection
 - The result list is now multi-selectable (Ctrl+click adds, Shift+click extends)
   and a new **Selección** menu acts on the whole selection: open (Ctrl+O),

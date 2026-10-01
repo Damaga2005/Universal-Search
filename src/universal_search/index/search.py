@@ -31,7 +31,7 @@ from universal_search.query import parse_query, translate
 # (measured, phase 018). `build_snippet()` below is a single linear pass,
 # so latency no longer depends on how often a term occurs.
 RESULTS_SQL = """
-    SELECT d.path, d.name, d.source, d.extension, d.modified_at,
+    SELECT d.path, d.name, d.source, d.extension, d.modified_at, d.size,
            d.availability, d.id AS document_id,
            f.content AS content,
            f.rank AS rank
@@ -93,7 +93,7 @@ def _pool_sql(clauses: list[str]) -> str:
 # `{where}` only ever receives the static clause templates above; every
 # value stays a bound parameter.
 FILTER_ONLY_SQL = """
-    SELECT d.path, d.name, d.source, d.extension, d.modified_at,
+    SELECT d.path, d.name, d.source, d.extension, d.modified_at, d.size,
            d.availability, d.id AS document_id,
            NULL AS content, NULL AS snippet, 0.0 AS rank
     FROM documents AS d
@@ -113,6 +113,11 @@ class SearchResult:
     score: float = 0.0
     availability: str = "available"
     document_id: str = ""
+    # Phase 036: presentation metadata. Sorting and grouping by date or size
+    # need them, and carrying them here means the GUI can show them without a
+    # second query per row.
+    modified_at: str | None = None
+    size: int = 0
     explain: dict[str, float] | None = None
     explain_notes: tuple[str, ...] = ()
 
@@ -144,6 +149,8 @@ def filters_only_results(
             score=0.0,
             availability=row["availability"],
             document_id=row["document_id"],
+            modified_at=row["modified_at"],
+            size=int(row["size"] or 0),
         )
         for row in rows
     ]
@@ -362,6 +369,8 @@ class SearchEngine:
                     score=score,
                     availability=row["availability"],
                     document_id=row["document_id"],
+                    modified_at=row["modified_at"],
+                    size=int(row["size"] or 0),
                     explain=points,
                     explain_notes=notes,
                 )

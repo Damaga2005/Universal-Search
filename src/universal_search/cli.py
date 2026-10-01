@@ -9,6 +9,20 @@ from universal_search.appconfig import AppPaths
 from universal_search.index.database import SearchDatabase, UnsupportedSchemaVersion
 from universal_search.index.indexer import Indexer
 from universal_search.index.search import SearchEngine
+from universal_search.organize import (
+    GROUP_FIELDS,
+    GROUP_NONE,
+    SORT_FIELDS,
+    SORT_RELEVANCE,
+    SavedSearch,
+    delete_search,
+    find_saved,
+    group_results,
+    names,
+    pool_size,
+    save_search,
+    sort_results,
+)
 from universal_search.recovery import CASES as RECOVERY_CASES
 
 
@@ -40,7 +54,10 @@ def main() -> None:
         help="explicitly download cloud-only OneDrive files up to this size (0 = never)",
     )
     search = sub.add_parser("search")
-    search.add_argument("query")
+    # Optional so that "--use NAME" can run a saved search on its own; the
+    # missing query is reported below with the saved searches available, which
+    # is more use than argparse's "the following arguments are required".
+    search.add_argument("query", nargs="?")
     search.add_argument("--database", type=Path, default=default_database,
         help="index database (default: the user data directory)",
     )
@@ -72,6 +89,27 @@ def main() -> None:
     search.add_argument(
         "--no-suggest", action="store_true",
         help="do not suggest corrections when nothing is found (032)",
+    )
+    search.add_argument(
+        "--sort", choices=SORT_FIELDS, default=SORT_RELEVANCE,
+        help="order the results (036); a non-relevance order widens the "
+             "candidate pool so the page really is sorted, not just shuffled",
+    )
+    search.add_argument(
+        "--group", choices=GROUP_FIELDS, default=GROUP_NONE,
+        help="group the results by folder, type, source or date (036)",
+    )
+    search.add_argument(
+        "--save", dest="save_name", default=None, metavar="NAME",
+        help="save this query with its order and grouping under NAME (036)",
+    )
+    search.add_argument(
+        "--use", dest="use_name", default=None, metavar="NAME",
+        help="run a saved search: its query, order, grouping and filters (036)",
+    )
+    search.add_argument(
+        "--delete-saved", dest="delete_saved", default=None, metavar="NAME",
+        help="remove a saved search by name (036)",
     )
     sub.add_parser("gui", help="launch the desktop search window")
     open_command = sub.add_parser("open", help="open a file or folder with its default app")
@@ -449,11 +487,14 @@ def main() -> None:
         raise SystemExit(_indexer_command(args))
     else:
         # search
+        from dataclasses import replace
+
         from universal_search.appconfig import AppConfig
         from universal_search.context import get_context
         from universal_search.query import QueryError
 
-        config = AppConfig.load(AppPaths.discover())
+        paths = AppPaths.discover()
+        config = AppConfig.load(paths)
         if args.context:
             context = get_context(config, args.context)
             if context is None:
@@ -464,6 +505,68 @@ def main() -> None:
         else:
             context = None
         database = _open_or_explain(args.database)
+        # Phase 036: a saved search carries its query, order, grouping and
+        # filters. Anything typed on the command line overrides it, so an
+        # explicit flag is never silently ignored because a saved search said
+        # something else.
+        saved = None
+        if args.use_name:
+            saved = find_saved(config.saved_searches, args.use_name)
+            if saved is None:
+                available = ", ".join(names(config.saved_searches)) or "(ninguna)"
+                print(
+                    f"error: no hay ninguna busqueda guardada llamada "
+                    f"{args.use_name!r}. Guardadas: {available}",
+                    file=sys.stderr,
+                )
+                raise SystemExit(1)
+        if args.delete_saved:
+            remaining = delete_search(config.saved_searches, args.delete_saved)
+            if remaining == config.saved_searches:
+                print(
+                    f"error: no hay ninguna busqueda guardada llamada "
+                    f"{args.delete_saved!r}",
+                    file=sys.stderr,
+                )
+                raise SystemExit(1)
+            config = replace(config, saved_searches=remaining)
+            config.save(paths)
+            print(f"Busqueda eliminada: {args.delete_saved}")
+            return
+        if saved is not None:
+            args.query = args.query or saved.query
+            args.sort = saved.sort if args.sort == SORT_RELEVANCE else args.sort
+            args.group = saved.group if args.group == GROUP_NONE else args.group
+            args.source = args.source or saved.source or None
+            args.doc_type = args.doc_type or saved.doc_type or None
+        if not args.query:
+            available = ", ".join(names(config.saved_searches)) or "(ninguna)"
+            print(
+                "error: falta la consulta. Usa 'search <texto>' o "
+                f"'search --use <nombre>'. Guardadas: {available}",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+        if args.save_name:
+            entries = save_search(
+                config.saved_searches,
+                SavedSearch(
+                    name=args.save_name,
+                    query=args.query,
+                    sort=args.sort,
+                    group=args.group,
+                    source=args.source or "",
+                    doc_type=args.doc_type or "",
+                ),
+            )
+            config = replace(config, saved_searches=entries)
+            config.save(paths)
+            print(f"Busqueda guardada: {args.save_name}")
+            if saved is None:
+                return
+        # An order other than relevance widens the candidate pool: the page
+        # must really be sorted, not the most relevant documents shuffled.
+        limit = pool_size(args.limit, args.sort)
         # Two optional, fallback-only layers over the same authoritative
         # lexical engine. Each one has its own opt-out, and the order matters
         # only in that the semantic layer is the broader guess and the fuzzy
@@ -482,7 +585,7 @@ def main() -> None:
         try:
             results = engine.search(
                 args.query,
-                args.limit,
+                limit,
                 context=context,
                 usage=config.usage_tracking,
                 explain=args.explain,
@@ -493,6 +596,7 @@ def main() -> None:
             # A malformed query is feedback, never a traceback (spec 012).
             print(f"error: {exc}", file=sys.stderr)
             raise SystemExit(1) from None
+        results = sort_results(results, args.sort)[: args.limit]
         if not results and not args.no_suggest:
             # Phase 032: a suggestion is a query that was actually run and
             # actually returned a document, drawn only from the words in the
@@ -525,6 +629,12 @@ def main() -> None:
                     else ""
                 )
                 print(f"  score={result.score:.3f}  {breakdown}{notes}\n")
+        if args.group != GROUP_NONE and results:
+            print("-" * 60)
+            for group in group_results(results, args.group):
+                print(f"{group.label}  ({len(group)} documento(s))")
+                for item in group.results:
+                    print(f"  {item.name}")
 
 
 def _privacy_command(args) -> int:
