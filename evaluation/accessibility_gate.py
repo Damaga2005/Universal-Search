@@ -146,6 +146,24 @@ def main() -> int:
         control_names: list[str] = []
     else:
         try:
+            # Measured with a result on screen. Phase 041 made the results
+            # pane a widget that is packed only when there is something in it,
+            # so a ring captured on an empty window legitimately omits it --
+            # and reporting that ring would invite exactly the wrong reading,
+            # that the results are not reachable without a mouse.
+            from universal_search.index.search import SearchResult
+
+            window.query_var.set("capacitor")
+            window._render([
+                SearchResult(
+                    path=Path(workspace / "files" / "electronica" / "capacitor.md"),
+                    name="capacitor.md",
+                    source="local",
+                    snippet="notas sobre el capacitor de 100 uF",
+                    rank=0.0,
+                    document_id="gate-039",
+                )
+            ])
             focus = focus_report(window)
             names = name_report_for(window)
             control_names = [
@@ -154,7 +172,8 @@ def main() -> int:
             unreachable = len(focus.unreachable)
             unnamed = len(names.unnamed)
             t1_detail = (
-                f"{focus.reachable} controles en el anillo: "
+                f"{focus.reachable} controles en el anillo, con un "
+                f"resultado en pantalla: "
                 f"{[type(w).__name__ for w in focus_order(window)]}"
             )
             t2_detail = ", ".join(control_names) or "(sin controles)"

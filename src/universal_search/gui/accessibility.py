@@ -323,9 +323,13 @@ CONTRAST_PAIRS: tuple[tuple[str, str, str, float], ...] = (
     ("warning", "busy", "background", AA_BODY),
     ("error", "danger", "background", AA_BODY),
     # A selected row also has to be distinguishable from an unselected one by
-    # something other than colour alone, which is what the listbox highlight
-    # ring is for; the ratio below is the colour half of that requirement.
+    # something other than colour alone; the ratio below is the colour half of
+    # that requirement, and phase 041 moved the ring from the listbox
+    # highlight to the focused search field.
     ("focus ring", "accent", "background", AA_LARGE),
+    # Added in phase 041: the column headings of the results pane. They are
+    # labels rather than body text, so AA_LARGE is the honest level for them.
+    ("column headings", "accent", "background", AA_LARGE),
 )
 
 

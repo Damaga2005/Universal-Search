@@ -6,28 +6,28 @@
       "measured": 0,
       "threshold": 0,
       "passed": true,
-      "detail": "6 controles en el anillo: ['Entry', 'Combobox', 'Combobox', 'Combobox', 'Menubutton', 'Listbox']"
+      "detail": "6 controles en el anillo, con un resultado en pantalla: ['Entry', 'Combobox', 'Combobox', 'Combobox', 'Menubutton', 'Treeview']"
     },
     {
       "gate": "T2 controls with no accessible name",
       "measured": 0,
       "threshold": 0,
       "passed": true,
-      "detail": "Entry=Búsqueda, Combobox=Contexto:, Combobox=Fuente:, Combobox=Tipo:, Menubutton=Recientes ▾, Listbox=Resultados"
+      "detail": "Entry=Búsqueda, Combobox=Contexto:, Combobox=Fuente:, Combobox=Tipo:, Menubutton=Recientes ▾, Treeview=Resultados"
     },
     {
       "gate": "T3 visible strings outside the catalogue",
       "measured": 0,
       "threshold": 0,
       "passed": true,
-      "detail": "86 entradas catalogadas"
+      "detail": "110 entradas catalogadas"
     },
     {
       "gate": "T4 WCAG AA contrast failures",
       "measured": 0,
       "threshold": 0,
       "passed": true,
-      "detail": "7 pares x 2 temas, cuerpo 4.5:1"
+      "detail": "8 pares x 2 temas, cuerpo 4.5:1"
     },
     {
       "gate": "T5 palette colours never drawn",
@@ -89,6 +89,12 @@
         "ratio": 6.29,
         "required": 3.0,
         "ok": true
+      },
+      {
+        "pair": "column headings",
+        "ratio": 6.29,
+        "required": 3.0,
+        "ok": true
       }
     ],
     "dark": [
@@ -130,6 +136,12 @@
       },
       {
         "pair": "focus ring",
+        "ratio": 6.69,
+        "required": 3.0,
+        "ok": true
+      },
+      {
+        "pair": "column headings",
         "ratio": 6.69,
         "required": 3.0,
         "ok": true

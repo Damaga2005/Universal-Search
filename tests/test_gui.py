@@ -84,11 +84,13 @@ def search(window, query: str) -> None:
 def test_window_renders_results_preview_and_status(window) -> None:
     search(window, "capacitor")
 
-    assert window.listbox.size() == 1
-    assert "capacitor.md" in window.listbox.get(0)
-    assert "capacitor" in window.preview["text"]  # context line
+    assert len(window.tree.get_children()) == 1
+    assert window.tree.item("0", "values")[0] == "capacitor.md"
+    # The detail pane has three lines with three jobs: what it is, where it
+    # is, why it matched. Phase 041 split one clipped label into those.
+    assert window.preview["text"].startswith("capacitor.md")
+    assert window.preview_path["text"].endswith("capacitor.md")
     assert str(len(window.results)) in window.status_var.get()
-    assert "capacitor.md" in window.preview["text"]
     assert window.results[0].path.name == "capacitor.md"
 
 
@@ -122,7 +124,7 @@ def test_enter_without_selection_opens_first_result(window, monkeypatch) -> None
     opened: list[Path] = []
     monkeypatch.setattr(gui_app, "open_path", lambda path: opened.append(Path(path)))
     search(window, "capacitor")
-    window.listbox.selection_clear(0, "end")
+    window.tree.selection_clear()
 
     window._on_open()
 
@@ -141,7 +143,7 @@ def test_escape_clears_query_then_closes(window, monkeypatch) -> None:
 
     window._on_escape()
     assert window.query_var.get() == ""
-    assert window.listbox.size() == 0
+    assert window.tree.get_children() == ()
     assert not window.closed
 
     window._on_escape()  # second press closes the application
@@ -193,7 +195,7 @@ def test_empty_query_shows_ready_state(window) -> None:
     search(window, "capacitor")
     window.query_var.set("")
 
-    assert window.listbox.size() == 0
+    assert window.tree.get_children() == ()
     assert window.results == []
     assert "Listo" in window.status_var.get()
 
@@ -264,11 +266,7 @@ def test_cloud_only_result_shows_onedrive_marker(window) -> None:
         score=0.5,
         availability="cloud_only",
     )
-    window._clear_results()
-    window.results = [result]
-    window.listbox.insert(0, "nube.md  ·  Markdown  ·  onedrive")
-    window.listbox.selection_set(0)
-    window._update_preview()
+    window._render([result])
 
     text = window.preview.cget("text")
     assert "onedrive" in text
@@ -291,10 +289,7 @@ def test_related_window_lists_ranked_evidence(window, monkeypatch) -> None:
         score=0.5,
         document_id="bjt-id",
     )
-    window._clear_results()
-    window.results = [result]
-    window.listbox.insert(0, "bjt.md")
-    window.listbox.selection_set(0)
+    window._render([result])
     monkeypatch.setattr(
         window.service,
         "related",
@@ -316,21 +311,22 @@ def test_related_window_lists_ranked_evidence(window, monkeypatch) -> None:
 
     assert window.related_window is not None
     children = window.related_window.winfo_children()
-    listboxes = [
-        child for child in children if child.winfo_class() == "Listbox"
-    ]
-    # The list is inside a frame, so inspect the frame child as well.
-    if not listboxes:
+    trees = [child for child in children if child.winfo_class() == "Treeview"]
+    # The pane is inside a frame, so inspect the frame child as well.
+    if not trees:
         frames = [child for child in children if child.winfo_class() == "TFrame"]
-        listboxes = [
+        trees = [
             nested
             for frame in frames
             for nested in frame.winfo_children()
-            if nested.winfo_class() == "Listbox"
+            if nested.winfo_class() == "Treeview"
         ]
-    assert listboxes
-    assert "notes.md" in listboxes[0].get(0)
-    assert "phrase_overlap" in listboxes[0].get(0)
+    assert trees
+    name, folder, score, reason = trees[0].item("0", "values")
+    assert name == "notes.md"
+    assert folder == "docs"
+    assert score == "0.800"
+    assert "phrase_overlap" in reason
     window.related_window.destroy()
     window.related_window = None
 
@@ -399,10 +395,7 @@ def test_open_records_usage_signal_only_when_enabled(window, monkeypatch) -> Non
         score=0.5,
         document_id="doc-usage-test",
     )
-    window._clear_results()
-    window.results = [result]
-    window.listbox.insert(0, "y.md")
-    window.listbox.selection_set(0)
+    window._render([result])
 
     opened: list[str] = []
     monkeypatch.setattr(gui_app, "open_path", lambda path: opened.append(str(path)))
@@ -464,8 +457,8 @@ def test_copy_path_recents_and_show_request(window, monkeypatch) -> None:
     from universal_search import hotkey
     from universal_search.index.search import SearchResult
 
-    # -- copy path: bound on the results list and observable in the status bar
-    assert_bound(window.listbox, "<Control-c>")
+    # -- copy path: bound on the results pane and observable in the status bar
+    assert_bound(window.tree, "<Control-c>")
     result = SearchResult(
         path=Path(r"C:\docs\nota.md"),
         name="nota.md",
@@ -475,10 +468,7 @@ def test_copy_path_recents_and_show_request(window, monkeypatch) -> None:
         score=0.5,
         document_id="doc-copy-test",
     )
-    window._clear_results()
-    window.results = [result]
-    window.listbox.insert(0, "nota.md")
-    window.listbox.selection_set(0)
+    window._render([result])
     window._copy_path()
     assert "Ruta copiada" in window.status_var.get()
     assert window.clipboard_get() == str(result.path)

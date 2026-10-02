@@ -7,11 +7,13 @@ same way the application actually behaves.
 
 import time
 from pathlib import Path
+from tkinter import ttk
 
 import pytest
 
 from universal_search.appconfig import AppConfig, AppPaths
 from universal_search.gui import rows, theme as theme_module
+from universal_search.gui import app as gui_app
 from universal_search.gui.app import RESULT_POLL_MS, SearchWindow
 from universal_search.gui.services import SearchService
 from universal_search.index.database import SearchDatabase
@@ -90,33 +92,44 @@ def test_derived_palette_does_not_mutate_the_original():
 
 # -- result rows (pure) --------------------------------------------------------
 
-def test_row_shows_name_type_and_useful_path():
-    row = rows.format_result_row(
+def test_result_cells_name_every_part_of_a_result():
+    cells = rows.result_cells(
         "informe_final.pdf",
         r"C:\Users\me\Docs\trabajo\informes\informe_final.pdf",
         "resumen [conclusion] del proyecto",
     )
-    assert "informe_final.pdf" in row
-    assert "PDF" in row
-    assert "trabajo/informes" in row
-    # The absolute user path is noise in a list line.
-    assert "C:" not in row
+    assert cells["name"] == "informe_final.pdf"
+    assert cells["kind"] == "PDF"
+    assert cells["folder"] == "trabajo/informes"
+    # The absolute user path is noise in a row.
+    assert "C:" not in cells["folder"]
     # Highlight markers never reach the screen.
-    assert "[" not in row and "conclusion" in row
+    assert "[" not in cells["snippet"] and "conclusion" in cells["snippet"]
+    # And the five things a result is, each has its own cell.
+    assert set(cells) == set(gui_app.RESULT_COLUMNS)
 
 
-def test_row_handles_missing_snippet_and_source():
-    row = rows.format_result_row("notas.txt", r"C:\Docs\notas.txt", None)
-    assert row.endswith("notas.txt  ·  TXT  ·  Docs")
-    assert "—" not in row.split("·")[-1]  # no empty snippet separator
-    onedrive = rows.format_result_row(
+def test_result_cells_handle_missing_snippet_and_source():
+    cells = rows.result_cells("notas.txt", r"C:\Docs\notas.txt", None)
+    assert cells["snippet"] == ""
+    assert cells["folder"] == "Docs"
+    assert rows.result_cells(
         "notas.txt", r"C:\Docs\notas.txt", "texto", source="onedrive"
-    )
-    assert onedrive.startswith("[onedrive]")
+    )["source"] == "onedrive"
     # The default source is not worth a column of noise.
-    assert not rows.format_result_row(
+    assert rows.result_cells(
         "notas.txt", r"C:\Docs\notas.txt", "texto", source="local"
-    ).startswith("[")
+    )["source"] == ""
+
+
+def test_one_table_answers_what_kind_of_file_this_is():
+    """Phase 041 found two answers living side by side."""
+    assert rows.type_label("informe.pdf") == "PDF"
+    assert rows.type_label("memoria.docx") == "Word"
+    assert rows.type_label("hoja.xlsx") == "Excel"
+    # An unknown type still says something useful rather than nothing.
+    assert rows.type_label("thing.weird") == "WEIRD"
+    assert rows.type_label("noextension") == "—"
 
 
 def test_snippet_is_truncated_with_an_ellipsis():
@@ -161,9 +174,18 @@ def window(tmp_path_factory, tk_guard):
 
 def test_window_uses_the_central_theme(window):
     assert window.theme.name in {"light", "dark"}
-    assert window.listbox.cget("background") == window.theme.background
-    assert window.listbox.cget("foreground") == window.theme.foreground
-    assert window.listbox.cget("highlightcolor") == window.theme.accent
+    # Phase 041: the results pane is a ttk widget, so it takes the palette
+    # through a named style. A `Listbox` took colours as widget options; a
+    # Treeview does not, and a pane that kept the old route would have drawn
+    # the light palette in the dark theme.
+    style = ttk.Style(window)
+    assert style.lookup(gui_app.RESULT_STYLE, "fieldbackground") == (
+        window.theme.background
+    )
+    assert style.lookup(gui_app.RESULT_STYLE, "foreground") == window.theme.foreground
+    assert style.lookup(gui_app.RESULT_STYLE, "background") == window.theme.background
+    selection = style.map(gui_app.RESULT_STYLE, "background")
+    assert ("selected", window.theme.selection_background) in selection
     # No hard-coded colour survives in the widget tree.
     assert str(window.cget("background")) == window.theme.background
 
@@ -176,7 +198,7 @@ def test_window_is_keyboard_reachable(window):
     contract is in `docs/development/017-ux-checklist.md`, to be verified
     by a person on a real desktop.
     """
-    for widget in (window.entry, window.listbox):
+    for widget in (window.entry, window.tree):
         assert str(widget.cget("takefocus")) in ("1", "True", "true")
 
 
@@ -203,9 +225,7 @@ def test_typing_searches_off_the_ui_thread(window, monkeypatch):
     finally:
         release.set()
     assert window.pump(timeout=5)
-    assert "0 resultado" in window.status_var.get() or "Sin resultados" in (
-        window.status_var.get()
-    )
+    assert "Sin resultados" in window.status_var.get()
 
 
 def test_stale_results_never_replace_a_newer_query(window, monkeypatch):
@@ -262,7 +282,7 @@ def test_clearing_the_box_drops_pending_results(window):
     window._execute_search()
     window.query_var.set("")  # triggers _clear_results
     assert window.pump(timeout=5)
-    assert window.listbox.size() == 0
+    assert window.tree.get_children() == ()
     assert window.results == []
 
 
@@ -274,7 +294,7 @@ def test_keyboard_navigation_moves_and_opens(window, monkeypatch):
     window.query_var.set("capacitor")
     window._execute_search()
     assert window.pump(timeout=5)
-    assert window.listbox.size() == 1
+    assert len(window.tree.get_children()) == 1
 
     window._move_down()  # wraps around from the first result
     assert window._selected_index() == 0

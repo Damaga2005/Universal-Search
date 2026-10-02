@@ -35,17 +35,53 @@ DEBOUNCE_MS = 150
 RESULT_POLL_MS = 40
 DEFAULT_LIMIT = 50
 SHOW_POLL_MS = 250
-SOURCE_FILTER_VALUES = ("(todas)", "local", "onedrive", "network", "removable")
-TYPE_FILTER_VALUES = ("(todos)", "pdf", "docx", "xlsx", "pptx", "md", "txt")
+# Used only when the widget cannot be asked how many rows it is showing.
+DEFAULT_PAGE_ROWS = 10
+# The five things a search result is. Phase 041: the old results pane put all
+# of them in one string, so the reader had to guess which part was the name
+# and which was the folder, and a long name simply vanished past the edge.
+RESULT_COLUMNS = ("name", "folder", "kind", "source", "snippet")
+# A named style, never the built-in "Treeview": see
+# `_configure_result_style` for the measurement that decided it.
+RESULT_STYLE = "SearchResults.Treeview"
+# No dot in this one, on purpose: in a ttk style name the dot separates the
+# style from its *layout*, so "Search.Entry" asks for a layout named "Search".
+# "SearchResults.Treeview" wants exactly that and inherits the Treeview
+# layout; the entry has no such shorthand, so it gets the layout copied.
+ENTRY_STYLE = "SearchEntry"
+SOURCE_FILTER_VALUES = (
+    strings.get("FILTER.ALL_SOURCES"),
+    "local",
+    "onedrive",
+    "network",
+    "removable",
+)
+TYPE_FILTER_VALUES = (
+    strings.get("FILTER.ALL_TYPES"),
+    "pdf",
+    "docx",
+    "xlsx",
+    "pptx",
+    "md",
+    "txt",
+)
+# The catalogue holds one "(todos)" and it serves the context filter too: the
+# neutral option for "which context" is the same word the type filter uses.
+# A second entry with the same value would break the catalogue's uniqueness
+# rule, and a bare literal would break the "every visible string is
+# catalogued" rule that phase 039 established.
+ALL_CONTEXTS_LABEL = strings.get("FILTER.ALL_TYPES")
 
-TYPE_LABELS = {
-    ".pdf": "PDF",
-    ".docx": "Word",
-    ".xlsx": "Excel",
-    ".pptx": "PowerPoint",
-    ".md": "Markdown",
-    ".txt": "Texto",
-}
+
+def placeholder_visible(query: str, focused: bool) -> bool:
+    """Whether the search box should draw its placeholder.
+
+    A rule, not a widget, so it can be tested without the OS focus: phase 039
+    already established that whether a window holds the desktop focus is not
+    something a test can assert, and a test that tries will pass on a developer
+    machine and fail in CI.
+    """
+    return not query and not focused
 
 
 class SearchWindow(tk.Tk):
@@ -75,9 +111,10 @@ class SearchWindow(tk.Tk):
             getattr(config, "ui_scale", 1.0)
         )
         self.fonts = theme_module.fonts(self.ui_scale)
+        self.spacing = theme_module.spacing(self.ui_scale)
         self.configure(background=self.theme.background)
 
-        self.title(f"Universal Search {__version__}")
+        self.title(strings.get("APP.TITLE", version=__version__))
         self.geometry(config.window_geometry or "940x580")
         self.minsize(680, 400)
 
@@ -87,7 +124,11 @@ class SearchWindow(tk.Tk):
         # Publish the PID: the worker's global hotkey targets this window.
         services.register_gui_pid(self.service.paths)
         self._set_status(strings.get("SEARCH.READY"))
+        self._show_message(
+            strings.get("SEARCH.EMPTY_TITLE"), strings.get("SEARCH.EMPTY_HINT")
+        )
         self.query_var.trace_add("write", self._on_query_changed)
+        self._sync_placeholder()
         self.entry.focus_set()
 
     # -- construction --------------------------------------------------------
@@ -98,19 +139,37 @@ class SearchWindow(tk.Tk):
             if theme in style.theme_names():
                 style.theme_use(theme)
                 break
+        self._configure_result_style(style)
+        self._wrap_width = 0
 
-        top = ttk.Frame(self, padding=(12, 12, 12, 6))
+        top = ttk.Frame(self, padding=self.spacing.pad)
         top.pack(fill="x")
         self.query_var = tk.StringVar()
+        # The entry lives in its own frame so the placeholder can be placed
+        # over it. `place` is the only geometry manager that can overlay a
+        # sibling without reserving space for it, which is exactly what a
+        # placeholder needs.
+        self.search_frame = ttk.Frame(top)
+        self.search_frame.pack(fill="x")
         self.entry = ttk.Entry(
-            top,
+            self.search_frame,
             textvariable=self.query_var,
             font=self.fonts["entry"],
             takefocus=True,  # explicit: never rely on a style default
+            style=ENTRY_STYLE,
         )
         self.entry.pack(fill="x")
+        self.placeholder = ttk.Label(
+            self.search_frame,
+            text=strings.get("SEARCH.PLACEHOLDER_OR_LABEL"),
+            font=self.fonts["entry"],
+            foreground=self.theme.muted,
+        )
+        self.placeholder.place(relx=0.01, rely=0.5, anchor="w")
+        self.entry.bind("<FocusIn>", self._sync_placeholder, add="+")
+        self.entry.bind("<FocusOut>", self._sync_placeholder, add="+")
 
-        context_bar = ttk.Frame(top, padding=(0, 6, 0, 0))
+        context_bar = ttk.Frame(top, padding=(0, self.spacing.gap, 0, 0))
         context_bar.pack(fill="x")
         ttk.Label(context_bar, text=strings.get("SEARCH.LABEL.CONTEXT")).pack(side="left")
         self.context_var = tk.StringVar()
@@ -120,13 +179,18 @@ class SearchWindow(tk.Tk):
             state="readonly",
             width=28,
             values=self._context_values(),
-            takefocus=True,  # phase 039: never rely on a platform default
+            takefocus=True,  # phase 039: never rely on a style default
         )
-        self.context_combo.pack(side="left", padx=(6, 0))
+        self.context_combo.pack(side="left", padx=(self.spacing.gap, 0))
         self.context_combo.bind("<<ComboboxSelected>>", self._on_context_changed)
-        self.context_var.set(self.service.config.active_context or "(todos)")
+        self.context_var.set(
+            self.service.config.active_context or ALL_CONTEXTS_LABEL
+        )
 
-        ttk.Label(context_bar, text=strings.get("SEARCH.LABEL.SOURCE")).pack(side="left", padx=(12, 0))
+        gap = (self.spacing.pad, 0)
+        ttk.Label(context_bar, text=strings.get("SEARCH.LABEL.SOURCE")).pack(
+            side="left", padx=gap
+        )
         self.source_var = tk.StringVar(value=SOURCE_FILTER_VALUES[0])
         self.source_combo = ttk.Combobox(
             context_bar,
@@ -136,10 +200,12 @@ class SearchWindow(tk.Tk):
             values=SOURCE_FILTER_VALUES,
             takefocus=True,  # phase 039: never rely on a platform default
         )
-        self.source_combo.pack(side="left", padx=(6, 0))
+        self.source_combo.pack(side="left", padx=(self.spacing.gap, 0))
         self.source_combo.bind("<<ComboboxSelected>>", self._on_filter_changed)
 
-        ttk.Label(context_bar, text=strings.get("SEARCH.LABEL.TYPE")).pack(side="left", padx=(12, 0))
+        ttk.Label(context_bar, text=strings.get("SEARCH.LABEL.TYPE")).pack(
+            side="left", padx=gap
+        )
         self.type_var = tk.StringVar(value=TYPE_FILTER_VALUES[0])
         self.type_combo = ttk.Combobox(
             context_bar,
@@ -149,7 +215,7 @@ class SearchWindow(tk.Tk):
             values=TYPE_FILTER_VALUES,
             takefocus=True,  # phase 039: never rely on a platform default
         )
-        self.type_combo.pack(side="left", padx=(6, 0))
+        self.type_combo.pack(side="left", padx=(self.spacing.gap, 0))
         self.type_combo.bind("<<ComboboxSelected>>", self._on_filter_changed)
 
         self.recent_button = ttk.Menubutton(
@@ -228,33 +294,74 @@ class SearchWindow(tk.Tk):
         menu.add_cascade(label=strings.get("MENU.DIAGNOSE"), menu=diagnose_menu)
         self.config(menu=menu)
 
-        middle = ttk.Frame(self, padding=(12, 0, 12, 0))
+        middle = ttk.Frame(self, padding=(self.spacing.pad, 0, self.spacing.pad, 0))
         middle.pack(fill="both", expand=True)
-        self.listbox = tk.Listbox(
-            middle,
-            font=self.fonts["body"],
-            activestyle="none",
-            exportselection=False,
+        self.results_frame = ttk.Frame(middle)
+        self.results_frame.pack(fill="both", expand=True)
+        # Phase 041: columns, not one clipped string per row. The Treeview is
+        # in the phase 039 accessible-control list, so the pane that carries
+        # the whole product is also the pane the accessibility gates measure —
+        # a hand-drawn canvas would have looked more flexible and been
+        # invisible to every instrument this project has.
+        self.tree = ttk.Treeview(
+            self.results_frame,
+            columns=RESULT_COLUMNS,
+            show="headings",
             # Phase 035: a selection of many results, so they can be opened,
-            # revealed or copied in one action. Ctrl+click adds, Shift+click
-            # extends; the keyboard focus ring behaviour is unchanged.
+            # revealed or copied in one action.
             selectmode="extended",
-            relief="flat",
             takefocus=True,  # reachable with Tab, visible with the focus ring
-            highlightthickness=1,
-            highlightcolor=self.theme.accent,
-            highlightbackground=self.theme.background,
-            background=self.theme.background,
-            foreground=self.theme.foreground,
-            selectbackground=self.theme.selection_background,
-            selectforeground=self.theme.selection_foreground,
+            style=RESULT_STYLE,
         )
-        scrollbar = ttk.Scrollbar(middle, orient="vertical", command=self.listbox.yview)
-        self.listbox.configure(yscrollcommand=scrollbar.set)
-        self.listbox.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        for column, key, anchor, width, stretch in (
+            ("name", "RESULTS.COLUMN.NAME", "w", 320, False),
+            ("folder", "RESULTS.COLUMN.FOLDER", "w", 200, True),
+            ("kind", "RESULTS.COLUMN.KIND", "center", self.spacing.column_kind, False),
+            (
+                "source",
+                "RESULTS.COLUMN.SOURCE",
+                "center",
+                self.spacing.column_source,
+                False,
+            ),
+            ("snippet", "RESULTS.COLUMN.SNIPPET", "w", 320, True),
+        ):
+            self.tree.heading(column, text=strings.get(key))
+            self.tree.column(column, anchor=anchor, width=width, stretch=stretch)
+        self.tree.pack(side="left", fill="both", expand=True)
+        self.scrollbar = ttk.Scrollbar(
+            self.results_frame, orient="vertical", command=self.tree.yview
+        )
+        self.tree.configure(yscrollcommand=self.scrollbar.set)
+        self.scrollbar.pack(side="right", fill="y")
 
-        statusbar = ttk.Frame(self, padding=(12, 4))
+        # The area where there is nothing to list. Phase 041: "no results" was
+        # a status line and a blank rectangle, so the largest region of the
+        # window said nothing at all in the state a user meets most often
+        # after typing something that does not exist.
+        self.empty_frame = ttk.Frame(middle, padding=(0, self.spacing.pad, 0, 0))
+        self.empty_title = ttk.Label(
+            self.empty_frame,
+            text="",
+            font=self.fonts["detail"],
+            foreground=self.theme.foreground,
+            justify="left",
+            anchor="w",
+            wraplength=1,
+        )
+        self.empty_title.pack(fill="x")
+        self.empty_hint = ttk.Label(
+            self.empty_frame,
+            text="",
+            font=self.fonts["body"],
+            foreground=self.theme.muted,
+            justify="left",
+            anchor="w",
+            wraplength=1,
+        )
+        self.empty_hint.pack(fill="x", pady=(self.spacing.tight, 0))
+
+        statusbar = ttk.Frame(self, padding=(self.spacing.pad, self.spacing.tight))
         statusbar.pack(fill="x", side="bottom")
         self.status_var = tk.StringVar()
         # Kept as a real widget, not a temporary: phase 039 found that `danger`
@@ -265,16 +372,155 @@ class SearchWindow(tk.Tk):
             statusbar, textvariable=self.status_var, foreground=self.theme.muted
         )
         self.status_label.pack(side="left")
-        self.indexer_var = tk.StringVar(value="indexador: …")
-        ttk.Label(
-            statusbar, textvariable=self.indexer_var, foreground=self.theme.muted
-        ).pack(side="right")
-
-        self.preview = ttk.Label(
-            self, text="", padding=(12, 8), justify="left",
-            font=self.fonts["body"], foreground=self.theme.muted,
+        self.indexer_var = tk.StringVar(
+            value=strings.get("INDEXER.STATE_LABEL", state="…")
         )
-        self.preview.pack(fill="x", side="bottom")
+        self.indexer_label = ttk.Label(
+            statusbar, textvariable=self.indexer_var, foreground=self.theme.muted
+        )
+        self.indexer_label.pack(side="right")
+
+        # The detail pane: what the row cannot fit. Three lines with three
+        # roles — what it is, where it is, why it matched — so the full path
+        # and the whole snippet are reachable instead of clipped. The path
+        # gets the monospaced font, which until phase 041 was defined in the
+        # theme and used by nothing.
+        self.detail_frame = ttk.Frame(
+            self, padding=(self.spacing.pad, 0, self.spacing.pad, self.spacing.gap)
+        )
+        self.detail_caption = ttk.Label(
+            self.detail_frame,
+            text=strings.get("RESULTS.DETAIL_LABEL"),
+            font=self.fonts["body"],
+            foreground=self.theme.muted,
+        )
+        self.detail_caption.pack(anchor="w")
+        self.preview = ttk.Label(
+            self.detail_frame,
+            text="",
+            font=self.fonts["detail"],
+            foreground=self.theme.foreground,
+            anchor="w",
+            justify="left",
+        )
+        self.preview.pack(fill="x")
+        self.preview_path = ttk.Label(
+            self.detail_frame,
+            text="",
+            font=self.fonts["mono"],
+            foreground=self.theme.muted,
+            anchor="w",
+            justify="left",
+            wraplength=1,
+        )
+        self.preview_path.pack(fill="x")
+        self.preview_snippet = ttk.Label(
+            self.detail_frame,
+            text="",
+            font=self.fonts["body"],
+            foreground=self.theme.muted,
+            anchor="w",
+            justify="left",
+            wraplength=1,
+        )
+        self.preview_snippet.pack(fill="x")
+        # Packed last and to the bottom, so it sits under the status bar.
+        self.detail_frame.pack(fill="x", side="bottom")
+        self._clear_detail()
+        # Wrap to the window instead of clipping at the right edge, which is
+        # what the single preview label used to do with every long path.
+        self.bind("<Configure>", self._on_window_resize, add="+")
+
+    def _configure_result_style(self, style: ttk.Style) -> None:
+        """Put the palette into the results pane through a named style.
+
+        Measured on this machine before committing to it: a *named* ttk style
+        overrides ``fieldbackground`` under vista, winnative and clam, while
+        the built-in ``Treeview`` style honours it under none of them. A pane
+        that keeps the palette in a named style therefore reaches the dark
+        theme, and one that relies on the defaults does not.
+        """
+        style.configure(
+            RESULT_STYLE,
+            background=self.theme.background,
+            fieldbackground=self.theme.background,
+            foreground=self.theme.foreground,
+            rowheight=self.spacing.row_height,
+            font=self.fonts["body"],
+        )
+        style.map(
+            RESULT_STYLE,
+            background=[("selected", self.theme.selection_background)],
+            foreground=[("selected", self.theme.selection_foreground)],
+        )
+        # The headings name what each column is, and they are the only part of
+        # the pane whose text is not a result. Drawing them in the accent is
+        # what makes the structure readable, and it is also what keeps
+        # `accent` drawn at all now that the listbox highlight is gone — the
+        # phase 039 gate said so before this line existed.
+        style.configure(
+            f"{RESULT_STYLE}.Heading",
+            font=self.fonts["body"],
+            foreground=self.theme.accent,
+        )
+        style.map(
+            f"{RESULT_STYLE}.Heading",
+            foreground=[("active", self.theme.accent)],
+        )
+        # The search field is the only control a user looks at while typing,
+        # so it is the one that says where the keyboard is: the accent border
+        # is the focus ring the Listbox used to draw with `highlightcolor`.
+        style.layout(ENTRY_STYLE, style.layout("TEntry"))
+        style.configure(
+            ENTRY_STYLE,
+            fieldbackground=self.theme.background,
+            foreground=self.theme.foreground,
+            padding=self.spacing.tight,
+        )
+        for option in ("bordercolor", "lightcolor", "darkcolor"):
+            style.map(
+                ENTRY_STYLE,
+                **{option: [("focus", self.theme.accent)]},
+            )
+
+    def _on_window_resize(self, event=None) -> None:
+        """Re-wrap the message and detail text to the new window width."""
+        if event is not None and event.widget is not self:
+            return
+        width = self.winfo_width()
+        if width <= 1 or width == self._wrap_width:
+            return
+        self._wrap_width = width
+        usable = width - 2 * self.spacing.pad
+        for widget in (self.empty_title, self.empty_hint,
+                       self.preview_path, self.preview_snippet):
+            widget.configure(wraplength=usable)
+
+    def _sync_placeholder(self, _event=None) -> None:
+        """Show the placeholder only while the box is empty and not focused."""
+        if placeholder_visible(self.query_var.get(), self.focus_get() is self.entry):
+            self.placeholder.place(relx=0.01, rely=0.5, anchor="w")
+        else:
+            self.placeholder.place_forget()
+
+    def _show_message(self, title: str, hint: str = "") -> None:
+        """Replace the results area with a message about the results area."""
+        children = self.tree.get_children()
+        if children:
+            self.tree.delete(*children)
+        self.results_frame.pack_forget()
+        self.empty_title.configure(text=title)
+        self.empty_hint.configure(text=hint)
+        if not self.empty_frame.winfo_manager():
+            self.empty_frame.pack(fill="both", expand=True)
+        self._on_window_resize()
+        self._clear_detail()
+
+    def _show_results(self) -> None:
+        """Put the results pane back after a message replaced it."""
+        self.empty_frame.pack_forget()
+        if not self.results_frame.winfo_manager():
+            self.results_frame.pack(fill="both", expand=True)
 
     def _declare_accessible_names(self) -> None:
         """Name every interactive control (phase 039).
@@ -292,7 +538,7 @@ class SearchWindow(tk.Tk):
             (self.source_combo, "SEARCH.LABEL.SOURCE"),
             (self.type_combo, "SEARCH.LABEL.TYPE"),
             (self.recent_button, "SEARCH.RECENTS"),
-            (self.listbox, "RESULTS.LIST_LABEL"),
+            (self.tree, "RESULTS.LIST_LABEL"),
         ):
             accessibility.declare_name(widget, strings.get(key))
 
@@ -304,16 +550,25 @@ class SearchWindow(tk.Tk):
         self.entry.bind("<Up>", self._move_up)
         self.entry.bind("<Next>", self._page_down)
         self.entry.bind("<Prior>", self._page_up)
-        self.listbox.bind("<Return>", self._open_selected)
-        self.listbox.bind("<Control-Return>", self._reveal_selected)
-        self.listbox.bind("<Escape>", self._on_escape)
-        self.listbox.bind("<Double-Button-1>", self._open_selected)
-        self.listbox.bind("<<ListboxSelect>>", self._update_preview)
-        self.listbox.bind("<Control-c>", self._copy_selected_paths)
+        self.tree.bind("<Return>", self._open_selected)
+        self.tree.bind("<Control-Return>", self._reveal_selected)
+        self.tree.bind("<Escape>", self._on_escape)
+        self.tree.bind("<Double-Button-1>", self._open_selected)
+        self.tree.bind("<<TreeviewSelect>>", self._update_preview)
+        # Arrow keys move the selection as well as the cursor, so the detail
+        # pane follows the keyboard. ttk moves only the cursor item on its
+        # own, which would leave the pane showing the previous result.
+        self.tree.bind("<Down>", self._move_down)
+        self.tree.bind("<Up>", self._move_up)
+        self.tree.bind("<Next>", self._page_down)
+        self.tree.bind("<Prior>", self._page_up)
+        self.tree.bind("<Home>", self._tree_first)
+        self.tree.bind("<End>", self._tree_last)
+        self.tree.bind("<Control-c>", self._copy_selected_paths)
         # Phase 035: batch actions over a multi-selection.
-        self.listbox.bind("<Control-o>", self._open_selected)
-        self.listbox.bind("<Control-r>", self._reveal_selected)
-        self.listbox.bind("<Control-Shift-R>", self._forget_selected)
+        self.tree.bind("<Control-o>", self._open_selected)
+        self.tree.bind("<Control-r>", self._reveal_selected)
+        self.tree.bind("<Control-Shift-R>", self._forget_selected)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self._poll_indexer()
         self._poll_show_request()
@@ -328,7 +583,7 @@ class SearchWindow(tk.Tk):
             summary = services.indexer_summary(self.service.paths)
         except Exception:
             log.exception("could not read indexer status")
-            summary = "indexador: ?"
+            summary = strings.get("INDEXER.UNKNOWN")
         self.indexer_var.set(summary)
         self.after(2000, self._poll_indexer)
 
@@ -501,10 +756,24 @@ class SearchWindow(tk.Tk):
         failure: str | None,
     ) -> None:
         if query_error is not None:
-            self._render([])
-            self._set_status(f"Consulta no válida: {query_error}")
+            # Phase 041 found the twin of the defect phase 039 fixed here:
+            # a rejected query was rendered in the same muted grey as an
+            # ordinary status line, so the one error the user can fix by
+            # editing what they typed looked like idle chatter.
+            message = strings.get("STATUS.QUERY_INVALID", reason=query_error)
+            self._clear_results()
+            self._show_message(message, strings.get("SEARCH.QUERY_SYNTAX_HINT"))
+            self._set_status(message, "error")
             return
         if failure is not None:
+            # And these results used to stay on screen. The user had just
+            # typed something new, the search failed, and the previous
+            # query's answers were still listed as if they were the answer.
+            self._clear_results()
+            self._show_message(
+                strings.get("ERROR.SEARCH"),
+                strings.get("RESULTS.ERROR", reason=failure),
+            )
             self._set_status(strings.get("ERROR.SEARCH"), "error")
             return
         self._render(results)
@@ -527,7 +796,12 @@ class SearchWindow(tk.Tk):
             return
         if self.query_var.get().strip():
             self._execute_search()
-        self._set_status(f"Contexto: {name or 'ninguno'}")
+        self._set_status(
+            strings.get(
+                "STATUS.CONTEXT",
+                name=name or strings.get("STATUS.CONTEXT_NONE"),
+            )
+        )
 
     # -- filters and recent queries ----------------------------------------------
 
@@ -542,7 +816,13 @@ class SearchWindow(tk.Tk):
     def _on_filter_changed(self, _event=None) -> None:
         if self.query_var.get().strip():
             self._execute_search()
-        self._set_status(f"Filtro: {self.source_var.get()} · {self.type_var.get()}")
+        self._set_status(
+            strings.get(
+                "STATUS.FILTER",
+                source=self.source_var.get(),
+                type=self.type_var.get(),
+            )
+        )
 
     def _refresh_recent_menu(self) -> None:
         """Show/hide the recents menu according to configuration (optional)."""
@@ -577,29 +857,45 @@ class SearchWindow(tk.Tk):
 
     def _render(self, results: list[SearchResult]) -> None:
         self.results = results
-        self.listbox.delete(0, "end")
-        for result in results:
-            self.listbox.insert("end", self._row_text(result))
+        children = self.tree.get_children()
+        if children:
+            # `delete` refuses an id that already exists, so the whole set
+            # goes before anything is inserted with the same ids.
+            self.tree.delete(*children)
+        cells = [
+            rows.result_cells(r.name, r.path, r.snippet, r.source)
+            for r in results
+        ]
+        for index, row in enumerate(cells):
+            self.tree.insert(
+                "", "end", iid=str(index),
+                values=tuple(row[column] for column in RESULT_COLUMNS),
+            )
+        self._show_results()
+        # A column full of "local" is noise, so the source column only exists
+        # when something in this answer is not local.
+        self.tree.configure(
+            displaycolumns=list(RESULT_COLUMNS)
+            if any(row["source"] for row in cells)
+            else [c for c in RESULT_COLUMNS if c != "source"]
+        )
         if results:
-            self.listbox.selection_set(0)
-            self.listbox.activate(0)
-            self.listbox.see(0)
-            self._set_status(f"{len(results)} resultado(s)")
+            self._select(0)
+            self._set_status(strings.get("RESULTS.COUNT", count=len(results)))
         elif self.query_var.get().strip():
             # A named, empty result list is a state of its own (spec 017):
             # say what happened and what to try, not just "0".
-            self._set_status(
-                f"Sin resultados para «{self.query_var.get().strip()}»"
-            )
+            message = strings.get("RESULTS.NONE", query=self.query_var.get().strip())
+            self._show_message(message, strings.get("RESULTS.NONE_HINT"))
+            self._set_status(message)
         else:
+            # Nothing typed yet. The message explains the product rather than
+            # repeating the status line, which already says it is ready.
+            self._show_message(
+                strings.get("SEARCH.EMPTY_TITLE"), strings.get("SEARCH.EMPTY_HINT")
+            )
             self._set_status(strings.get("SEARCH.READY"))
         self._update_preview()
-
-    @staticmethod
-    def _row_text(result: SearchResult) -> str:
-        return rows.format_result_row(
-            result.name, result.path, result.snippet, result.source
-        )
 
     def _set_busy(self, query: str) -> None:
         """Loading state: the previous results stay visible while searching.
@@ -608,15 +904,17 @@ class SearchWindow(tk.Tk):
         blanks on every keystroke makes it impossible to compare two
         queries. ``_apply_search`` replaces the status when results land.
         """
-        self._set_status(f"Buscando «{query.strip()}»…")
+        self._set_status(strings.get("RESULTS.SEARCHING", query=query.strip()))
 
     def _clear_results(self) -> None:
         # Bumping the generation makes any search still in flight stale,
         # so late results cannot repopulate a box the user just cleared.
         self._generation += 1
         self.results = []
-        self.listbox.delete(0, "end")
-        self.preview.configure(text="")
+        children = self.tree.get_children()
+        if children:
+            self.tree.delete(*children)
+        self._clear_detail()
 
     def _set_status(self, text: str, severity: str = "info") -> None:
         """Show a status line, coloured by how much it matters.
@@ -668,12 +966,15 @@ class SearchWindow(tk.Tk):
             self._set_status(strings.get("ERROR.DIAGNOSTICS"), "error")
             return
         window = tk.Toplevel(self)
-        window.title("Diagnóstico del índice")
+        window.title(strings.get("DIAGNOSTICS.TITLE"))
         window.geometry("640x420")
         text = tk.Text(window, wrap="word")
         text.insert("1.0", report)
         text.configure(state="disabled")
-        text.pack(side="top", fill="both", expand=True, padx=8, pady=8)
+        text.pack(
+            side="top", fill="both", expand=True,
+            padx=self.spacing.gap, pady=self.spacing.gap,
+        )
 
     def _show_related(self, document_id: str | None = None) -> None:
         """Load a small ranked evidence list without blocking Tk."""
@@ -730,37 +1031,43 @@ class SearchWindow(tk.Tk):
                 pass
         window = tk.Toplevel(self)
         self.related_window = window
-        window.title("Documentos relacionados")
+        window.title(strings.get("RELATED.TITLE"))
         window.geometry("760x360")
         ttk.Label(
             window,
             text=strings.get("RELATED.NOTE"),
-            padding=(10, 8),
+            padding=(self.spacing.pad, self.spacing.gap),
         ).pack(anchor="w")
-        frame = ttk.Frame(window, padding=(10, 0, 10, 10))
+        frame = ttk.Frame(window, padding=(self.spacing.pad, 0, self.spacing.pad, self.spacing.pad))
         frame.pack(fill="both", expand=True)
         if not related:
             ttk.Label(frame, text=strings.get("RELATED.EMPTY")).pack(anchor="nw")
             return
-        listbox = tk.Listbox(
+        # Same shape as the main results pane: a related document is also a
+        # name, a place and a reason, and the old one-line format put the
+        # score, the name and the evidence in the same unreadable run as the
+        # search list did.
+        tree = ttk.Treeview(
             frame,
+            columns=("name", "folder", "score", "reason"),
+            show="headings",
             selectmode="browse",
-            exportselection=False,
-            activestyle="none",
-            relief="flat",
-            highlightthickness=1,
-            highlightcolor=self.theme.accent,
-            highlightbackground=self.theme.background,
-            background=self.theme.background,
-            foreground=self.theme.foreground,
-            selectbackground=self.theme.selection_background,
-            selectforeground=self.theme.selection_foreground,
+            takefocus=True,
+            style=RESULT_STYLE,
         )
-        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=listbox.yview)
-        listbox.configure(yscrollcommand=scrollbar.set)
-        listbox.pack(side="left", fill="both", expand=True)
+        for column, key, anchor, width, stretch in (
+            ("name", "RESULTS.COLUMN.NAME", "w", 240, False),
+            ("folder", "RESULTS.COLUMN.FOLDER", "w", 160, True),
+            ("score", "RELATED.COLUMN.SCORE", "center", 64, False),
+            ("reason", "RELATED.COLUMN.REASON", "w", 240, True),
+        ):
+            tree.heading(column, text=strings.get(key))
+            tree.column(column, anchor=anchor, width=width, stretch=stretch)
+        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+        tree.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
-        for item in related:
+        for index, item in enumerate(related):
             evidence = []
             for detail in getattr(item, "evidence", ()):
                 values = ", ".join(getattr(detail, "values", ()))
@@ -768,10 +1075,24 @@ class SearchWindow(tk.Tk):
                     f"{getattr(detail, 'kind', 'signal')}"
                     + (f": {values}" if values else "")
                 )
-            reason = "; ".join(evidence[:3]) or "relación local"
+            reason = "; ".join(evidence[:3]) or strings.get(
+                "STATUS.RELATED_FALLBACK"
+            )
             name = getattr(item, "name", "") or item.document_id
-            listbox.insert("end", f"{item.score:.3f}  {name}  —  {reason}")
-        self._set_status(f"{len(related)} documento(s) relacionado(s)")
+            path = getattr(item, "path", "") or ""
+            tree.insert(
+                "", "end", iid=str(index),
+                values=(
+                    name,
+                    rows.path_hint(path) if path else "",
+                    f"{item.score:.3f}",
+                    reason,
+                ),
+            )
+        tree.selection_set("0")
+        self._set_status(
+            strings.get("STATUS.RELATED_COUNT", count=len(related))
+        )
 
     def _rebuild_index(self) -> None:
         """Compatibility route: maintenance belongs to the control center."""
@@ -783,9 +1104,9 @@ class SearchWindow(tk.Tk):
     # -- selection and preview -------------------------------------------------
 
     def _selected_index(self) -> int | None:
-        selection = self.listbox.curselection()
-        if selection and selection[0] < len(self.results):
-            return selection[0]
+        for item in self.tree.selection():
+            if item.isdigit() and int(item) < len(self.results):
+                return int(item)
         return None
 
     def _selected_paths(self) -> list[Path]:
@@ -795,7 +1116,7 @@ class SearchWindow(tk.Tk):
         on what the list shows rather than on the order the user happened to
         click in.
         """
-        chosen = set(self.listbox.curselection())
+        chosen = {int(item) for item in self.tree.selection() if item.isdigit()}
         return [
             result.path
             for index, result in enumerate(self.results)
@@ -864,8 +1185,11 @@ class SearchWindow(tk.Tk):
         self.clipboard_clear()
         self.clipboard_append(text)
         count = len(text.splitlines()) if text else 0
-        self._set_status(f"Ruta copiada: {paths[0]}" if count == 1
-                         else f"{count} rutas copiadas")
+        self._set_status(
+            strings.get("STATUS.PATH_COPIED", path=paths[0])
+            if count == 1
+            else strings.get("STATUS.PATHS_COPIED", count=count)
+        )
         return "break"
 
     def _forget_selected(self) -> str:
@@ -874,11 +1198,13 @@ class SearchWindow(tk.Tk):
         if not paths:
             self._set_status(strings.get("ACTION.FORGET_NEEDS_SELECTION"))
             return "break"
-        plural = "documentos" if len(paths) > 1 else "documento"
+        question = (
+            strings.get("ACTION.FORGET_CONFIRM_ONE")
+            if len(paths) == 1
+            else strings.get("ACTION.FORGET_CONFIRM_MANY", count=len(paths))
+        )
         if not messagebox.askyesno(
-            "Olvidar documentos",
-            f"Se borrarán del índice {len(paths)} {plural}.\n\n"
-            "Los archivos del disco no se tocan.\n¿Continuar?",
+            strings.get("ACTION.FORGET_CONFIRM_TITLE"), question
         ):
             self._set_status(strings.get("ACTION.CANCELLED"))
             return "break"
@@ -890,10 +1216,17 @@ class SearchWindow(tk.Tk):
         if not self.results:
             return
         index = max(0, min(index, len(self.results) - 1))
-        self.listbox.selection_clear(0, "end")
-        self.listbox.selection_set(index)
-        self.listbox.activate(index)
-        self.listbox.see(index)
+        # `Treeview.selection_clear()` with no arguments clears *nothing*: Tcl
+        # reads the missing item list as "no items to clear", not "everything".
+        # Measured, not assumed -- arrowing with it left every row the user had
+        # walked past still selected, and the detail pane followed the oldest
+        # one instead of the current row.
+        chosen = self.tree.selection()
+        if chosen:
+            self.tree.selection_remove(*chosen)
+        self.tree.selection_set(str(index))
+        self.tree.focus(str(index))
+        self.tree.see(str(index))
         self._update_preview()
 
     def _move_down(self, _event=None):
@@ -907,32 +1240,89 @@ class SearchWindow(tk.Tk):
         self._select(last if current is None else current - 1)
         return "break"
 
+    def _tree_first(self, _event=None):
+        self._select(0)
+        return "break"
+
+    def _tree_last(self, _event=None):
+        self._select(len(self.results) - 1)
+        return "break"
+
+    def _page_size(self) -> int:
+        """How many rows a Page Down should move: the rows on screen.
+
+        This used to be the literal 10, in a window whose height and row count
+        were both configurable, so a Page Down either skipped past most of a
+        short list or crawled through a tall one.
+
+        ``bbox`` only describes rows that are *visible*: it returns an empty
+        string for a row scrolled out of sight and raises for one that is not
+        there at all. So the count grows from the first row until the pane says
+        "no further", which is the question being asked, and both failure modes
+        fall back to the constant instead of raising on the UI thread.
+        """
+        children = self.tree.get_children()
+        if len(children) < 2:
+            return DEFAULT_PAGE_ROWS
+        try:
+            first = self.tree.bbox(children[0])
+        except tk.TclError:  # the pane was resized between the two calls
+            return DEFAULT_PAGE_ROWS
+        if not first:
+            return DEFAULT_PAGE_ROWS
+        visible = 1
+        for child in children[1:]:
+            try:
+                if not self.tree.bbox(child):
+                    break
+            except tk.TclError:
+                break
+            visible += 1
+        return max(1, visible - 1)
+
     def _page_down(self, _event=None):
         current = self._selected_index()
-        self._select(10 if current is None else current + 10)
+        step = self._page_size()
+        self._select(step if current is None else current + step)
         return "break"
 
     def _page_up(self, _event=None):
         current = self._selected_index()
-        self._select(-10 if current is None else current - 10)
+        step = self._page_size()
+        self._select(-step if current is None else current - step)
         return "break"
 
+    def _clear_detail(self) -> None:
+        self.preview.configure(text="")
+        self.preview_path.configure(text="")
+        self.preview_snippet.configure(text="")
+        if self.detail_frame.winfo_manager():
+            self.detail_frame.pack_forget()
+
     def _update_preview(self, _event=None) -> None:
+        """Fill the detail pane: what it is, where it is, why it matched."""
         index = self._selected_index()
         if index is None:
-            self.preview.configure(text="")
+            self._clear_detail()
             return
         result = self.results[index]
-        kind = TYPE_LABELS.get(result.path.suffix.lower(), result.path.suffix or "?")
-        snippet = (result.snippet or "").replace("[", "").replace("]", "")
+        source = result.source or strings.get("FILTER.SOURCE.LOCAL")
         cloud = (
-            "  ·  ☁ solo en OneDrive (sin descargar)"
+            "  ·  " + strings.get("PREVIEW.CLOUD_ONLY")
             if result.availability == "cloud_only"
             else ""
         )
         self.preview.configure(
-            text=f"{result.name}  —  {kind}  —  {result.source}{cloud}\n{result.path}\n{snippet}"
+            text=f"{result.name}  ·  {rows.type_label(result.path)}  ·  "
+                 f"{source}{cloud}"
         )
+        self.preview_path.configure(text=str(result.path))
+        self.preview_snippet.configure(
+            text=(result.snippet or "").replace("[", "").replace("]", "").strip()
+        )
+        if not self.detail_frame.winfo_manager():
+            self.detail_frame.pack(fill="x", side="bottom")
+        self._on_window_resize()
 
     # -- actions ----------------------------------------------------------------
 
@@ -985,7 +1375,7 @@ class SearchWindow(tk.Tk):
         path = str(self.results[index].path)
         self.clipboard_clear()
         self.clipboard_append(path)
-        self._set_status(f"Ruta copiada: {path}")
+        self._set_status(strings.get("STATUS.PATH_COPIED", path=path))
         return "break"
 
     def _add_root(self) -> None:

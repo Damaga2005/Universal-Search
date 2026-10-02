@@ -1,0 +1,73 @@
+{
+  "phase": "041",
+  "verdicts": [
+    {
+      "gate": "U1 partes de un resultado sin columna",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "5 columnas, 5 partes, encabezados ['Carpeta', 'Coincidencia', 'Fuente', 'Nombre', 'Tipo']"
+    },
+    {
+      "gate": "U2 estados vacios sin nada que leer",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "«Sin resultados para «noexistenadaquienadie».» / «Prueba con menos palabras, o con un filtro menos.»"
+    },
+    {
+      "gate": "U3 pasos que necesitan raton",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "6 pasos del recorrido; anillo ['Entry', 'Combobox', 'Combobox', 'Combobox', 'Menubutton', 'Treeview']"
+    },
+    {
+      "gate": "U4 fallos que parecen un estado normal",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "estado normal #a6adb8, fallo #f28b82"
+    },
+    {
+      "gate": "U5 respuestas viejas tras un fallo",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "las dos rutas de fallo vacian el panel"
+    },
+    {
+      "gate": "U6 valores recortados e inalcanzables",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "detalle: 149 caracteres de ruta, 647 de coincidencia; la fila acota a 100 (presupuesto 100)"
+    },
+    {
+      "gate": "U7 huecos que ignoran la escala",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "escala 1.0: fila 26 px, padding 12 px, tipografia 14 pt"
+    },
+    {
+      "gate": "U8 partes del panel que ignoran el tema",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "6 roles del panel con color propio en cada tema"
+    },
+    {
+      "gate": "U9 relleno del panel por encima del presupuesto",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": false,
+      "detail": "INCONCLUYENTE: CPU del sistema al 79% antes de medir (> 60%): hay otro programa usando la máquina, así que una cifra de latencia no concluiría nada; 50 filas en 155.0 ms (presupuesto 200 ms)"
+    }
+  ],
+  "window_checked": true,
+  "window_reason": null,
+  "render_ms": 155.01,
+  "render_budget_ms": 200.0,
+  "load_ok": false
+}

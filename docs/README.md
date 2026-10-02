@@ -47,7 +47,7 @@ El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
 | 038 | Puerta de rendimiento reproducible | ✅ Completada | — | [informe](development/038-performance-gate-report.md) |
 | 039 | Accesibilidad e interfaz (teclado, nombres, contraste, catálogo) | ✅ Completada | — | [informe](development/039-accessibility-report.md) |
 | 040 | Puerta de calidad v3 (23 invariantes) y decisión de publicación | ✅ Completada | — | [informe](development/040-v3-quality-gate-report.md) |
-| 041 | Experiencia de producto y UX | ⬜ Planificada | — | [plan](development/041-product-ux-redesign.md) |
+| 041 | Experiencia de producto: resultados con columnas y estados reales | ✅ Completada | — | [informe](development/041-product-experience-report.md) · [checklist](development/041-windows-ux-checklist.md) |
 | 042 | Experiencia interactiva de búsqueda | ⬜ Planificada | — | [plan](development/042-search-experience-v2.md) |
 | 043 | Configuración y ajustes | ⬜ Planificada | — | [plan](development/043-settings-and-personalization.md) |
 | 044 | Aprendizaje local v2 | ⬜ Planificada | — | [plan](development/044-local-learning-v2.md) |
@@ -58,12 +58,16 @@ El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
 | 049 | Distribución e instalación Windows | ⬜ Planificada | — | [plan](development/049-distribution-and-installation-v2.md) |
 | 050 | Puerta de producto Universal Search 3.x | ⬜ Planificada | — | [plan](development/050-product-v3-gate.md) |
 
-**Fases 031–040 cerradas. Fases 041–050 planificadas.** El gate ejecutable tiene **23 invariantes**
-(`python -m evaluation.gate`); la puerta de rendimiento sabe decir «inconcluyente»
-en vez de publicar una cifra tomada con el equipo ocupado; la puerta de
-accesibilidad comprueba teclado, nombres, contraste y catálogo de textos. Cada
-fase 031–040 tiene su informe con la puerta que la midió. El resultado y la
-decisión de publicación están en el
+**Fases 031–040 cerradas. Fase 041 cerrada; 042–050 planificadas.** El gate
+ejecutable tiene **23 invariantes** (`python -m evaluation.gate`); la puerta de
+rendimiento sabe decir «inconcluyente» en vez de publicar una cifra tomada con
+el equipo ocupado; la puerta de accesibilidad comprueba teclado, nombres,
+contraste y catálogo de textos; y la **puerta de experiencia**
+(`python -m evaluation.ux_gate`) comprueba nueve cosas que las anteriores no
+preguntaban: que un resultado tenga su columna, que el área vacía diga algo, que
+el recorrido no necesite ratón y que un fallo no deje respuestas viejas en
+pantalla. Cada fase 031–041 tiene su informe con la puerta que la midió; el
+resultado y la decisión de publicación de las 031–040 están en el
 [informe de la fase 040](development/040-v3-quality-gate-report.md).
 
 Verificado en la fase 010: **208 tests en verde**
@@ -80,7 +84,7 @@ nombrados, puertas de CI verificadas por test y un gate v2 ejecutable de 13
 invariantes (`python -m evaluation.gate`); detalles y límites en el
 [informe de la fase 030](development/030-v2-quality-gate-report.md).
 
-Current test count: 1216 tests collected.
+Current test count: 1249 tests collected.
 
 ## Cómo ejecutar
 

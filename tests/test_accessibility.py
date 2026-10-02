@@ -327,14 +327,23 @@ def test_the_window_can_be_reached_with_the_keyboard_alone(window) -> None:
     assert report.unreachable == (), (
         "controles que el teclado no alcanza: " + ", ".join(report.unreachable)
     )
-    assert report.reachable >= 4  # entry, three comboboxes, listbox, menubutton
+    assert report.reachable >= 4  # entry, three comboboxes, results pane, menubutton
 
 
 def test_the_focus_ring_covers_the_whole_window(window) -> None:
+    # Phase 041: the results pane is packed only when there is something in
+    # it, so this asks the question in the state that matters — a window with
+    # results. An empty pane is genuinely not a tab stop, and pretending
+    # otherwise would make the ring a test of the implementation rather than
+    # of the experience.
+    from universal_search.index.search import SearchResult
+
+    window._render([SearchResult(path=Path(r"C:\docs\notas.md"), name="notas.md",
+                                 source="local", snippet="texto", rank=0.0)])
     ring = focus_order(window)
     roles = [type(widget).__name__ for widget in ring]
     assert roles[0] == "Entry", "typing must come first"
-    assert "Listbox" in roles, "the results must be reachable without a mouse"
+    assert "Treeview" in roles, "the results must be reachable without a mouse"
 
 
 def test_focus_starts_in_the_query_box(window) -> None:

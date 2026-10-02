@@ -5,6 +5,11 @@ Scattering `#666` through widget code is how a dark mode ends up with
 unreadable text in three places; a single frozen record with one place to
 change is the only way this stays maintainable.
 
+Phase 041 moved the gaps here too, which closes a gap the record had been
+quietly hiding: `ui_scale` multiplied fonts and nothing else, so "bigger text"
+gave a user larger words inside the padding they had already complained about.
+Fonts and gaps are one decision.
+
 Phase 039 removed the ``surface`` colour: it was declared here and in both
 palettes and drawn by no widget. A colour nothing renders is a colour nobody
 audited, and `evaluation.accessibility_gate` now fails if a palette field is
@@ -31,6 +36,21 @@ BODY_FONT_SIZE = 10
 # whole sentence into a listbox line.
 SNIPPET_CHARS = 100
 PATH_PARTS = 2
+
+# Spacing budget, in pixels at scale 1.0. Phase 041 moved these here because
+# they used to be literals inside the window: `ui_scale` scaled the fonts and
+# nothing else, so a user who asked for larger text got larger words inside
+# the same tight padding. Fonts and gaps are one decision, not two.
+PAD = 12
+PAD_GAP = 6
+PAD_TIGHT = 4
+ROW_HEIGHT = 26
+# Fixed column widths in the results pane. The name and the snippet stretch,
+# because those are the two fields with no useful maximum; the rest are sized
+# to their longest realistic value.
+COLUMN_KIND = 84
+COLUMN_SOURCE = 74
+COLUMN_FOLDER_MIN = 120
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,8 +172,56 @@ def fonts(scale: float = 1.0) -> dict[str, tuple[str, int]]:
     return {
         "entry": (UI_FONT, scaled_size(ENTRY_FONT_SIZE, factor)),
         "body": (UI_FONT, scaled_size(BODY_FONT_SIZE, factor)),
+        "detail": (UI_FONT, scaled_size(BODY_FONT_SIZE + 1, factor)),
         "mono": (MONO_FONT, scaled_size(BODY_FONT_SIZE, factor)),
     }
+
+
+@dataclass(frozen=True, slots=True)
+class Spacing:
+    """Pixel gaps for one UI scale.
+
+    Every padding in the window comes from here. The alternative was literals
+    in the layout code, which meant `ui_scale` was really a font-size knob and
+    not an accessibility one: a user who needed larger text to read the
+    results also needed wider columns and roomier rows, and only got the first.
+    """
+
+    pad: int
+    gap: int
+    tight: int
+    row_height: int
+    column_kind: int
+    column_source: int
+    column_folder_min: int
+
+    def as_dict(self) -> dict[str, int]:
+        return {
+            "pad": self.pad,
+            "gap": self.gap,
+            "tight": self.tight,
+            "row_height": self.row_height,
+            "column_kind": self.column_kind,
+            "column_source": self.column_source,
+            "column_folder_min": self.column_folder_min,
+        }
+
+
+def spacing(scale: float = 1.0) -> Spacing:
+    """The gaps for this configuration, scaled the same way the fonts are."""
+
+    def px(value: int) -> int:
+        return max(1, int(round(value * clamp_scale(scale))))
+
+    return Spacing(
+        pad=px(PAD),
+        gap=px(PAD_GAP),
+        tight=px(PAD_TIGHT),
+        row_height=px(ROW_HEIGHT),
+        column_kind=px(COLUMN_KIND),
+        column_source=px(COLUMN_SOURCE),
+        column_folder_min=px(COLUMN_FOLDER_MIN),
+    )
 
 
 def with_accent(theme: Theme, accent: str) -> Theme:

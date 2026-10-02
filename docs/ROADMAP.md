@@ -75,9 +75,9 @@
 - [x] Universal Search v2 quality gate (030)
 
 
-## v3.x — planned (phases 041–050)
+## v3.x (phases 041–050)
 
-- [ ] Product UX redesign (041)
+- [x] Product experience & UX (041)
 - [ ] Interactive Search Experience (042)
 - [ ] Settings & Configuration (043)
 - [ ] Local learning v2 (044)
@@ -112,10 +112,23 @@ re-measured semantic layer (hybrid failure R@5 0.762, exact-match correctness
 exposed and fixed a zero-idf degeneracy and an exact-token precision gate. The
 v3 gate re-measured all ten phases of the programme on Windows 11, Python
 3.14.6: **every phase gate SHIP**, MRR unchanged at 0,833, pyflakes clean, and
-the full suite at **1210 passed, 6 skipped, 0 failed** over 1216 collected. The
+the full suite at **1249 collected, 0 failed** on a machine at rest. The
 programme's ten phases were pushed to `main` on explicit instruction; the
 version tag, the artefact publication and the release notes are separate steps
 that follow the release list. The version is still `2.0.0` — finishing a
 programme of phases is not a reason to rename the software.
 
-Current test count: 1216 tests collected.
+Phase 041 is the first of the 3.x programme and the first one that measured the
+*experience* rather than the engine: `python -m evaluation.ux_gate` runs nine
+invariants about the primary flow, and it found that the results pane had no
+hierarchy at all — a `Listbox` flattening name, folder, type, source and snippet
+into one clipped string — plus two defects the phase 039 audit had missed on one
+of its two error paths: a rejected query drawn as an ordinary status line, and a
+failed search leaving the previous query's answers on screen.
+
+Its ninth invariant — filling a page of 50 results inside the interaction budget
+— is **INCONCLUSIVE** and exits 2, because the phase 038 load veto found the
+machine busy with something that is not this project. It is declared, not
+assumed, and it closes on its own when the machine is idle.
+
+Current test count: 1249 tests collected.

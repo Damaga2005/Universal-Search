@@ -87,6 +87,13 @@ ENTRIES: tuple[Entry, ...] = (
     Entry("SEARCH.READY", "Listo — escribe para buscar"),
     Entry("SEARCH.HOTKEY_SHOWN", "Atajo global — escribe para buscar"),
     Entry("SEARCH.PICK_FOLDER", "Carpeta a indexar"),
+    Entry("SEARCH.QUERY_SYNTAX_HINT",
+          "Revisa las comillas y los paréntesis, o pulsa Esc para empezar "
+          "de nuevo."),
+    Entry("SEARCH.EMPTY_TITLE", "¿Qué estás buscando?"),
+    Entry("SEARCH.EMPTY_HINT",
+          "Escribe para buscar por nombre o por contenido. Enter abre el "
+          "resultado y Ctrl+Enter lo muestra en el Explorador."),
 
     # -- filters -------------------------------------------------------------
     Entry("FILTER.ALL_SOURCES", "(todas)"),
@@ -102,8 +109,33 @@ ENTRIES: tuple[Entry, ...] = (
     Entry("RESULTS.NONE_HINT",
           "Prueba con menos palabras, o con un filtro menos."),
     Entry("RESULTS.ERROR", "No se pudo buscar: {reason}"),
-    Entry("RESULTS.SEARCHING", "Buscando…"),
+    Entry("RESULTS.SEARCHING", "Buscando «{query}»…"),
     Entry("RESULTS.COUNT", "{count} documento(s)"),
+    # Column headings. Phase 041: a result has five parts and the old list
+    # flattened them into one string, so these labels name them for the first
+    # time — which is also what makes the pane's hierarchy readable at a
+    # glance instead of merely ordered.
+    Entry("RESULTS.COLUMN.NAME", "Nombre"),
+    Entry("RESULTS.COLUMN.FOLDER", "Carpeta"),
+    Entry("RESULTS.COLUMN.KIND", "Tipo"),
+    Entry("RESULTS.COLUMN.SOURCE", "Fuente"),
+    Entry("RESULTS.COLUMN.SNIPPET", "Coincidencia"),
+    Entry("RESULTS.DETAIL_LABEL", "Detalle del resultado"),
+
+    # -- status lines that used to be f-strings ------------------------------
+    # Phase 041 routed these through the catalogue. They were invisible to the
+    # phase 039 string audit precisely because an f-string is not a literal,
+    # so "every visible string is catalogued" was true of every string the
+    # checker could see and silent about the rest.
+    Entry("STATUS.CONTEXT", "Contexto: {name}"),
+    Entry("STATUS.CONTEXT_NONE", "(ninguno)"),
+    Entry("STATUS.FILTER", "Filtro: {source} · {type}"),
+    Entry("STATUS.RELATED_COUNT", "{count} documento(s) relacionado(s)"),
+    Entry("STATUS.PATH_COPIED", "Ruta copiada: {path}"),
+    Entry("STATUS.PATHS_COPIED", "{count} rutas copiadas"),
+    Entry("STATUS.QUERY_INVALID", "Consulta no válida: {reason}"),
+    Entry("STATUS.RELATED_FALLBACK", "relación local"),
+    Entry("PREVIEW.CLOUD_ONLY", "☁ solo en OneDrive (sin descargar)"),
 
     # -- related documents ---------------------------------------------------
     Entry("RELATED.TITLE", "Documentos relacionados"),
@@ -111,6 +143,8 @@ ENTRIES: tuple[Entry, ...] = (
     Entry("RELATED.NOTE",
           "Relaciones locales; no cambian la relevancia de la búsqueda."),
     Entry("RELATED.EMPTY", "No hay documentos relacionados."),
+    Entry("RELATED.COLUMN.SCORE", "Puntuación"),
+    Entry("RELATED.COLUMN.REASON", "Por qué"),
 
     # -- indexer feedback ----------------------------------------------------
     Entry("INDEXER.STATE_LABEL", "indexador: {state}"),
@@ -134,8 +168,19 @@ ENTRIES: tuple[Entry, ...] = (
     Entry("ERROR.SAVE_CONTEXT",
           "No se pudo guardar el contexto — consulta el registro"),
     Entry("ERROR.DIAGNOSTICS", "No se pudo generar el diagnóstico"),
+    Entry("DIAGNOSTICS.TITLE", "Diagnóstico del índice"),
     Entry("ERROR.RELATED", "No se pudieron cargar los relacionados"),
     Entry("ACTION.CANCELLED", "Cancelado: no se olvidó nada"),
+    # The one confirmation whose text a user must read before authorising a
+    # change to their index, and it was an f-string with the reassurance
+    # ("your files on disk are not touched") buried in the middle of it.
+    Entry("ACTION.FORGET_CONFIRM_TITLE", "Olvidar documentos"),
+    Entry("ACTION.FORGET_CONFIRM_ONE",
+          "Se borrará del índice 1 documento.\n\n"
+          "Los archivos del disco no se tocan.\n¿Continuar?"),
+    Entry("ACTION.FORGET_CONFIRM_MANY",
+          "Se borrarán del índice {count} documentos.\n\n"
+          "Los archivos del disco no se tocan.\n¿Continuar?"),
     Entry("ACTION.FORGET_NEEDS_SELECTION",
           "Selecciona al menos un documento para olvidar"),
     Entry("ACTION.RELATED_NEEDS_SELECTION",

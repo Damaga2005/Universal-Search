@@ -7,10 +7,93 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
-### Roadmap 041–050 — planned
+### Phase 041 - Product experience: the results pane finally has a hierarchy
+- **The audit found the panel had none.** The results were a `tk.Listbox`
+  holding one string per row — `[source] name · TYPE · folder — snippet` — five
+  different things flattened together, with no headings, and **clipped at the
+  widget edge**: a long filename did not shrink or get an ellipsis, it vanished.
+  It is now a `ttk.Treeview` with five real, labelled columns (Nombre, Carpeta,
+  Tipo, Fuente, Coincidencia) over a three-line detail pane.
+- **The widget choice was measured, not preferred.** A `Canvas` would have
+  allowed per-column typography, but it is not in the phase 039 list of
+  interactive controls — so the surface carrying the whole product would have
+  been invisible to every accessibility instrument this project owns. What a
+  Treeview cannot do, the report says: the type is per row, not per column.
+- **The source column hides itself** when every result is local, which is the
+  rule the row already had ("a column of *local* on every row is noise")
+  applied one level up.
+- **"No results" was a status line and a blank rectangle.** The largest region
+  of the window said nothing in the state a user meets most after typing
+  something that does not exist. There is now one message surface with a title
+  and a hint, used for the empty, zero-result and failed states, and a fresh
+  window explains the product and its two most useful shortcuts.
+- **The search box now says what it is.** It had an accessible name and nothing
+  a sighted user could see; the placeholder follows `gui_app.placeholder_visible`,
+  a rule rather than widget logic, because whether a window holds the desktop
+  focus is not something a test can promise.
+- **`ui_scale` scales the gaps now, not only the fonts.** Padding, row height
+  and fixed column widths come from `theme.spacing()`. Until now "larger text"
+  gave bigger words inside the same tight padding; an AST test fails if a
+  non-zero padding literal comes back.
+- **Two error paths, two defects, both of the kind the 039 audit exists to
+  find.** A rejected query was drawn in exactly the same muted grey as an
+  ordinary status line — the twin of the defect 039 fixed on the *other* error
+  path. And a failed search left the previous query's answers listed on screen
+  as if they were the answer to the new one. Both fixed, both measured by
+  invariants U4 and U5.
+
+- **`Treeview.selection_clear()` with no arguments clears nothing.** Tcl reads
+  the missing item list as "no items to clear", not "everything". Measured, not
+  assumed: with it, arrowing down the results *accumulated* selection and the
+  detail pane kept showing the first row. `Treeview.bbox()` only describes
+  visible rows and raises for absent ones, so the Page Down size — previously a
+  literal 10, now derived from the rows actually on screen — had to count
+  upward until the pane says "no further".
+- **The phase 039 palette gate caught `accent` becoming undrawn** the moment the
+  `Listbox` went, because its `highlightcolor` was the only thing drawing it. The
+  gate said so before any of this was invented. `accent` now draws the column
+  headings and the focused search field, and `CONTRAST_PAIRS` grows by the one
+  pair that really appeared ("column headings", `AA_LARGE`).
+- **Two tables answered "what kind of file is this"** — `rows.extension_label`
+  said `DOCX`, a `TYPE_LABELS` table in the window said `Word` — and the row
+  and the detail pane could disagree. One table now (`rows.type_label`), and
+  `rows.format_result_row` is deleted: with the pane changed it had no callers,
+  and a formatter with no callers is a second place to change the next row.
+- **Nine visible status lines were f-strings**, which is why the phase 039
+  string audit never saw them: an `ast.JoinedStr` is not a literal. All are
+  catalogued now, along with the "forget documents" confirmation — the most
+  safety-relevant string in the product, where "your files on disk are not
+  touched" was buried mid-sentence. An AST test fails if a literal or an
+  f-string ever reaches `_set_status` or `_show_message` again.
+- **The diagnostics window was left behind by the spacing work**, with `padx=8`
+  literals and an inline title. The AST test found it.
+
+- **New gate, `python -m evaluation.ux_gate`: nine invariants**, thresholds
+  zero, one number each — one labelled column per part of a result, an empty
+  state with words in it, a primary flow that needs no mouse, failures drawn as
+  failures on both paths, no stale answers after a failure, long paths and
+  snippets reachable, gaps that follow the UI scale, six of six pane roles that
+  change with the theme, and a full page of rows inside the interaction budget.
+  **Eight PASS; U9 is INCONCLUSIVE with exit code 2**, because the machine was
+  busy with something that is not this project and the phase 038 load veto said
+  so. The parts that *were* measurable are in the report: 50 rows insert in
+  2.5–5.6 ms, a plain Treeview lays them out in 0.8–1.1 ms, and each custom
+  style option adds 4.4–8.8 ms — so the pane costs ~20–30 ms per page, which is
+  what "compact and themed" buys. The total was not claimed, because it was not
+  measured.
+- `evaluation/ux_baseline.json` records the run, including the load note.
+- `docs/development/041-windows-ux-checklist.md` is the manual Windows
+  checklist the prompt asked for, with each of the ten validation areas marked
+  automatic, manual, or **declared out of scope** — column sorting is out of
+  scope, and the reason is written down rather than left as an omission.
+- Test count 1216 → 1249. `python -m evaluation.gate` and the phase 039
+  accessibility gate both stay green; the latter grows to 8 contrast pairs.
+
+### Roadmap 041–050 — 041 done, 042–050 planned
 - The former duplicate product roadmap numbered 031–040 is now the planned 041–050 programme.
 - Phases 031–040 remain the completed Universal Search 2.x programme and are not renumbered.
-- The 041–050 documents are planning only; no implementation status is implied.
+- **Phase 041 is implemented** (see above). Phases 042–050 remain planning only;
+  no implementation status is implied for them.
 
 
 ### Phase 040 - Quality gate v3: re-measure everything and decide
