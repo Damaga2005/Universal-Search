@@ -78,8 +78,8 @@
 ## v3.x (phases 041–050)
 
 - [x] Product experience & UX (041)
-- [ ] Interactive Search Experience (042)
-- [ ] Settings & Configuration (043)
+- [x] Interactive Search Experience (042)
+- [x] Settings & Configuration (043)
 - [ ] Local learning v2 (044)
 - [ ] Search Quality & Relevance (045)
 - [ ] Indexing Scalability & Performance (046)
@@ -140,4 +140,6 @@ passed because its test stubbed the service. `python -m evaluation.interaction_g
 runs 11 invariants about the seam between the mechanisms and the user; all 11
 pass, including keystroke-to-result at 185 ms against a 600 ms budget.
 
-Current test count: 1288 tests collected.
+Phase 043 turned configuration from a bag of fields into a contract. `python -m evaluation.settings_gate` runs 13 invariants over it, and none needs a window. The measurement that justified it: a negative `indexer_file_delay` in `config.json` reached `time.sleep(-1)`, which raises inside the indexing loop and fails the whole pass — reachable only by editing a JSON file, and now refused by the schema.
+
+Current test count: 1342 tests collected.

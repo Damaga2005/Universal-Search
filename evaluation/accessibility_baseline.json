@@ -20,7 +20,7 @@
       "measured": 0,
       "threshold": 0,
       "passed": true,
-      "detail": "160 entradas catalogadas"
+      "detail": "222 entradas catalogadas"
     },
     {
       "gate": "T4 WCAG AA contrast failures",

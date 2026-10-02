@@ -88,6 +88,7 @@ ENTRIES: tuple[Entry, ...] = (
     Entry("MENU.HISTORY.DISABLE", "Dejar de recordar búsquedas"),
     Entry("MENU.HISTORY.ENABLE", "Volver a recordar búsquedas"),
     Entry("MENU.VIEW", "Ver"),
+    Entry("MENU.SETTINGS", "Ajustes..."),
     Entry("MENU.VIEW.EXPLAIN", "Explicar por qué coincidió (recalcula)"),
     Entry("MENU.DIAGNOSE.SUMMARY", "Estado del índice"),
     Entry("MENU.DIAGNOSE.CONTROL_CENTER", "Centro de control de indexación..."),
@@ -249,6 +250,195 @@ ENTRIES: tuple[Entry, ...] = (
     Entry("ACTION.REBUILD_HINT",
           "Usa el centro de control para reconstruir el índice"),
 
+
+    # -- settings window (phase 043) ------------------------------------------
+    # A label and an explanation for every setting, because an advanced
+    # switch nobody can understand is a switch nobody should flip. Generated
+    # and checked by `tests/test_settings.py`: the phase 039 gate forbids two
+    # keys carrying the same value, which is easy to break by hand and
+    # obvious to check by machine.
+    Entry("SETTINGS.ROOTS.LABEL",
+          "Carpetas indexadas"),
+    Entry("SETTINGS.IGNORE_DIRS.LABEL",
+          "Carpetas excluidas"),
+    Entry("SETTINGS.IGNORE_PATTERNS.LABEL",
+          "Patrones excluidos"),
+    Entry("SETTINGS.RESULT_LIMIT.LABEL",
+          "Documentos por búsqueda"),
+    Entry("SETTINGS.FUZZY_ENABLED.LABEL",
+          "Búsqueda con tolerancia a erratas"),
+    Entry("SETTINGS.SEMANTIC_ENABLED.LABEL",
+          "Búsqueda por significado"),
+    Entry("SETTINGS.HOTKEY.LABEL",
+          "Atajo global"),
+    Entry("SETTINGS.HOTKEY_ENABLED.LABEL",
+          "Atajo global activo"),
+    Entry("SETTINGS.INDEXER_INTERVAL_SECONDS.LABEL",
+          "Cada cuánto se revisa"),
+    Entry("SETTINGS.INDEXER_FILE_DELAY.LABEL",
+          "Pausa por archivo"),
+    Entry("SETTINGS.ONEDRIVE_DOWNLOAD_MAX_MB.LABEL",
+          "Descarga de OneDrive"),
+    Entry("SETTINGS.START_WITH_WINDOWS.LABEL",
+          "Abrir el indexador al iniciar Windows"),
+    Entry("SETTINGS.THEME.LABEL",
+          "Tema"),
+    Entry("SETTINGS.UI_SCALE.LABEL",
+          "Tamaño del texto y los huecos"),
+    Entry("SETTINGS.TRAY_ENABLED.LABEL",
+          "Icono en la bandeja"),
+    Entry("SETTINGS.USAGE_TRACKING.LABEL",
+          "Aprendizaje del uso local"),
+    Entry("SETTINGS.RECENT_QUERIES_ENABLED.LABEL",
+          "Recordar las búsquedas"),
+    Entry("SETTINGS.LOG_LEVEL.LABEL",
+          "Detalle del registro"),
+    Entry("SETTINGS.ROOTS.HELP",
+          "Las carpetas cuyo contenido se busca. Segestionan en el centro de "
+          "control de indexación."
+          ),
+    Entry("SETTINGS.IGNORE_DIRS.HELP",
+          "Nombres de carpetas que nunca se recorren, por ejemplo una copia de "
+          "seguridad que no quieres indexar."
+          ),
+    Entry("SETTINGS.IGNORE_PATTERNS.HELP",
+          "Patrones de nombre de archivo que se saltan, como *.tmp o ~$*."
+          ),
+    Entry("SETTINGS.RESULT_LIMIT.HELP",
+          "Cuántos resultados se piden al buscador. Más resultados Tardan más en "
+          "llegar y ocupan más sitio en pantalla."
+          ),
+    Entry("SETTINGS.FUZZY_ENABLED.HELP",
+          "Si está activada, una palabra mal escrita encuentra el documento que "
+          "contiene la correcta. Cuesta un poco más de trabajo por consulta."
+          ),
+    Entry("SETTINGS.SEMANTIC_ENABLED.HELP",
+          "Activa la capa local que encuentra documentos parecidos por tema, no "
+          "solo por las palabras exactas. Solo se usa cuando la búsqueda normal "
+          "no devuelve nada."
+          ),
+    Entry("SETTINGS.HOTKEY.HELP",
+          "La combinación de teclas que abre la ventana desde cualquier sitio. "
+          "Debe llevar Ctrl, Alt, Mayús o Windows."
+          ),
+    Entry("SETTINGS.HOTKEY_ENABLED.HELP",
+          "Si está desactivado, la combinación anterior no registra nada y el "
+          "indexador no la escucha."
+          ),
+    Entry("SETTINGS.INDEXER_INTERVAL_SECONDS.HELP",
+          "Segundos entre dos revisiones de las carpetas indexadas. Más tiempo "
+          "ahorraCPU y llega más tarde a los cambios."
+          ),
+    Entry("SETTINGS.INDEXER_FILE_DELAY.HELP",
+          "Segundos de espera tras cada archivo modificado. Es una forma "
+          "cooperativa de no cargar el disco; con valor alto la indexación tarda "
+          "mucho más."
+          ),
+    Entry("SETTINGS.ONEDRIVE_DOWNLOAD_MAX_MB.HELP",
+          "Tamaño máximo en MB de un archivo de OneDrive que se descarga para "
+          "leerlo. Con 0 no se descarga ninguno."
+          ),
+    Entry("SETTINGS.START_WITH_WINDOWS.HELP",
+          "Registra la aplicación para que el indexador arranque al iniciar "
+          "Windows. Se escribe en el registro del usuario y es reversible."
+          ),
+    Entry("SETTINGS.THEME.HELP",
+          "Claro, oscuro, o seguir a Windows. Ninguno de los tres cambia lo que "
+          "se indexa."
+          ),
+    Entry("SETTINGS.UI_SCALE.HELP",
+          "Escala tipografía, relleno y alto de fila a la vez. Entre 0,75 y 2,5."
+          ),
+    Entry("SETTINGS.TRAY_ENABLED.HELP",
+          "Muestra un icono junto al reloj para abrir la ventana o salir."
+          ),
+    Entry("SETTINGS.USAGE_TRACKING.HELP",
+          "Registra qué documentos abres para mejorar el orden de los resultados. "
+          "Se guarda sólo en este equipo y está desactivado por defecto."
+          ),
+    Entry("SETTINGS.RECENT_QUERIES_ENABLED.HELP",
+          "Guarda las últimas consultas para la lista de recientes. No graba lo "
+          "que buscas si lo desactivas, pero lo ya guardado se queda."
+          ),
+    Entry("SETTINGS.LOG_LEVEL.HELP",
+          "Cuánto se registra en el archivo de registro. WARNING sólo anota "
+          "problemas, DEBUG anota cada operación y ocupa más."
+          ),
+    Entry("SETTINGS.TITLE",
+          "Ajustes de Universal Search"
+),
+    Entry("SETTINGS.SAVE",
+          "Guardar"
+),
+    Entry("SETTINGS.SAVED",
+          "Ajustes guardados"
+),
+    Entry("SETTINGS.REFUSED",
+          "{count} valor(es) no se han podido guardar"
+),
+    Entry("SETTINGS.RESET",
+          "Restablecer"
+),
+    Entry("SETTINGS.RESET_TITLE",
+          "Restablecer los ajustes"
+),
+    Entry("SETTINGS.RESET_CONFIRM",
+          "Todas las preferencias volverán a su valor de fábrica.\n\nLas carpetas indexadas, las búsquedas guardadas y el historial NO se borran.\n\n¿Continuar?"
+),
+    Entry("SETTINGS.RESET_DONE",
+          "Ajustes restablecidos"
+),
+    Entry("SETTINGS.RESET_APPLY",
+          "Los ajustes restablecidos se verán al reiniciar la aplicación."
+),
+    Entry("SETTINGS.REPAIR",
+          "Reparar"
+),
+    Entry("SETTINGS.REPAIRED",
+          "{count} valor(es) estaban fuera de rango y se han corregido"
+),
+    Entry("SETTINGS.NOTHING_TO_REPAIR",
+          "Ningún valor está fuera de rango"
+),
+    Entry("SETTINGS.EXPORT",
+          "Exportar"
+),
+    Entry("SETTINGS.EXPORTED",
+          "Ajustes exportados a {path}"
+),
+    Entry("SETTINGS.IMPORT",
+          "Importar"
+),
+    Entry("SETTINGS.IMPORTED",
+          "Importados {count} ajuste(s); {refused} rechazados"
+),
+    Entry("SETTINGS.IMPORT_FAILED",
+          "No se ha podido importar: {reason}"
+),
+    Entry("SETTINGS.CLOSE",
+          "Cerrar"
+),
+    Entry("SETTINGS.RESTART",
+          "Requiere reiniciar la aplicación para aplicarse."
+),
+    Entry("SETTINGS.GROUP.SOURCES",
+          "Qué se indexa"
+),
+    Entry("SETTINGS.GROUP.INDEXING",
+          "Cuándo y cómo se indexa"
+),
+    Entry("SETTINGS.GROUP.SEARCH",
+          "Cómo se busca"
+),
+    Entry("SETTINGS.GROUP.APPEARANCE",
+          "Cómo se ve"
+),
+    Entry("SETTINGS.GROUP.PRIVACY",
+          "Qué se recuerda"
+),
+    Entry("SETTINGS.GROUP.DIAGNOSTICS",
+          "Diagnóstico y registro"
+),
     # -- control centre ------------------------------------------------------
     Entry("CONTROL.TITLE", "Indexación y fuentes"),
     Entry("CONTROL.ADD_FOLDER", "Añadir carpeta a indexar"),

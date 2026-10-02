@@ -149,13 +149,18 @@ class SearchWindow(tk.Tk):
         self._related_poll: str | None = None
         self.related_window: tk.Toplevel | None = None
         self.control_center_window: object | None = None
+        self.settings_window: object | None = None
         self.closed = False
         # How many results the window shows, and how many it asked the engine
         # for. They differ on purpose: a sort other than relevance can only
         # choose from the set it was given, so phase 036 widened the pool and
-        # this phase asks for that wider pool.
-        self.limit = DEFAULT_LIMIT
-        self.requested_limit = DEFAULT_LIMIT
+        # this phase asks for that wider pool. Phase 043 moved the count out of
+        # a constant in this module and into the configuration, where a person
+        # can change it.
+        self.limit = int(
+            getattr(self.service.config, "result_limit", DEFAULT_LIMIT)
+        )
+        self.requested_limit = self.limit
         # What the last render actually had to do. Phase 042's promise of
         # incremental updates is only worth something if it can be counted.
         self.render_stats: dict[str, int] = {"inserted": 0, "updated": 0, "removed": 0}
@@ -383,6 +388,9 @@ class SearchWindow(tk.Tk):
         )
         diagnose_menu.add_command(
             label=strings.get("MENU.DIAGNOSE.RELATED"), command=self._show_related
+        )
+        diagnose_menu.add_command(
+            label=strings.get("MENU.SETTINGS"), command=self._show_settings
         )
         menu.add_cascade(label=strings.get("MENU.DIAGNOSE"), menu=diagnose_menu)
 
@@ -1488,6 +1496,25 @@ class SearchWindow(tk.Tk):
             pass
 
     # -- diagnostics and control center (phases 015/023) ----------------------
+
+    def _show_settings(self) -> None:
+        """Open the settings window, or bring the existing one forward."""
+        existing = self.settings_window
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift()
+                    existing.focus_force()
+                    return
+            except (tk.TclError, RuntimeError, AttributeError):
+                pass
+        from universal_search.gui.settings_window import (
+            SettingsService,
+            SettingsWindow,
+        )
+
+        service = SettingsService(paths=self.service.paths)
+        self.settings_window = SettingsWindow(self, service=service)
 
     def _show_control_center(self) -> None:
         """Open the separate operational window without crowding search."""

@@ -339,7 +339,10 @@ def test_tray_command_uses_discovered_paths_and_returns_run_tray_code(
     tray_calls = []
     monkeypatch.setattr(cli.AppPaths, "discover", lambda: paths)
     monkeypatch.setattr(
-        appconfig, "setup_logging", lambda supplied: logging_calls.append(supplied)
+        appconfig, "setup_logging",
+        # Phase 043: `setup_logging` takes the configured level as well, so the
+        # tray stops logging at a hard-coded INFO.
+        lambda supplied, level=None: logging_calls.append((supplied, level)),
     )
     monkeypatch.setattr(
         tray,
@@ -349,7 +352,9 @@ def test_tray_command_uses_discovered_paths_and_returns_run_tray_code(
 
     result = cli._tray_command(object())
 
+    from universal_search.appconfig import AppConfig
+
     assert result == 17
-    assert logging_calls == [paths]
+    assert logging_calls == [(paths, AppConfig().log_level)]
     assert tray_calls == [{"paths": paths}]
     assert not paths.database.exists()

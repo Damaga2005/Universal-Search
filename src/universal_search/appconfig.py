@@ -14,6 +14,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from universal_search.providers.ignore import IgnoreRules
+from universal_search.settings import BY_KEY
 
 log = logging.getLogger("universal_search.config")
 
@@ -197,6 +198,67 @@ class AppPaths:
         return self.home / f"indexer-stop.{token}.flag"
 
 
+# -- versioning and migration (phase 043) -------------------------------------
+#
+# `config.json` had no version, so "which build wrote this?" was unanswerable
+# and every field had to be guessed. The index database solved this with
+# `PRAGMA user_version` and a migrations ledger; the settings file gets the same
+# treatment, and the model is copied rather than invented: a version, a list of
+# steps, a refusal to read a file from a *newer* build.
+CONFIG_VERSION = 2
+
+
+def migrate(raw: dict) -> dict:
+    """Bring a raw settings mapping up to :data:`CONFIG_VERSION`.
+
+    A file with no ``version`` key is version 1, which is what every build
+    before phase 043 wrote. Version 1 needed no key changes -- the new fields
+    simply appear with their defaults -- so its migration only stamps the
+    version. Keeping the step explicit means the next one has a place to go,
+    and keeps the rule that a file from a *newer* build is refused rather than
+    half-read.
+    """
+    version = raw.get("version", 1)
+    try:
+        version = int(version)
+    except (TypeError, ValueError):
+        version = 1
+    if version > CONFIG_VERSION:
+        log.warning(
+            "config.json declares version %s, newer than %s; reading what is "
+            "understood and keeping the rest",
+            version, CONFIG_VERSION,
+        )
+    updated = dict(raw)
+    updated["version"] = CONFIG_VERSION
+    return updated
+
+
+# -- operational overrides (phase 043) ---------------------------------------
+#
+# The environment variables that change behaviour, in the order they win. This
+# is data rather than a comment because the precedence was documented in three
+# different files and never in one place, and because phase 043 can then check
+# the table instead of trusting the prose. Nothing here overrides a *setting*:
+# they choose where the settings live, not what they say.
+PRECEDENCE: tuple[tuple[str, str, str], ...] = (
+    (
+        "UNIVERSAL_SEARCH_HOME",
+        "1",
+        "La carpeta de la aplicación; manda sobre todo lo demás, y por tanto "
+        "sobre dónde vive config.json",
+    ),
+    (
+        "UNIVERSAL_SEARCH_PORTABLE",
+        "2",
+        "Modo portable; gana al marcador portable.txt y pierde contra "
+        "UNIVERSAL_SEARCH_HOME",
+    ),
+    ("portable.txt", "3", "Marcador junto al ejecutable"),
+    ("%LOCALAPPDATA%", "4", "Instalación por usuario, el valor más bajo"),
+)
+
+
 @dataclass(frozen=True, slots=True)
 class AppConfig:
     roots: tuple[str, ...] = ()
@@ -221,6 +283,24 @@ class AppConfig:
     saved_searches: tuple[dict, ...] = ()
     hotkey: str = "ctrl+alt+s"
     hotkey_enabled: bool = True
+    # Phase 043: the semantic layer (026), which until now was only reachable
+    # behind the command line's `--no-semantic`. It has the same shape as
+    # `fuzzy_enabled` and the same reason to be visible: it is the layer that
+    # does extra work per query, so a user who does not want it should be able
+    # to say so where they can see the other switches.
+    semantic_enabled: bool = True
+    # Phase 043: how many results the window asks for. It was a constant in the
+    # window module, which made "show me more results" something you answered
+    # by editing a Python file.
+    result_limit: int = 50
+    # Phase 043: whether the tray icon is offered. It was decided only by which
+    # command you ran, and the tray's own menu already advertised a settings
+    # window that did not exist.
+    tray_enabled: bool = True
+    # Phase 043: how much the log records. `setup_logging` used a hard-coded
+    # INFO, so a user reporting a problem had no way to ask for more detail
+    # without editing a file.
+    log_level: str = "INFO"
     # Appearance (spec 017): "system" follows the Windows preference.
     theme: str = "system"
     # User scale on top of the system DPI: 1.0 is the system default.
@@ -244,6 +324,7 @@ class AppConfig:
             return defaults
         if not isinstance(raw, dict):
             return defaults
+        raw = migrate(raw)
         return cls(
             roots=_str_tuple(raw.get("roots"), defaults.roots),
             ignore_dirs=_str_tuple(raw.get("ignore_dirs"), defaults.ignore_dirs),
@@ -278,16 +359,118 @@ class AppConfig:
             hotkey_enabled=_bool(
                 raw.get("hotkey_enabled"), defaults.hotkey_enabled
             ),
+            semantic_enabled=_bool(
+                raw.get("semantic_enabled"), defaults.semantic_enabled
+            ),
+            result_limit=_int(raw.get("result_limit"), defaults.result_limit),
+            tray_enabled=_bool(raw.get("tray_enabled"), defaults.tray_enabled),
+            log_level=_str(raw.get("log_level"), defaults.log_level),
             window_geometry=_str(raw.get("window_geometry"), defaults.window_geometry),
             theme=_str(raw.get("theme"), defaults.theme),
             ui_scale=_float(raw.get("ui_scale"), defaults.ui_scale),
         )
 
+    def problems(self) -> list[tuple[str, str]]:
+        """Which of this configuration's values the schema would refuse.
+
+        Phase 043: loading coerces a badly typed value to its default, which is
+        forgiving, and silently accepts a *well typed* value that is out of
+        range. Both were reachable only by editing ``config.json``; now a
+        settings window can show the user which values need attention instead of
+        leaving them to discover it.
+        """
+        from universal_search.settings import SettingError, validate
+
+        found: list[tuple[str, str]] = []
+        for name in self.__dataclass_fields__:
+            if name not in BY_KEY:
+                continue
+            try:
+                validate(name, getattr(self, name))
+            except SettingError as exc:
+                found.append((name, str(exc)))
+        return found
+
+    def repaired(self) -> "AppConfig":
+        """This configuration with every out-of-range value pulled back.
+
+        Used by the settings window's "repair" and by nothing else automatic: a
+        loader that silently rewrote values would be making a decision for the
+        user, and the fix has to be visible.
+        """
+        from universal_search.settings import SettingError, validate
+
+        changes: dict[str, object] = {}
+        for name in self.__dataclass_fields__:
+            setting = BY_KEY.get(name)
+            if setting is None:
+                continue
+            value = getattr(self, name)
+            try:
+                validate(name, value)
+            except SettingError:
+                changes[name] = setting.clamp(value)
+        return replace(self, **changes) if changes else self
+
+    def defaults_keeping_data(self) -> "AppConfig":
+        """Every preference back to its default, keeping what the user owns.
+
+        Phase 043's reset. A reset that forgot the folders you index and the
+        searches you saved would be data loss wearing a friendly label, so the
+        data settings are deliberately not part of it.
+        """
+        from universal_search.settings import DATA_SETTINGS
+
+        keep = {
+            name: getattr(self, name)
+            for name in self.__dataclass_fields__
+            if name in DATA_SETTINGS
+        }
+        return AppConfig(**keep)
+
     def save(self, paths: AppPaths) -> None:
+        """Write ``config.json`` atomically, keeping unknown keys.
+
+        Two changes in phase 043, both about two processes:
+
+        * The temporary file used a **fixed** name, ``config.json.tmp``. The
+          window, its service, the control-centre window and ``set_autostart``
+          all write here, and two of them in the same second would write the
+          same temporary file and then ``os.replace`` it, so one would publish
+          the other's half-written content or fail outright. The name now
+          carries the process id, the way the control centre's own sidecar
+          already did.
+        * A **newer build's** keys used to be destroyed by the next save, since
+          it rewrote the file from the fields this build knows. They are read,
+          kept, and written back. Downgrading then re-upgrading no longer loses
+          a setting the user had configured in between.
+        """
         paths.ensure()
-        payload = json.dumps(asdict(self), indent=2, ensure_ascii=False)
-        temporary = paths.config_file.with_name(paths.config_file.name + ".tmp")
-        temporary.write_text(payload, encoding="utf-8")
+        payload = asdict(self)
+        try:
+            existing = json.loads(paths.config_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            existing = {}
+        if isinstance(existing, dict):
+            for key, value in existing.items():
+                payload.setdefault(key, value)
+            # The file declares which build wrote it, and `migrate` on load
+            # reads that. A file this build does not understand keeps its
+            # higher number: stamping it down would tell the next build that
+            # nobody had ever used the settings it cannot see.
+            try:
+                written = int(existing.get("version", 1))
+            except (TypeError, ValueError):
+                written = 1
+            payload["version"] = max(CONFIG_VERSION, written)
+        else:
+            payload["version"] = CONFIG_VERSION
+        temporary = paths.config_file.with_name(
+            f"{paths.config_file.name}.{os.getpid()}.tmp"
+        )
+        temporary.write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
         os.replace(temporary, paths.config_file)
 
 
@@ -349,18 +532,41 @@ class _BoundedMessage(logging.Filter):
         return True
 
 
-def setup_logging(paths: AppPaths | None = None) -> logging.Logger:
+def resolve_log_level(value) -> int:
+    """The logging level a configured name means, or INFO.
+
+    A configured value is a string from a file somebody can edit, so this
+    returns INFO for anything it does not recognise. Silently dropping to
+    WARNING would look like the application had nothing to say.
+    """
+    from universal_search.settings import LOG_LEVEL_CHOICES
+
+    if isinstance(value, str) and value in LOG_LEVEL_CHOICES:
+        return getattr(logging, value)
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    return logging.INFO
+
+
+def setup_logging(
+    paths: AppPaths | None = None, level: str | None = None
+) -> logging.Logger:
     """Attach a rotating file handler to the package logger.
 
     Idempotent for the same file; re-binds when the application home changes
     (tests and the ``UNIVERSAL_SEARCH_HOME`` override). Local, rotated at
     1 MB with 3 backups, timestamped and severity-tagged, with every message
     bounded by :class:`_BoundedMessage`.
+
+    ``level`` is phase 043's ``log_level`` setting. It used to be hard-coded
+    here, so asking for a more detailed log meant editing a file, which is the
+    one thing the settings window was built to avoid. An unrecognised value
+    falls back to INFO rather than to something that would silence the log.
     """
     paths = paths or AppPaths.discover()
     paths.ensure()
     logger = logging.getLogger("universal_search")
-    logger.setLevel(logging.INFO)
+    logger.setLevel(resolve_log_level(level))
     target = paths.log_file.resolve()
     for handler in list(logger.handlers):
         if isinstance(handler, RotatingFileHandler) and Path(

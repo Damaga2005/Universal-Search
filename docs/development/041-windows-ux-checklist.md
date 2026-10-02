@@ -154,7 +154,27 @@ escritorio.
 | J11 | *Historial → Dejar de recordar* | Se desactiva **sin borrar** lo ya guardado | V7, ✅ |
 | J12 | Recorrer la fila de filtros con `Tab` | Orden, agrupación y recientes entran en el anillo con nombre accesible | T1, T2 |
 
+## K. Ventana de ajustes (fase 043)
+
+Se abre desde *Diagnóstico → Ajustes...*. La bandeja también la anuncia desde
+que existe; hasta la fase 043 ese botón abría la ventana de búsqueda.
+
+| # | Paso | Qué se espera | Automático |
+|---|---|---|---|
+| K1 | Abrir Ajustes | Seis pestañas por intención, no por módulo | ✅ prueba |
+| K2 | Recorrer la ventana con `Tab` | Todo control es alcanzable y tiene nombre accesible | ✅ prueba |
+| K3 | Poner «Documentos por búsqueda» a 999 | Se rechaza, no se guarda, y el estado lo dice | C3, ✅ |
+| K4 | Cambiar el tema y guardar | Aparece «Requiere reiniciar»; al reabrir, el tema es el nuevo | C13, ✅ |
+| K5 | Pulsar *Restablecer* | **Pide confirmación** y nombra lo que NO borra | ✅ prueba |
+| K6 | Tras restablecer | Las carpetas y las guardadas siguen ahí; las preferencias voltou a su valor | C8, ✅ |
+| K7 | *Exportar* y abrir el fichero | Preferencias, ningún dato, y un texto que dice que no lleva contraseñas | C9, ✅ |
+| K8 | *Importar* un fichero alterado a mano | Aplica lo válido, rechaza lo que no lo es, ignora lo desconocido | C10, ✅ |
+| K9 | Buscar un ajuste por su nombre | Todas las etiquetas y explicaciones están en el catálogo | C12, ✅ |
+| K10 | Redimensionar la ventana de ajustes | Las explicaciones se ajustan de línea; nada se recorta | ❌ manual |
+
 ---
+
+## Lo que queda sin hacer y por qué
 
 ## Lo que queda sin hacer y por qué
 

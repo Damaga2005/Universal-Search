@@ -1,0 +1,100 @@
+{
+  "phase": "043",
+  "config_version": 2,
+  "export_version": 1,
+  "settings": 18,
+  "groups": 6,
+  "verdicts": [
+    {
+      "gate": "C1 ajustes sin valor por defecto coherente",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "18 ajustes, todos con su valor por defecto"
+    },
+    {
+      "gate": "C2 preferencias fuera del esquema",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "23 campos, 18 en el esquema, 3 de ellos solo de lectura"
+    },
+    {
+      "gate": "C3 valores fuera de rango aceptados",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "6 valores fuera de rango rechazados y reparados a 30 s / 2.5"
+    },
+    {
+      "gate": "C4 tipos erróneos aceptados",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "6 tipos erróneos rechazados"
+    },
+    {
+      "gate": "C5 versiones sin declarar o rebajadas",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "guarda como versión 2, no rebaja un 99 ajeno, y trata un fichero sin versión como 1"
+    },
+    {
+      "gate": "C6 claves de una version nueva destruidas",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "una clave de otra build sobrevive a guardar (pid 6352 en el nombre del temporal)"
+    },
+    {
+      "gate": "C7 ficheros temporales sin limpiar",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "ningun temporal tras guardar, y su nombre lleva el pid"
+    },
+    {
+      "gate": "C8 restablecimientos que olvidan los datos",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "8 campos de datos conservados, preferencias restablecidas (sin pérdidas)"
+    },
+    {
+      "gate": "C9 exportaciones con datos o sin aviso",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "15 preferencias, 0 datos, versión 1, y el archivo dice que no lleva contraseñas"
+    },
+    {
+      "gate": "C10 importaciones que no se comportan",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "rechaza lo posterior, aplica lo valido, rechaza lo fuera de rango e ignora lo desconocido y los datos"
+    },
+    {
+      "gate": "C11 precedencia sin orden ni explicación",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "4 reglas de precedencia, la primera es UNIVERSAL_SEARCH_HOME"
+    },
+    {
+      "gate": "C12 ajustes sin explicación",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "18 ajustes con etiqueta y explicacion, 6 grupos con nombre"
+    },
+    {
+      "gate": "C13 reinicios que descubre el usuario",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "6 ajustes marcados como «requiere reiniciar», y la ventana lo dice"
+    }
+  ]
+}

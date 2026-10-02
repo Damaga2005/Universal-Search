@@ -5,7 +5,7 @@ from contextlib import closing
 from pathlib import Path
 
 from universal_search import __version__, metrics
-from universal_search.appconfig import AppPaths
+from universal_search.appconfig import AppConfig, AppPaths
 from universal_search.index.database import SearchDatabase, UnsupportedSchemaVersion
 from universal_search.index.indexer import Indexer
 from universal_search.index.search import SearchEngine
@@ -1243,7 +1243,9 @@ def _tray_command(args) -> int:
     from universal_search.tray import run_tray
 
     paths = AppPaths.discover()
-    setup_logging(paths)
+    # Phase 043: the tray honours the configured log level instead of the
+    # hard-coded INFO it had since logging was introduced.
+    setup_logging(paths, AppConfig.load(paths).log_level)
     return run_tray(paths=paths)
 
 
@@ -1252,7 +1254,7 @@ def _indexer_command(args) -> int:
     from universal_search import background
     from universal_search.appconfig import setup_logging
 
-    setup_logging()
+    setup_logging(None, AppConfig.load(AppPaths.discover()).log_level)
     command = args.indexer_command
     if command == "run":
         return background.BackgroundIndexer().run()

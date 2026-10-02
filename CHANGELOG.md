@@ -7,6 +7,61 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 043 - One typed, validated, migrated settings system
+- **`settings.py` is the schema.** For every user-configurable value: type,
+  default, valid range, whether it is advanced, whether changing it needs a
+  restart, and what it governs. Eighteen settings in six groups. No Tk, no I/O.
+- **The labels are not in it, on purpose.** They live in `gui/strings.py` under
+  `SETTINGS.<KEY>.LABEL`/`.HELP`, so the catalogue stays the single list of
+  visible text and the phase 039 audit keeps covering it. A first commit had a
+  `GROUP_LABELS` dict with Spanish inline — the second place to translate that
+  the module's own docstring rules out — and a test caught it.
+- **Ranges, because without them the numbers were landmines.** A negative
+  `indexer_file_delay` in `config.json` reached `time.sleep(-1)`, raises
+  `ValueError` inside the indexing loop and **fails the whole pass**. An interval
+  of `0` makes the worker's wait loop spin with no sleep. Neither was reachable
+  from a typed settings window; both were reachable by editing a JSON file. An
+  out-of-range value now loads (forgiving) but is *reported*, and repaired only
+  when the user asks — a loader that silently rewrote values would be deciding
+  for them.
+- **`config.json` declares which build wrote it.** `CONFIG_VERSION = 2`, with
+  the model copied from the index database, which already had `PRAGMA
+  user_version` and a migrations ledger: a version, steps, and a refusal to read
+  a *newer* file as if it were ours. A file with no `version` is version 1.
+- **A newer build's keys no longer die on the next save.** `save()` read the
+  file, kept what it does not own, and did not downgrade a higher version. Down
+  and back up no longer loses a setting.
+- **The temporary file carries the pid.** It was `config.json.tmp`, a fixed name,
+  written by the window, its service, the control centre and `set_autostart`;
+  two writers in the same second collided. Three characters, one class of bug.
+- **A settings window**, grouped by intent — what is indexed, how you search,
+  when it indexes, how it looks, what is remembered, diagnostics — and not by
+  module. Every control explains itself; the six that need a restart say so; the
+  three that are data are shown read-only because they belong to the control
+  centre, and a second surface for them is the thing this phase removes. Reset
+  asks, and the question names what it will *not* delete.
+- **Export and import.** The prompt marked them "where justified"; they are
+  justified by needing to be able to check them. The file carries preferences,
+  carries no data, and says in its own text that it carries no passwords.
+  Import refuses a newer file, applies what is valid, rejects what is out of
+  range and ignores what it does not know.
+- **Four settings that existed only as command-line flags**: `semantic_enabled`,
+  `tray_enabled`, `result_limit` and `log_level`. `setup_logging` had `INFO`
+  hard-coded; the window read `theme` and `ui_scale` once at construction.
+- **Precedence is data now.** `appconfig.PRECEDENCE` is an ordered, explained
+  table and a gate checks it. Nothing in it overrides a *setting*: the
+  environment chooses where the settings live, never what they say.
+- **The tray's "Configuración" item now opens something.** It has advertised a
+  settings window since it existed and opened the search window instead.
+
+- **New gate, `python -m evaluation.settings_gate`: 13 invariants**, all
+  passing, and the first gate of this programme that needs no window.
+- Catalogue grows from 160 to 221 entries, every one of them a label or an
+  explanation somebody can read.
+- Test count 1288 -> 1342. Per instruction only the tests touching the changed
+  modules were run: the window, the service, the configuration, the CLI, the
+  gates and the settings window itself. No push.
+
 ### Phase 042 - Search as one interactive flow, and the error that never arrived
 - **A rejected query could not reach the user.** `SearchService.search` swallows
   `QueryError` into `last_query_error` and returns `[]`, so the window's

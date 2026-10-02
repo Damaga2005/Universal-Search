@@ -101,7 +101,7 @@ class SearchService:
             lexical, SemanticIndex(self.database)
         )
         self._layer_fuzzy = False
-        self._apply_fuzzy()
+        self._apply_layers()
         # Last query-language error (spec 012): the window reads this to show
         # understandable feedback instead of a traceback.
         self.last_query_error: str | None = None
@@ -110,31 +110,36 @@ class SearchService:
         # engine and is pure: it returns a list and never touches a query.
         self._suggester: object | None = None
 
-    def _apply_fuzzy(self) -> None:
-        """Wrap the hybrid engine in the fuzzy layer, or take the layer off.
+    def _apply_layers(self) -> None:
+        """Assemble the optional search layers the configuration asks for.
 
-        Phase 042: the GUI now gets the phase 031 fuzzy layer, because the CLI
-        has had it since 031 and its absence from the window was never a
-        decision -- it was the service being wired once and never revisited.
+        Phase 042 added the fuzzy layer (031), which the CLI had wired and the
+        window never did. Phase 043 added ``semantic_enabled`` beside it, for
+        the same reason: both are extra work per query, both were reachable only
+        from a command line, and a user who does not want that work should be
+        able to say so where they can see the other switches.
 
-        The layer keeps its own contract and this does not weaken it: lexical
-        results are returned untouched, an explicit source or type filter
-        disables it entirely, and with the derived table absent the wrapper
-        *is* the lexical engine. Unwrapping goes back to the hybrid engine held
-        in ``self.engine``, which is the only place the stack is assembled, so
-        the two directions cannot drift apart.
+        The stack is assembled in one place, in one direction, so what the
+        service runs and what the configuration says cannot drift apart. The
+        layers keep their own contracts and this does not weaken either:
+        lexical results are returned untouched, an explicit source or type
+        filter disables them entirely, and with the derived tables absent each
+        wrapper *is* the engine it wraps.
         """
         from universal_search.semantic import HybridSearchEngine, SemanticIndex
 
-        inner = HybridSearchEngine(self.lexical, SemanticIndex(self.database))
+        engine: object = self.lexical
+        if self.config.semantic_enabled:
+            engine = HybridSearchEngine(engine, SemanticIndex(self.database))
+        self._layer_semantic = self.config.semantic_enabled
         if self.config.fuzzy_enabled:
             from universal_search.fuzzy import FuzzyIndex, FuzzySearchEngine
 
-            self.engine = FuzzySearchEngine(inner, FuzzyIndex(self.database))
+            engine = FuzzySearchEngine(engine, FuzzyIndex(self.database))
             self._layer_fuzzy = True
         else:
-            self.engine = inner
             self._layer_fuzzy = False
+        self.engine = engine
 
     def set_fuzzy_enabled(self, enabled: bool) -> None:
         """Turn the fuzzy layer on or off at runtime.
@@ -147,11 +152,22 @@ class SearchService:
             return
         self.config = replace(self.config, fuzzy_enabled=bool(enabled))
         self._suggester = None
-        self._apply_fuzzy()
+        self._apply_layers()
+        self._persist(self.config)
+
+    def set_semantic_enabled(self, enabled: bool) -> None:
+        """Turn the semantic layer on or off at runtime."""
+        if bool(enabled) == self.config.semantic_enabled:
+            return
+        self.config = replace(self.config, semantic_enabled=bool(enabled))
+        self._apply_layers()
         self._persist(self.config)
 
     def fuzzy_enabled(self) -> bool:
         return self.config.fuzzy_enabled
+
+    def semantic_enabled(self) -> bool:
+        return self.config.semantic_enabled
 
     @property
     def suggester(self):
