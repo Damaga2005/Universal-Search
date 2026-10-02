@@ -133,6 +133,27 @@ color dibujado, todo texto catalogado, fallo dibujado como fallo. La fase 041
 **añade** un par de contraste (encabezados de columna) y **no toca** los otros
 ocho.
 
+## J. Controles de la fase 042
+
+Estos controles no existían cuando se escribió esta lista, así que tienen su
+propia sección. Automático = lo mide una puerta; manual = hace falta un
+escritorio.
+
+| # | Paso | Qué se espera | Automático |
+|---|---|---|---|
+| J1 | Escribir una consulta mal formada (`algo AND`) | «Consulta no válida» en rojo, y el panel se vacía | V1, ✅ |
+| J2 | Escribir `capacitos` con la capa difusa activa | El resultado difuso aparece y **la caja no cambia** | ✅ |
+| J3 | Desactivar la difusa y repetir J2 | Aparece la sugerencia; `Alt+Intro` la aplica | V3, ✅ |
+| J4 | Cambiar *Orden* a «Por nombre» | Se reordena; si el conjunto era el de relevancia, se repregunta | V6, ✅ |
+| J5 | Cambiar *Agrupar* a «Por carpeta» | Aparecen encabezados de grupo; no se puede abrir un encabezado | V5, ✅ |
+| J6 | `Inicio` / `Fin` con agrupación | Van al primer y al último **resultado**, no a un encabezado | ✅ |
+| J7 | *Buscar → Guardar la búsqueda actual…* | Pide nombre; el menú *Búsquedas guardadas* la lista | V8, ✅ |
+| J8 | Aplicar una guardada | Restaura consulta, orden, agrupación y los dos filtros | V8, ✅ |
+| J9 | *Ver → Explicar por qué coincidió* | El panel de detalle lista cada señal con su valor | V9, ✅ |
+| J10 | *Buscar → Historial → Ver…* | Lista las consultas **y los números de retención** | V7, ✅ |
+| J11 | *Historial → Dejar de recordar* | Se desactiva **sin borrar** lo ya guardado | V7, ✅ |
+| J12 | Recorrer la fila de filtros con `Tab` | Orden, agrupación y recientes entran en el anillo con nombre accesible | T1, T2 |
+
 ---
 
 ## Lo que queda sin hacer y por qué

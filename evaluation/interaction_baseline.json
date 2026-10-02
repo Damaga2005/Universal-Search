@@ -1,0 +1,87 @@
+{
+  "phase": "042",
+  "verdicts": [
+    {
+      "gate": "V1 consultas rechazadas que no llegan al usuario",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "titulo «Consulta no válida: operator 'AND' needs a term », color #f28b82, resultados 0"
+    },
+    {
+      "gate": "V2 filtros que no desactivan las capas opcionales",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "fuzzy presente; 2 sin filtro, ninguna de 5 fuentes devuelve resultados difusos"
+    },
+    {
+      "gate": "V3 sugerencias que cambian la consulta solas",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "«capacitos» se ofrecio «¿Querías decir «capacitor»? Pulsa Al» y solo cambio a «capacitor» al pedirlo"
+    },
+    {
+      "gate": "V4 ordenaciones que cambian cuales resultados son",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "2 resultados, el mismo conjunto en otro orden: True, ordenado por nombre: True"
+    },
+    {
+      "gate": "V5 resultados perdidos o inventados al agrupar",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "2 de 2 resultados, 1 encabezado(s) de grupo, perdidos 0, inventados 0"
+    },
+    {
+      "gate": "V6 ordenaciones sobre un conjunto truncado",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "relevancia 5, por nombre 25 (tope 500), pedidos 25"
+    },
+    {
+      "gate": "V7 controles de historial que no funcionan",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "guardar, desactivar sin borrar, reactivar, borrar y declarar la retencion: todo funciona"
+    },
+    {
+      "gate": "V8 campos de una busqueda guardada fuera de los seis",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "6 campos, los seis permitidos, y la busqueda se restaura completa: True"
+    },
+    {
+      "gate": "V9 explicaciones calculadas sin pedirlas",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "0 resultados explicados sin pedirlo, 2 al pedirlo"
+    },
+    {
+      "gate": "V10 filas rehechas que no cambiaron",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "reordenados 2 resultados sin tocar ninguna fila: {'inserted': 0, 'updated': 0, 'removed': 0}"
+    },
+    {
+      "gate": "V11 de pulsacion a resultado por encima del presupuesto",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "mejor de 3: 170 ms (presupuesto 600 ms)"
+    }
+  ],
+  "window_checked": true,
+  "window_reason": null,
+  "keystroke_ms": 170.06,
+  "keystroke_budget_ms": 600.0,
+  "load_ok": true
+}

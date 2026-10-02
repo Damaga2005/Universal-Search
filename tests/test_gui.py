@@ -165,10 +165,12 @@ def test_control_enter_reveals_in_explorer(window, monkeypatch) -> None:
 
 
 def test_search_error_shows_friendly_status_without_traceback(window, monkeypatch) -> None:
-    def boom(query, limit=50):
+    def boom(query, limit=50, **kwargs):
         raise RuntimeError("database exploded")
 
-    monkeypatch.setattr(window.service, "search", boom)
+    # Phase 042: the window asks for the results and the rejected-query
+    # feedback together, so a spy has to stand where the window calls.
+    monkeypatch.setattr(window.service, "search_or_error", boom)
 
     window.query_var.set("algo")
     window._execute_search()  # bypass the debounce, call the handler directly
@@ -403,7 +405,7 @@ def test_open_records_usage_signal_only_when_enabled(window, monkeypatch) -> Non
     # default: learning disabled -> the file opens, nothing is recorded
     window._on_open()
     assert opened == [str(result.path)]
-    assert window.service.engine.usage_rows() == []
+    assert window.service.usage_rows() == []
 
     # enabled -> the open is recorded with its query association
     window.service.save_config(
@@ -411,11 +413,11 @@ def test_open_records_usage_signal_only_when_enabled(window, monkeypatch) -> Non
     )
     window.query_var.set("y")
     window._on_open()
-    rows = window.service.engine.usage_rows()
+    rows = window.service.usage_rows()
     assert len(rows) == 1
     assert rows[0]["document_id"] == "doc-usage-test"
     assert rows[0]["query"] == "y"
-    window.service.engine.clear_usage()
+    window.service.clear_usage()
 
 
 def test_filters_apply_to_searches(window, monkeypatch) -> None:
@@ -425,9 +427,10 @@ def test_filters_apply_to_searches(window, monkeypatch) -> None:
         captured.clear()
         captured.update(kwargs)
         captured["query"] = query
-        return []
+        # The window reads the results and the feedback together (phase 042).
+        return [], None
 
-    monkeypatch.setattr(window.service, "search", spy)
+    monkeypatch.setattr(window.service, "search_or_error", spy)
     window.query_var.set("practica")
 
     # no filters by default

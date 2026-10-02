@@ -48,7 +48,7 @@ El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
 | 039 | Accesibilidad e interfaz (teclado, nombres, contraste, catálogo) | ✅ Completada | — | [informe](development/039-accessibility-report.md) |
 | 040 | Puerta de calidad v3 (23 invariantes) y decisión de publicación | ✅ Completada | — | [informe](development/040-v3-quality-gate-report.md) |
 | 041 | Experiencia de producto: resultados con columnas y estados reales | ✅ Completada | — | [informe](development/041-product-experience-report.md) · [checklist](development/041-windows-ux-checklist.md) |
-| 042 | Experiencia interactiva de búsqueda | ⬜ Planificada | — | [plan](development/042-search-experience-v2.md) |
+| 042 | Búsqueda como flujo: ordenar, agrupar, guardar, historial, explicaciones | ✅ Completada | — | [informe](development/042-search-experience-report.md) |
 | 043 | Configuración y ajustes | ⬜ Planificada | — | [plan](development/043-settings-and-personalization.md) |
 | 044 | Aprendizaje local v2 | ⬜ Planificada | — | [plan](development/044-local-learning-v2.md) |
 | 045 | Calidad y relevancia de búsqueda | ⬜ Planificada | — | [plan](development/045-search-quality-v3.md) |
@@ -58,7 +58,7 @@ El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
 | 049 | Distribución e instalación Windows | ⬜ Planificada | — | [plan](development/049-distribution-and-installation-v2.md) |
 | 050 | Puerta de producto Universal Search 3.x | ⬜ Planificada | — | [plan](development/050-product-v3-gate.md) |
 
-**Fases 031–040 cerradas. Fase 041 cerrada; 042–050 planificadas.** El gate
+**Fases 031–042 cerradas. Fases 043–050 planificadas.** El gate
 ejecutable tiene **23 invariantes** (`python -m evaluation.gate`); la puerta de
 rendimiento sabe decir «inconcluyente» en vez de publicar una cifra tomada con
 el equipo ocupado; la puerta de accesibilidad comprueba teclado, nombres,
@@ -69,6 +69,8 @@ el recorrido no necesite ratón y que un fallo no deje respuestas viejas en
 pantalla. Cada fase 031–041 tiene su informe con la puerta que la midió; el
 resultado y la decisión de publicación de las 031–040 están en el
 [informe de la fase 040](development/040-v3-quality-gate-report.md).
+
+La fase 042 añadió su propia puerta (`python -m evaluation.interaction_gate`): once invariantes sobre la **costura** entre lo que las fases anteriores construyeron y lo que la ventana realmente llama. La primera de ellas existe porque la 041 dibujaba una consulta rechazada como un fallo que la aplicación en ejecución nunca podía mostrar.
 
 Verificado en la fase 010: **208 tests en verde**
 (`.venv\Scripts\python -m pytest`), E2E completo de indexador, CLI, GUI e
@@ -84,7 +86,7 @@ nombrados, puertas de CI verificadas por test y un gate v2 ejecutable de 13
 invariantes (`python -m evaluation.gate`); detalles y límites en el
 [informe de la fase 030](development/030-v2-quality-gate-report.md).
 
-Current test count: 1249 tests collected.
+Current test count: 1288 tests collected.
 
 ## Cómo ejecutar
 

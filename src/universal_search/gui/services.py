@@ -7,9 +7,16 @@ and every behaviour is testable without Tk.
 
 import logging
 from contextlib import closing
+from dataclasses import replace
 from pathlib import Path
 
-from universal_search.appconfig import AppConfig, AppPaths, remember_query
+from universal_search.appconfig import (
+    MAX_QUERY_CHARS,
+    MAX_RECENT_QUERIES,
+    AppConfig,
+    AppPaths,
+    remember_query,
+)
 from universal_search.context import configured_roots, get_context
 from universal_search.hotkey import (
     consume_diagnostics_request,
@@ -21,6 +28,7 @@ from universal_search.hotkey import (
 from universal_search.index.database import SearchDatabase
 from universal_search.index.search import SearchEngine, SearchResult
 from universal_search.metrics import set_sink
+from universal_search.organize import delete_search, load_saved, save_search
 from universal_search.query import QueryError
 from universal_search.gui.control_center import (
     ActionResult,
@@ -80,19 +88,93 @@ class SearchService:
         self.database = SearchDatabase(
             Path(database_path) if database_path else self.paths.database
         )
+        self.config = AppConfig.load(self.paths)
         # Phase 026: the local semantic layer is fallback-only, so the
         # lexical engine stays authoritative and exact matches, phrases,
         # filters and operators are unchanged. With the derived tables
         # absent the hybrid engine is exactly the lexical engine.
         from universal_search.semantic import HybridSearchEngine, SemanticIndex
 
-        self.engine = HybridSearchEngine(
-            SearchEngine(self.database), SemanticIndex(self.database)
+        lexical = SearchEngine(self.database)
+        self.lexical = lexical
+        self.engine: object = HybridSearchEngine(
+            lexical, SemanticIndex(self.database)
         )
-        self.config = AppConfig.load(self.paths)
+        self._layer_fuzzy = False
+        self._apply_fuzzy()
         # Last query-language error (spec 012): the window reads this to show
         # understandable feedback instead of a traceback.
         self.last_query_error: str | None = None
+        # Suggestions (phase 032), reached for the first time from the GUI in
+        # phase 042. The suggester verifies every proposal against this very
+        # engine and is pure: it returns a list and never touches a query.
+        self._suggester: object | None = None
+
+    def _apply_fuzzy(self) -> None:
+        """Wrap the hybrid engine in the fuzzy layer, or take the layer off.
+
+        Phase 042: the GUI now gets the phase 031 fuzzy layer, because the CLI
+        has had it since 031 and its absence from the window was never a
+        decision -- it was the service being wired once and never revisited.
+
+        The layer keeps its own contract and this does not weaken it: lexical
+        results are returned untouched, an explicit source or type filter
+        disables it entirely, and with the derived table absent the wrapper
+        *is* the lexical engine. Unwrapping goes back to the hybrid engine held
+        in ``self.engine``, which is the only place the stack is assembled, so
+        the two directions cannot drift apart.
+        """
+        from universal_search.semantic import HybridSearchEngine, SemanticIndex
+
+        inner = HybridSearchEngine(self.lexical, SemanticIndex(self.database))
+        if self.config.fuzzy_enabled:
+            from universal_search.fuzzy import FuzzyIndex, FuzzySearchEngine
+
+            self.engine = FuzzySearchEngine(inner, FuzzyIndex(self.database))
+            self._layer_fuzzy = True
+        else:
+            self.engine = inner
+            self._layer_fuzzy = False
+
+    def set_fuzzy_enabled(self, enabled: bool) -> None:
+        """Turn the fuzzy layer on or off at runtime.
+
+        The suggester is dropped along with it: it holds a reference to the
+        engine it verified against, and a stale engine would propose a
+        correction this service can no longer run.
+        """
+        if bool(enabled) == self.config.fuzzy_enabled:
+            return
+        self.config = replace(self.config, fuzzy_enabled=bool(enabled))
+        self._suggester = None
+        self._apply_fuzzy()
+        self._persist(self.config)
+
+    def fuzzy_enabled(self) -> bool:
+        return self.config.fuzzy_enabled
+
+    @property
+    def suggester(self):
+        """The query suggester for this engine, built once.
+
+        It caches the indexed vocabulary on (COUNT(*), MAX(indexed_at)), so a
+        second call is free and a reindex invalidates it by itself.
+        """
+        if self._suggester is None:
+            from universal_search.fuzzy import QuerySuggester
+
+            self._suggester = QuerySuggester(self.engine)
+        return self._suggester
+
+    def suggest(self, query: str) -> tuple:
+        """Verified corrections for ``query``, or an empty tuple.
+
+        Every proposal is checked by *running it*: a suggestion that finds
+        nothing is not offered, and a query whose tokens are already indexed
+        gets nothing at all. Returns a tuple so the caller cannot mutate the
+        suggester's list, and never edits the query -- that is the contract.
+        """
+        return tuple(self.suggester.suggest(query))
 
     def search(
         self,
@@ -112,6 +194,41 @@ class SearchService:
 
         A malformed query is feedback, not a crash (spec 012): ``QueryError``
         is captured in ``last_query_error`` and resolves to no results.
+
+        Phase 042 adds :meth:`search_or_error` for callers that need the
+        feedback *with* the results, and this method stays as the quiet one so
+        nothing that already calls it changes behaviour.
+        """
+        results, _ = self.search_or_error(
+            query,
+            limit,
+            context=context,
+            explain=explain,
+            source=source,
+            doc_type=doc_type,
+        )
+        return results
+
+    def search_or_error(
+        self,
+        query: str,
+        limit: int = 50,
+        context: str | None = None,
+        explain: bool = False,
+        source: str | None = None,
+        doc_type: str | None = None,
+    ) -> tuple[list[SearchResult], str | None]:
+        """The results and the rejected-query feedback, in one call.
+
+        Phase 042. ``search`` swallows ``QueryError`` into ``last_query_error``,
+        which is right for a CLI that prints afterwards and wrong for a window:
+        reading that field on the next line can pick up an error belonging to a
+        *different* keystroke, because every keystroke runs on its own thread
+        against the same service instance. Handing the feedback back with the
+        results removes the window between the two facts.
+
+        ``last_query_error`` is still written, because ``test_advanced_search``
+        pins that part of the service's contract.
         """
         name = context if context is not None else self.config.active_context
         resolved = get_context(self.config, name) if name else None
@@ -127,9 +244,9 @@ class SearchService:
             )
         except QueryError as exc:
             self.last_query_error = str(exc)
-            return []
+            return [], str(exc)
         self.last_query_error = None
-        return results
+        return results, None
 
     def related(
         self,
@@ -240,9 +357,24 @@ class SearchService:
         if not document_id or not self.config.usage_tracking:
             return
         try:
-            self.engine.record_open(document_id, query)
+            # Through the lexical engine, not `self.engine`. Phase 042 found
+            # this the hard way: the fuzzy layer exposes `search` and
+            # `database` and nothing else, so calling `record_open` on the
+            # stack raised AttributeError, was swallowed by the `except` below,
+            # and local learning quietly stopped working for every user of the
+            # new wiring -- with no symptom other than a log line nobody reads.
+            # The signals belong to the index, so they go to the engine that
+            # owns the index.
+            self.lexical.record_open(document_id, query)
         except Exception:
             log.exception("could not record usage signal")
+
+    def usage_rows(self, limit: int = 50):
+        """Recorded usage signals, for diagnostics and tests."""
+        return self.lexical.usage_rows(limit)
+
+    def clear_usage(self) -> int:
+        return self.lexical.clear_usage()
 
     def record_query(self, query: str) -> None:
         """Remember an executed query for the recents menu.
@@ -265,6 +397,87 @@ class SearchService:
     def save_config(self, config: AppConfig) -> None:
         config.save(self.paths)
         self.config = config
+
+    # -- local history (phase 042) --------------------------------------------
+    #
+    # Four things the prompt asks for -- disable, clear, inspect, and explicit
+    # retention -- and until now only the CLI had the first three, inline. They
+    # are here so the window and the CLI share one implementation: two copies
+    # of "delete the history" is two places for them to disagree.
+
+    def history(self) -> tuple[str, ...]:
+        """The remembered queries, newest first."""
+        return self.config.recent_queries
+
+    def history_enabled(self) -> bool:
+        return self.config.recent_queries_enabled
+
+    def set_history_enabled(self, enabled: bool) -> None:
+        """Turn recording on or off.
+
+        Turning it off stops recording and does **not** delete what is already
+        there. Those are two different intentions, and a user who pauses
+        recording for a week should find their history intact when they come
+        back; :meth:`clear_history` is the explicit delete.
+        """
+        if bool(enabled) == self.config.recent_queries_enabled:
+            return
+        self._persist(replace(self.config, recent_queries_enabled=bool(enabled)))
+
+    def clear_history(self) -> int:
+        """Delete every remembered query. Returns how many were removed."""
+        removed = len(self.config.recent_queries)
+        if removed:
+            self._persist(replace(self.config, recent_queries=()))
+        return removed
+
+    def history_retention(self) -> dict[str, object]:
+        """The retention rules, as data, so the UI can state them.
+
+        Phase 042 asks for *explicit* retention semantics. They were explicit in
+        code -- a cap and a length limit -- and implicit everywhere else,
+        because nothing ever said so. Stating them is the whole point, and it
+        stays in step with the policy because both numbers are imported, not
+        copied.
+
+        There is no time-based expiry: entries carry no timestamp, so a TTL
+        would be a schema change with a migration, not a setting. The honest
+        description is the count cap, the length cap, and where it all lives.
+        """
+        return {
+            "enabled": self.config.recent_queries_enabled,
+            "kept": len(self.config.recent_queries),
+            "max_entries": MAX_RECENT_QUERIES,
+            "max_chars": MAX_QUERY_CHARS,
+            "file": str(self.paths.config_file),
+            "transmitted": False,
+        }
+
+    # -- saved searches (phase 036 data, phase 042 surface) -------------------
+
+    def saved_searches(self) -> tuple:
+        """The saved searches, normalised and validated."""
+        return load_saved(self.config.saved_searches)
+
+    def store_saved_search(self, search) -> tuple:
+        """Persist an already-built :class:`SavedSearch`."""
+        updated = save_search(self.config.saved_searches, search)
+        self._persist(replace(self.config, saved_searches=updated))
+        return updated
+
+    def delete_saved_search(self, name: str) -> bool:
+        updated = delete_search(self.config.saved_searches, name)
+        if updated == self.config.saved_searches:
+            return False
+        self._persist(replace(self.config, saved_searches=updated))
+        return True
+
+    def _persist(self, config: AppConfig) -> None:
+        """Save, and log rather than crash if the disk says no."""
+        try:
+            self.save_config(config)
+        except Exception:
+            log.exception("could not persist configuration")
 
     def control_center(self) -> ControlCenterService:
         """Return the operational service backed by this search service."""

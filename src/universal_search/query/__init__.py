@@ -45,6 +45,7 @@ from .nodes import (
     Or,
     Phrase,
     QueryPlan,
+    SOURCE_KINDS,
     Term,
 )
 from .parser import parse
@@ -61,6 +62,11 @@ __all__ = [
     "Phrase",
     "QueryError",
     "QueryPlan",
+    # Phase 042: the vocabulary of `source:`. Exported because a UI that offers
+    # a source filter has to offer exactly these, and hard-coding the list
+    # would let the two drift apart -- which is how `source:other` ended up a
+    # valid query with no way to pick it from the window.
+    "SOURCE_KINDS",
     "Term",
     "Token",
     "parse",

@@ -63,6 +63,23 @@ class FuzzySearchEngine:
     def database(self) -> SearchDatabase:
         return self.engine.database
 
+    # Phase 042 added the three delegations below. This wrapper is only
+    # transparent if it answers everything the engine it wraps answers, and
+    # until now it did not: `HybridSearchEngine` forwards the usage signals
+    # and this one silently did not, so stacking the two -- which is what the
+    # CLI does and what the window now does -- meant anything reaching through
+    # for `usage_rows` got an AttributeError. Found by phase 042, whose own
+    # call site was the one that broke.
+
+    def record_open(self, document_id: str, query: str = "") -> None:
+        return self.engine.record_open(document_id, query)
+
+    def usage_rows(self, limit: int = 50) -> list[dict[str, Any]]:
+        return self.engine.usage_rows(limit)
+
+    def clear_usage(self) -> int:
+        return self.engine.clear_usage()
+
     def search(self, query: str, limit: int = 10, **kwargs: Any) -> list[SearchResult]:
         results = self.engine.search(query, limit=limit, **kwargs)
         # Filters are user intent, not a ranking hint. This layer has no

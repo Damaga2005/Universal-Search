@@ -131,4 +131,13 @@ Its ninth invariant — filling a page of 50 results inside the interaction budg
 machine busy with something that is not this project. It is declared, not
 assumed, and it closes on its own when the machine is idle.
 
-Current test count: 1249 tests collected.
+Phase 042 integrated what the earlier phases had built and the window had never
+called: sorting, grouping, saved searches, verified suggestions, explanations and
+the fuzzy layer. Its first invariant exists because phase 041 drew a malformed
+query as a failure that **the running application could never be shown** — the
+service swallowed the error into a field nobody read, and phase 041's own gate
+passed because its test stubbed the service. `python -m evaluation.interaction_gate`
+runs 11 invariants about the seam between the mechanisms and the user; all 11
+pass, including keystroke-to-result at 185 ms against a 600 ms budget.
+
+Current test count: 1288 tests collected.

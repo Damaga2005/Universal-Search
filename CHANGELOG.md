@@ -7,6 +7,67 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 042 - Search as one interactive flow, and the error that never arrived
+- **A rejected query could not reach the user.** `SearchService.search` swallows
+  `QueryError` into `last_query_error` and returns `[]`, so the window's
+  `except QueryError` never ran and phase 041's "Consulta no válida" state was
+  dead code in production. Phase 041's gate passed it because its test stubbed
+  the service to raise — which proves the *handler* works and says nothing about
+  whether the application reaches it. `SearchService.search_or_error()` returns
+  the results and the feedback together, and `search` becomes a one-line wrapper
+  over it so the CLI's contract is untouched. Reading the field on the next line
+  would have been a race anyway: every keystroke runs on its own thread against
+  the same service instance.
+- **Six mechanisms existed and had never reached the screen**: `last_query_error`,
+  `sort_results`/`group_results`/`pool_size`, `SavedSearch`, `QuerySuggester`
+  (never imported by `gui/`), `explain=True` (never passed by anyone since phase
+  004) and the fuzzy layer, which the CLI has wired since phase 031 and the
+  service never did. Each phase's own gate measured its mechanism; none of them
+  could ask whether the window called it.
+- **The fuzzy layer now runs in the window**, with `AppConfig.fuzzy_enabled` to
+  turn it off, assembled in one place for both directions.
+- **Sorting and grouping** come from the phase 036 vocabulary, not a second
+  implementation. Reordering what is on screen is free; a sort other than
+  relevance re-runs the search with the widened pool, exactly as the CLI does,
+  rather than quietly reordering a truncated set. Group header rows carry an id no
+  result index can be, so every selection helper skips them by asking whether an
+  id is an index.
+- **Saved searches, history and suggestions** get a surface. A saved search
+  restores all six fields and holds no more. Disabling history recording
+  **does not delete** what is already stored — two different intentions, and the
+  one that deletes says so. Applying a suggestion is `query_var.set(...)`, which
+  is the same thing as typing the corrected words: there is no second path to
+  run a query. The retention rules were explicit in code and implicit everywhere
+  else; `MAX_QUERY_CHARS` now has a name and the window states both numbers and
+  the file.
+- **Explanations are asked for, never assumed**: `explain=True` is real work per
+  result, so it is a menu check, off by default.
+- **Rendering is incremental and counted.** A row is identified by its position,
+  so a row whose five values are unchanged is left alone. An unmeasured claim of
+  incrementality is not a claim.
+
+- **New gate, `python -m evaluation.interaction_gate`: 11 invariants**, all
+  passing, about the seam rather than the mechanisms. Exit 0.
+- **Four real defects found by the tests of this phase, three of them seams:**
+  `explain` was annotated `dict[str, float]` while the fuzzy layer stores a list
+  of dicts there (the annotation was wrong, not the layer, and the shape is
+  pinned by a phase 031 test); the fuzzy wrapper exposes `search` and `database`
+  and nothing else, so wrapping with it made `record_open` raise `AttributeError`,
+  the service swallowed it, and **local learning quietly stopped working** with
+  no symptom but a log line nobody reads — three delegations added, the ones
+  `HybridSearchEngine` already had; `explain_var.get()` was read on the worker
+  thread, which turns every search into a hard failure the moment anyone asks
+  for explanations; and `_on_view_changed` compared against the wrong pool size,
+  which the gate caught on its first run.
+- **Phases 031 and 042 overlap, and the order is now pinned by a test.** With the
+  fuzzy layer on, a typo already produces results and there is nothing to
+  suggest. The suggestion is the second line of defence, which is where it
+  belongs; a gate that described it as the first would be describing a
+  configuration nobody runs.
+- Test count 1249 → 1288. Query semantics, ranking, MRR and every existing gate
+  are untouched — no assertion in `test_query_parser`, `test_ranking`,
+  `test_evaluation` or the phase 031/032/036 gates was changed.
+
 ### Phase 041 - Product experience: the results pane finally has a hierarchy
 - **The audit found the panel had none.** The results were a `tk.Listbox`
   holding one string per row — `[source] name · TYPE · folder — snippet` — five

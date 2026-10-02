@@ -6,21 +6,21 @@
       "measured": 0,
       "threshold": 0,
       "passed": true,
-      "detail": "6 controles en el anillo, con un resultado en pantalla: ['Entry', 'Combobox', 'Combobox', 'Combobox', 'Menubutton', 'Treeview']"
+      "detail": "8 controles en el anillo, con un resultado en pantalla: ['Entry', 'Combobox', 'Combobox', 'Combobox', 'Combobox', 'Combobox', 'Menubutton', 'Treeview']"
     },
     {
       "gate": "T2 controls with no accessible name",
       "measured": 0,
       "threshold": 0,
       "passed": true,
-      "detail": "Entry=Búsqueda, Combobox=Contexto:, Combobox=Fuente:, Combobox=Tipo:, Menubutton=Recientes ▾, Treeview=Resultados"
+      "detail": "Entry=Búsqueda, Combobox=Contexto:, Combobox=Fuente:, Combobox=Tipo:, Combobox=Orden:, Combobox=Agrupar:, Menubutton=Recientes ▾, Treeview=Resultados"
     },
     {
       "gate": "T3 visible strings outside the catalogue",
       "measured": 0,
       "threshold": 0,
       "passed": true,
-      "detail": "110 entradas catalogadas"
+      "detail": "160 entradas catalogadas"
     },
     {
       "gate": "T4 WCAG AA contrast failures",

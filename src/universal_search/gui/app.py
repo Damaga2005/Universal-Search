@@ -13,7 +13,7 @@ import time
 import tkinter as tk
 from dataclasses import replace
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from universal_search import __version__
 from universal_search.context import load_contexts
@@ -25,7 +25,18 @@ from universal_search.gui.services import (
     reveal_in_explorer,
 )
 from universal_search.index.search import SearchResult
-from universal_search.query import QueryError
+from universal_search.organize import (
+    GROUP_FIELDS,
+    GROUP_FOLDER,
+    GROUP_NONE,
+    SORT_FIELDS,
+    SORT_RELEVANCE,
+    SavedSearch,
+    group_results,
+    pool_size,
+    sort_results,
+)
+from universal_search.query import SOURCE_KINDS, QueryError
 
 log = logging.getLogger("universal_search.gui")
 
@@ -41,6 +52,11 @@ DEFAULT_PAGE_ROWS = 10
 # of them in one string, so the reader had to guess which part was the name
 # and which was the folder, and a long name simply vanished past the edge.
 RESULT_COLUMNS = ("name", "folder", "kind", "source", "snippet")
+# Prefix for a group header row. Headers are not results, so their ids start
+# with something a result index can never be, and every selection helper skips
+# them by asking whether an id is an index rather than by tracking a second
+# list that could fall out of step.
+GROUP_ID_PREFIX = "g:"
 # A named style, never the built-in "Treeview": see
 # `_configure_result_style` for the measurement that decided it.
 RESULT_STYLE = "SearchResults.Treeview"
@@ -51,10 +67,9 @@ RESULT_STYLE = "SearchResults.Treeview"
 ENTRY_STYLE = "SearchEntry"
 SOURCE_FILTER_VALUES = (
     strings.get("FILTER.ALL_SOURCES"),
-    "local",
-    "onedrive",
-    "network",
-    "removable",
+    # Phase 042: every kind the query language accepts, including "other".
+    # `source:other` was a valid query with no way to pick it from the window.
+    *SOURCE_KINDS,
 )
 TYPE_FILTER_VALUES = (
     strings.get("FILTER.ALL_TYPES"),
@@ -72,6 +87,27 @@ TYPE_FILTER_VALUES = (
 # catalogued" rule that phase 039 established.
 ALL_CONTEXTS_LABEL = strings.get("FILTER.ALL_TYPES")
 
+# Sort and group are values from `universal_search.organize` and labels from
+# the catalogue, kept as two parallel lists because a `ttk.Combobox` returns
+# what it was given: the value has to travel, and the value has to be readable.
+SORT_VALUES = tuple(SORT_FIELDS)
+SORT_LABELS = {
+    "relevance": strings.get("SORT.RELEVANCE"),
+    "name": strings.get("SORT.NAME"),
+    "modified": strings.get("SORT.MODIFIED"),
+    "size": strings.get("SORT.SIZE"),
+}
+GROUP_VALUES = tuple(GROUP_FIELDS)
+GROUP_LABELS = {
+    GROUP_NONE: strings.get("GROUP.NONE"),
+    GROUP_FOLDER: strings.get("GROUP.FOLDER"),
+    "type": strings.get("GROUP.TYPE"),
+    "source": strings.get("GROUP.SOURCE"),
+    "date": strings.get("GROUP.DATE"),
+}
+GROUP_DISPLAY_LABELS = tuple(GROUP_LABELS[value] for value in GROUP_VALUES)
+SORT_DISPLAY_LABELS = tuple(SORT_LABELS[value] for value in SORT_VALUES)
+
 
 def placeholder_visible(query: str, focused: bool) -> bool:
     """Whether the search box should draw its placeholder.
@@ -82,6 +118,19 @@ def placeholder_visible(query: str, focused: bool) -> bool:
     machine and fail in CI.
     """
     return not query and not focused
+
+
+def _add_menu_entry(menu: tk.Menu, kind: str, **options) -> int:
+    """Add a menu entry with ``add_<kind>`` and return its index.
+
+    ``Menu.add_command`` returns ``None`` on this Tk, so capturing its result
+    and handing it to ``entryconfigure`` configures nothing and then raises
+    ``bad menu entry index "-state"``. The index of the entry just added is
+    ``menu.index("end")``. Measured here rather than assumed, because the
+    failure mode looks like a Tk bug and is actually a return value.
+    """
+    getattr(menu, f"add_{kind}")(**options)
+    return menu.index("end")
 
 
 class SearchWindow(tk.Tk):
@@ -101,6 +150,16 @@ class SearchWindow(tk.Tk):
         self.related_window: tk.Toplevel | None = None
         self.control_center_window: object | None = None
         self.closed = False
+        # How many results the window shows, and how many it asked the engine
+        # for. They differ on purpose: a sort other than relevance can only
+        # choose from the set it was given, so phase 036 widened the pool and
+        # this phase asks for that wider pool.
+        self.limit = DEFAULT_LIMIT
+        self.requested_limit = DEFAULT_LIMIT
+        # What the last render actually had to do. Phase 042's promise of
+        # incremental updates is only worth something if it can be counted.
+        self.render_stats: dict[str, int] = {"inserted": 0, "updated": 0, "removed": 0}
+        self.suggestions: tuple = ()
 
         # Theme and scaling resolved once, from configuration (spec 017).
         config = self.service.config
@@ -218,6 +277,40 @@ class SearchWindow(tk.Tk):
         self.type_combo.pack(side="left", padx=(self.spacing.gap, 0))
         self.type_combo.bind("<<ComboboxSelected>>", self._on_filter_changed)
 
+        # Phase 042: sorting and grouping, from the phase 036 vocabulary. They
+        # are filters on *presentation*, so they live on the same row as the
+        # other filters and re-render what is already on screen -- asking the
+        # engine again for the same query would be wasted work.
+        ttk.Label(context_bar, text=strings.get("SEARCH.LABEL.SORT")).pack(
+            side="left", padx=gap
+        )
+        self.sort_var = tk.StringVar(value=SORT_DISPLAY_LABELS[0])
+        self.sort_combo = ttk.Combobox(
+            context_bar,
+            textvariable=self.sort_var,
+            state="readonly",
+            width=12,
+            values=SORT_DISPLAY_LABELS,
+            takefocus=True,
+        )
+        self.sort_combo.pack(side="left", padx=(self.spacing.gap, 0))
+        self.sort_combo.bind("<<ComboboxSelected>>", self._on_view_changed)
+
+        ttk.Label(context_bar, text=strings.get("SEARCH.LABEL.GROUP")).pack(
+            side="left", padx=gap
+        )
+        self.group_var = tk.StringVar(value=GROUP_DISPLAY_LABELS[0])
+        self.group_combo = ttk.Combobox(
+            context_bar,
+            textvariable=self.group_var,
+            state="readonly",
+            width=12,
+            values=GROUP_DISPLAY_LABELS,
+            takefocus=True,
+        )
+        self.group_combo.pack(side="left", padx=(self.spacing.gap, 0))
+        self.group_combo.bind("<<ComboboxSelected>>", self._on_view_changed)
+
         self.recent_button = ttk.Menubutton(
             context_bar,
             text=strings.get("SEARCH.RECENTS"),
@@ -292,7 +385,67 @@ class SearchWindow(tk.Tk):
             label=strings.get("MENU.DIAGNOSE.RELATED"), command=self._show_related
         )
         menu.add_cascade(label=strings.get("MENU.DIAGNOSE"), menu=diagnose_menu)
+
+        # -- phase 042: saved searches, local history, explanations ---------
+        search_menu = tk.Menu(menu, tearoff=0)
+        search_menu.add_command(
+            label=strings.get("MENU.SEARCH.SAVE"),
+            command=self._prompt_store_search,
+        )
+        self.saved_menu = tk.Menu(search_menu, tearoff=0)
+        self.saved_menu.add_command(
+            label=strings.get("MENU.SEARCH.SAVED_EMPTY"), state="disabled"
+        )
+        search_menu.add_cascade(
+            label=strings.get("MENU.SEARCH.SAVED"), menu=self.saved_menu
+        )
+        search_menu.add_command(
+            label=strings.get("MENU.SEARCH.DELETE_SAVED"),
+            command=self._prompt_delete_search,
+        )
+        search_menu.add_separator()
+        self.suggestion_menu_index = _add_menu_entry(
+            search_menu, "command",
+            label=strings.get("MENU.SEARCH.NO_SUGGESTION"), state="disabled",
+        )
+        search_menu.add_separator()
+        history_menu = tk.Menu(search_menu, tearoff=0)
+        history_menu.add_command(
+            label=strings.get("MENU.HISTORY.SHOW"), command=self._show_history
+        )
+        history_menu.add_command(
+            label=strings.get("MENU.HISTORY.CLEAR"), command=self._clear_history
+        )
+        history_menu.add_separator()
+        self.history_disable_index = _add_menu_entry(
+            history_menu, "command",
+            label=strings.get("MENU.HISTORY.DISABLE"),
+            command=lambda: self._set_history_enabled(False),
+        )
+        self.history_enable_index = _add_menu_entry(
+            history_menu, "command",
+            label=strings.get("MENU.HISTORY.ENABLE"),
+            command=lambda: self._set_history_enabled(True),
+        )
+        search_menu.add_cascade(
+            label=strings.get("MENU.HISTORY"), menu=history_menu
+        )
+        self.history_menu = history_menu
+        menu.add_cascade(label=strings.get("MENU.SEARCH"), menu=search_menu)
+        self.search_menu = search_menu
+
+        view_menu = tk.Menu(menu, tearoff=0)
+        self.explain_var = tk.BooleanVar(value=False)
+        view_menu.add_checkbutton(
+            label=strings.get("MENU.VIEW.EXPLAIN"),
+            variable=self.explain_var,
+            command=self._on_explain_toggled,
+        )
+        menu.add_cascade(label=strings.get("MENU.VIEW"), menu=view_menu)
+
         self.config(menu=menu)
+        self._refresh_saved_menu()
+        self._refresh_history_menu()
 
         middle = ttk.Frame(self, padding=(self.spacing.pad, 0, self.spacing.pad, 0))
         middle.pack(fill="both", expand=True)
@@ -537,6 +690,8 @@ class SearchWindow(tk.Tk):
             (self.context_combo, "SEARCH.LABEL.CONTEXT"),
             (self.source_combo, "SEARCH.LABEL.SOURCE"),
             (self.type_combo, "SEARCH.LABEL.TYPE"),
+            (self.sort_combo, "SEARCH.LABEL.SORT"),
+            (self.group_combo, "SEARCH.LABEL.GROUP"),
             (self.recent_button, "SEARCH.RECENTS"),
             (self.tree, "RESULTS.LIST_LABEL"),
         ):
@@ -545,6 +700,9 @@ class SearchWindow(tk.Tk):
     def _bind_keys(self) -> None:
         self.entry.bind("<Return>", self._on_open)
         self.entry.bind("<Control-Return>", self._on_reveal)
+        # Applying a suggestion is a separate, explicit key: never the same one
+        # that accepts what was typed.
+        self.entry.bind("<Alt-Return>", self._apply_suggestion)
         self.entry.bind("<Escape>", self._on_escape)
         self.entry.bind("<Down>", self._move_down)
         self.entry.bind("<Up>", self._move_up)
@@ -682,15 +840,35 @@ class SearchWindow(tk.Tk):
         self._inflight += 1
         source = self._active_source_filter()
         doc_type = self._active_type_filter()
+        # Read here, on the main thread, and nowhere else. A Tk variable
+        # touched from a worker raises "main thread is not in main loop", and
+        # reading it there would have turned every search into a hard failure
+        # the moment anybody asked for explanations.
+        explain = self.explain_var.get()
+        self.requested_limit = pool_size(self.limit, self._sort_value())
         self._set_busy(query)
 
         def work() -> None:
             try:
-                results = self.service.search(
-                    query, limit=DEFAULT_LIMIT, source=source, doc_type=doc_type
+                # `search_or_error`, not `search` plus a second read of
+                # `last_query_error`. Phase 042: `search` swallows QueryError
+                # into a field on the shared service, and every keystroke runs
+                # on its own thread against that same instance -- so reading
+                # the field afterwards can hand this keystroke somebody else's
+                # error. Phase 041 drew the malformed-query state correctly and
+                # could never be shown it, which is what this call fixes.
+                results, query_error = self.service.search_or_error(
+                    query,
+                    limit=self.requested_limit,
+                    explain=explain,
+                    source=source,
+                    doc_type=doc_type,
                 )
-                self._results_queue.put((generation, results, None, None))
-            except QueryError as exc:
+                self._results_queue.put((generation, results, query_error, None))
+            except QueryError as exc:  # pragma: no cover - defence in depth
+                # `search_or_error` catches this; reaching here would mean the
+                # service changed its contract, and dropping it on the floor
+                # would show the user a traceback instead of a sentence.
                 self._results_queue.put((generation, [], str(exc), None))
             except Exception as exc:  # pragma: no cover - defensive
                 # The typed query never reaches the log: `events.jsonl`
@@ -856,37 +1034,41 @@ class SearchWindow(tk.Tk):
             self._search_job = None
 
     def _render(self, results: list[SearchResult]) -> None:
+        """Sort, group, and update the pane with as little work as possible.
+
+        Phase 036's rule governs the first two steps: organising the results
+        must not change which results you get. So ``sort_results`` and
+        ``group_results`` are the core's own functions, called with what the
+        engine returned and nothing else.
+
+        Phase 042's addition is the third step. Deleting every row and
+        reinserting fifty of them on every keystroke is the old behaviour, and
+        it is wasted work: while a user types, most rows do not move. A row is
+        identified by its position, so a row whose five values are unchanged is
+        left alone and only the ones that differ are rewritten. The counts are
+        kept because an unmeasured claim of incrementality is not a claim.
+        """
         self.results = results
-        children = self.tree.get_children()
-        if children:
-            # `delete` refuses an id that already exists, so the whole set
-            # goes before anything is inserted with the same ids.
-            self.tree.delete(*children)
-        cells = [
-            rows.result_cells(r.name, r.path, r.snippet, r.source)
-            for r in results
-        ]
-        for index, row in enumerate(cells):
-            self.tree.insert(
-                "", "end", iid=str(index),
-                values=tuple(row[column] for column in RESULT_COLUMNS),
-            )
+        self.suggestions = ()
+        # Read before the pane is rewritten: re-sorting or re-grouping must
+        # leave the user on the row they were reading, which is the whole
+        # reason incremental rendering is worth having.
+        previous = self._selected_index()
+        ordered = sort_results(results, self._sort_value())
+        self._render_rows(ordered)
         self._show_results()
-        # A column full of "local" is noise, so the source column only exists
-        # when something in this answer is not local.
-        self.tree.configure(
-            displaycolumns=list(RESULT_COLUMNS)
-            if any(row["source"] for row in cells)
-            else [c for c in RESULT_COLUMNS if c != "source"]
-        )
         if results:
-            self._select(0)
+            indices = self._result_indices()
+            self._select(
+                previous if previous in indices else (indices[0] if indices else 0)
+            )
             self._set_status(strings.get("RESULTS.COUNT", count=len(results)))
         elif self.query_var.get().strip():
             # A named, empty result list is a state of its own (spec 017):
             # say what happened and what to try, not just "0".
+            self._refresh_suggestions()
             message = strings.get("RESULTS.NONE", query=self.query_var.get().strip())
-            self._show_message(message, strings.get("RESULTS.NONE_HINT"))
+            self._show_message(message, self._empty_hint())
             self._set_status(message)
         else:
             # Nothing typed yet. The message explains the product rather than
@@ -896,6 +1078,374 @@ class SearchWindow(tk.Tk):
             )
             self._set_status(strings.get("SEARCH.READY"))
         self._update_preview()
+
+    def _render_rows(self, ordered: list[SearchResult]) -> None:
+        """Put ``ordered`` on screen, reusing the rows that did not change."""
+        stats = {"inserted": 0, "updated": 0, "removed": 0}
+        group = self._group_value()
+        cells = [
+            rows.result_cells(r.name, r.path, r.snippet, r.source)
+            for r in ordered
+        ]
+        # A result's row id is its position in the sorted list, so the mapping
+        # from a `SearchResult` back to its row is built once and looked up --
+        # not found with `list.index`, which compares by value and would pair
+        # two identical results with the same row.
+        position = {id(result): index for index, result in enumerate(ordered)}
+        wanted: dict[str, tuple | None] = {}
+        headers: dict[str, str] = {}
+        order: list[str] = []
+
+        if group == GROUP_NONE:
+            for index, row in enumerate(cells):
+                wanted[str(index)] = tuple(row[c] for c in RESULT_COLUMNS)
+                order.append(str(index))
+        else:
+            for number, block in enumerate(group_results(ordered, group)):
+                header = f"{GROUP_ID_PREFIX}{number}"
+                label = GROUP_LABELS.get(block.key, strings.get("GROUP.NONE"))
+                headers[header] = strings.get("GROUP.HEADER", label=label)
+                wanted[header] = None
+                order.append(header)
+                for result in block.results:
+                    index = position[id(result)]
+                    row = cells[index]
+                    wanted[str(index)] = tuple(row[c] for c in RESULT_COLUMNS)
+                    order.append(str(index))
+
+        for existing in self.tree.get_children(""):
+            if existing not in wanted:
+                self.tree.delete(existing)
+                stats["removed"] += 1
+
+        for iid in order:
+            values = wanted[iid]
+            if values is None:
+                # Group header rows carry an id no result index can be, so every
+                # selection helper skips them by asking "is this an index?".
+                if not self.tree.exists(iid):
+                    self.tree.insert(
+                        "", "end", iid=iid, text=headers[iid], tags=("group",)
+                    )
+                    stats["inserted"] += 1
+                continue
+            if self.tree.exists(iid):
+                if tuple(self.tree.item(iid, "values")) != values:
+                    self.tree.item(iid, values=values)
+                    stats["updated"] += 1
+                continue
+            self.tree.insert("", "end", iid=iid, values=values)
+            stats["inserted"] += 1
+
+        self.render_stats = stats
+        # A column full of "local" is noise, so the source column only exists
+        # when something in this answer is not local.
+        self.tree.configure(
+            displaycolumns=list(RESULT_COLUMNS)
+            if any(row["source"] for row in cells)
+            else [c for c in RESULT_COLUMNS if c != "source"]
+        )
+        self.tree.tag_configure("group", foreground=self.theme.accent)
+
+    def _render_stats(self) -> dict[str, int]:
+        return dict(self.render_stats)
+
+    def _result_indices(self) -> list[int]:
+        """The result indices currently on screen, in display order."""
+        return [
+            int(iid) for iid in self.tree.get_children("")
+            if iid.isdigit() and not iid.startswith(GROUP_ID_PREFIX)
+        ]
+
+    def _sort_value(self) -> str:
+        label = self.sort_var.get()
+        for value, text in SORT_LABELS.items():
+            if text == label:
+                return value
+        return SORT_RELEVANCE
+
+    def _group_value(self) -> str:
+        label = self.group_var.get()
+        for value, text in GROUP_LABELS.items():
+            if text == label:
+                return value
+        return GROUP_NONE
+
+    # -- suggestions (phase 032, reached from the window in phase 042) ------
+
+    def _refresh_suggestions(self) -> None:
+        """Ask for verified corrections, once, and only for an empty answer.
+
+        The suggester runs the proposed query against the same engine to prove
+        it finds something, so this costs one search -- and only for a query
+        that found nothing at all. A query that worked is never second-guessed.
+        """
+        query = self.query_var.get().strip()
+        self.suggestions = self.service.suggest(query) if query else ()
+        self._refresh_suggestion_menu()
+
+    def _suggestion_text(self) -> str:
+        """The offer, as text for the message area."""
+        if not self.suggestions:
+            return ""
+        return strings.get(
+            "SUGGESTION.TEXT", query=self.suggestions[0].query
+        )
+
+    def _empty_hint(self) -> str:
+        return self._suggestion_text() or strings.get("RESULTS.NONE_HINT")
+
+    def _refresh_suggestion_menu(self) -> None:
+        menu = self.search_menu
+        index = self.suggestion_menu_index
+        if not self.suggestions:
+            menu.entryconfigure(index, {
+                "label": strings.get("MENU.SEARCH.NO_SUGGESTION"),
+                "state": "disabled",
+            })
+            return
+        menu.entryconfigure(index, {
+            "label": strings.get(
+                "MENU.SEARCH.APPLY_SUGGESTION", query=self.suggestions[0].query
+            ),
+            "state": "normal",
+        })
+
+    def _apply_suggestion(self) -> str:
+        """Adopt a suggestion because the user said so. Never otherwise."""
+        if not self.suggestions:
+            self._set_status(strings.get("SUGGESTION.NONE"))
+            return "break"
+        proposed = self.suggestions[0].query
+        # Setting the variable is the *whole* mechanism: the trace schedules
+        # the search like any other keystroke, so a suggestion is not a second
+        # way to run a query, it is the user typing the corrected words.
+        self.query_var.set(proposed)
+        self._set_status(strings.get("STATUS.SUGGESTION", query=proposed))
+        return "break"
+
+    # -- saved searches (phase 036 data, phase 042 surface) -----------------
+
+    def _refresh_saved_menu(self) -> None:
+        menu = self.saved_menu
+        menu.delete(0, "end")
+        entries = self.service.saved_searches()
+        if not entries:
+            menu.add_command(
+                label=strings.get("MENU.SEARCH.SAVED_EMPTY"), state="disabled"
+            )
+            return
+        for entry in entries:
+            menu.add_command(
+                label=entry.name,
+                command=lambda chosen=entry.name: self._apply_saved_search(chosen),
+            )
+
+    def _current_saved_search(self, name: str) -> SavedSearch:
+        return SavedSearch(
+            name=name,
+            query=self.query_var.get().strip(),
+            sort=self._sort_value(),
+            group=self._group_value(),
+            source=self._active_source_filter() or "",
+            doc_type=self._active_type_filter() or "",
+        )
+
+    def _prompt_store_search(self) -> None:
+        if not self.query_var.get().strip():
+            self._set_status(strings.get("STATUS.SAVED_NEEDS_QUERY"))
+            return
+        name = simpledialog.askstring(
+            strings.get("SAVED.PROMPT"), strings.get("SAVED.PROMPT")
+        )
+        if name is None:
+            return
+        self._store_current_search(name)
+
+    def _store_current_search(self, name: str) -> None:
+        cleaned = " ".join(str(name or "").split())
+        if not cleaned:
+            self._set_status(strings.get("STATUS.SAVED_EMPTY_NAME"))
+            return
+        existed = any(
+            entry.name.casefold() == cleaned.casefold()
+            for entry in self.service.saved_searches()
+        )
+        self.service.store_saved_search(self._current_saved_search(cleaned))
+        self._refresh_saved_menu()
+        self._set_status(
+            strings.get("STATUS.SAVED_EXISTS" if existed else "STATUS.SAVED", name=cleaned)
+        )
+
+    def _prompt_delete_search(self) -> None:
+        entries = self.service.saved_searches()
+        if not entries:
+            self._set_status(strings.get("STATUS.SAVED_MISSING", name=""))
+            return
+        name = simpledialog.askstring(
+            strings.get("MENU.SEARCH.DELETE_SAVED"),
+            " · ".join(entry.name for entry in entries),
+        )
+        if name is None:
+            return
+        self._delete_saved_search(name)
+
+    def _delete_saved_search(self, name: str) -> None:
+        cleaned = " ".join(str(name or "").split())
+        if self.service.delete_saved_search(cleaned):
+            self._set_status(strings.get("STATUS.SAVED_DELETED", name=cleaned))
+        else:
+            self._set_status(strings.get("STATUS.SAVED_MISSING", name=cleaned))
+        self._refresh_saved_menu()
+
+    def _apply_saved_search(self, name: str) -> None:
+        """Put a saved search back: the query and every view that shaped it."""
+        entry = None
+        for candidate in self.service.saved_searches():
+            if candidate.name.casefold() == str(name).casefold():
+                entry = candidate
+                break
+        if entry is None:
+            self._set_status(strings.get("STATUS.SAVED_MISSING", name=name))
+            return
+        self.source_var.set(
+            entry.source or SOURCE_FILTER_VALUES[0]
+        )
+        self.type_var.set(entry.doc_type or TYPE_FILTER_VALUES[0])
+        self.sort_var.set(SORT_LABELS.get(entry.sort, SORT_DISPLAY_LABELS[0]))
+        self.group_var.set(GROUP_LABELS.get(entry.group, GROUP_DISPLAY_LABELS[0]))
+        # The trace fires the search with every field already in place.
+        self.query_var.set(entry.query)
+
+    # -- local history (phase 042) ------------------------------------------
+
+    def _refresh_history_menu(self) -> None:
+        enabled = self.service.history_enabled()
+        # The options go in a dict: `entryconfigure(index, **options)` on this
+        # Tk version folds the keywords into the index and fails with
+        # 'bad menu entry index "-state"'.
+        self.history_menu.entryconfigure(
+            self.history_disable_index,
+            {"state": "normal" if enabled else "disabled"},
+        )
+        self.history_menu.entryconfigure(
+            self.history_enable_index,
+            {"state": "disabled" if enabled else "normal"},
+        )
+
+    def _set_history_enabled(self, enabled: bool) -> None:
+        self.service.set_history_enabled(enabled)
+        self._refresh_history_menu()
+        self._refresh_recent_menu()
+        self._set_status(
+            strings.get(
+                "STATUS.HISTORY_ENABLED" if enabled else "STATUS.HISTORY_DISABLED"
+            )
+        )
+
+    def _clear_history(self) -> str:
+        removed = self.service.clear_history()
+        self._refresh_recent_menu()
+        self._set_status(
+            strings.get("STATUS.HISTORY_CLEARED", count=removed)
+            if removed
+            else strings.get("STATUS.HISTORY_EMPTY")
+        )
+        return "break"
+
+    def _history_body(self) -> str:
+        """What the history view says, as text.
+
+        A method and not a widget: phase 039 established that asserting on a
+        Tk widget from a test is unreliable, and this is a claim about wording
+        and numbers, not about pixels.
+        """
+        retention = self.service.history_retention()
+        lines: list[str] = []
+        if not retention["enabled"]:
+            lines.append(strings.get("HISTORY.DISABLED_NOTE"))
+            lines.append("")
+        lines.append(
+            strings.get(
+                "HISTORY.RETENTION",
+                max_entries=retention["max_entries"],
+                max_chars=retention["max_chars"],
+                file=retention["file"],
+            )
+        )
+        lines.append("")
+        entries = self.service.history()
+        lines.extend(entries if entries else (strings.get("HISTORY.EMPTY"),))
+        return "\n".join(lines)
+
+    def _show_history(self) -> None:
+        """Show what is stored, and the rules that decide what is kept.
+
+        Phase 042 asks for history to be *inspectable*. Showing the rules next
+        to the entries is the point: "local and capped" is a promise until
+        somebody can read the numbers.
+        """
+        window = tk.Toplevel(self)
+        window.title(strings.get("HISTORY.TITLE"))
+        window.geometry("640x420")
+        text = tk.Text(window, wrap="word")
+        text.insert("1.0", self._history_body())
+        text.configure(state="disabled")
+        text.pack(
+            side="top", fill="both", expand=True,
+            padx=self.spacing.gap, pady=self.spacing.gap,
+        )
+
+    def _sort_results_only(self, sort: str | None = None) -> None:
+        """Re-order what is already on screen, without asking the engine again.
+
+        Phase 036 widened the pool for a non-relevance sort, so the results to
+        choose from are already here. Asking again would repeat the whole
+        search for a change of order.
+        """
+        ordered = sort_results(self.results, sort or self._sort_value())
+        self._render_rows(ordered)
+        self._update_preview()
+
+    def _on_view_changed(self, _event=None) -> None:
+        """A presentation change.
+
+        Sorting and grouping normally reorder what is already on screen, which
+        is free. One case is not free: a sort other than relevance can only
+        choose from the set the engine gave it (phase 036's rule), and the set
+        on screen was fetched with the relevance pool. So that one re-runs the
+        search with the widened pool, the same thing the CLI does, rather than
+        quietly reordering a truncated set and calling it a sort.
+        """
+        if not self.results:
+            return
+        sort = self._sort_value()
+        relevance_pool = pool_size(self.limit, SORT_RELEVANCE)
+        if sort != SORT_RELEVANCE and self.requested_limit <= relevance_pool:
+            self._execute_search()
+            return
+        self._sort_results_only()
+        self._set_status(
+            strings.get("SORT.APPLIED", label=SORT_LABELS[sort])
+        )
+
+    def _on_explain_toggled(self) -> None:
+        """Explanations cost work, so they are asked for, never assumed.
+
+        Phase 042 turns ``explain=True`` on only when the user asks, because
+        ``Ranker.contributions`` is real work per result and nobody wants it
+        paid for on every keystroke they do not read.
+        """
+        self._set_status(strings.get("STATUS.EXPLAIN"))
+        if self.query_var.get().strip():
+            self._execute_search()
+
+    def _set_explain(self, enabled: bool) -> None:
+        """Turn explanation on or off, and re-run if there is something to run."""
+        if bool(enabled) == self.explain_var.get():
+            return
+        self.explain_var.set(bool(enabled))
+        self._on_explain_toggled()
 
     def _set_busy(self, query: str) -> None:
         """Loading state: the previous results stay visible while searching.
@@ -911,9 +1461,12 @@ class SearchWindow(tk.Tk):
         # so late results cannot repopulate a box the user just cleared.
         self._generation += 1
         self.results = []
-        children = self.tree.get_children()
+        self.suggestions = ()
+        self._refresh_suggestion_menu()
+        children = self.tree.get_children("")
         if children:
             self.tree.delete(*children)
+        self.render_stats = {"inserted": 0, "updated": 0, "removed": 0}
         self._clear_detail()
 
     def _set_status(self, text: str, severity: str = "info") -> None:
@@ -1317,12 +1870,53 @@ class SearchWindow(tk.Tk):
                  f"{source}{cloud}"
         )
         self.preview_path.configure(text=str(result.path))
-        self.preview_snippet.configure(
-            text=(result.snippet or "").replace("[", "").replace("]", "").strip()
-        )
+        self.preview_snippet.configure(text=self._why_text(result))
         if not self.detail_frame.winfo_manager():
             self.detail_frame.pack(fill="x", side="bottom")
         self._on_window_resize()
+
+    def _why_text(self, result: SearchResult) -> str:
+        """Why this matched: the snippet, or the ranking's own account of it.
+
+        Phase 042 asked for result explanations. The ranking has been computing
+        them since phase 004 behind an ``explain`` flag nobody passed, so this
+        reads what is already there rather than inventing a second account. The
+        plain snippet is still shown when explanations are off, because that is
+        what most people want to read.
+
+        The values are `object`, not `float`: the fuzzy layer stores structured
+        match details beside its numbers, and this formats both without
+        pretending to know which layer produced which.
+        """
+        if not result.explain:
+            return (result.snippet or "").replace("[", "").replace("]", "").strip()
+        lines = [strings.get("PREVIEW.EXPLAIN_TITLE")]
+        numeric = [
+            (signal, float(value))
+            for signal, value in result.explain.items()
+            if isinstance(value, (int, float)) and not isinstance(value, bool)
+        ]
+        for signal, value in sorted(numeric, key=lambda pair: (-pair[1], pair[0])):
+            lines.append(
+                strings.get(
+                    "PREVIEW.EXPLAIN_SIGNAL", signal=signal, value=value
+                )
+            )
+        for signal, value in sorted(result.explain.items()):
+            if signal in {name for name, _ in numeric}:
+                continue
+            count = len(value) if hasattr(value, "__len__") else 1
+            lines.append(
+                strings.get(
+                    "PREVIEW.EXPLAIN_DETAIL", signal=signal, count=count
+                )
+            )
+        lines.extend(result.explain_notes)
+        snippet = (result.snippet or "").replace("[", "").replace("]", "").strip()
+        if snippet:
+            lines.append("")
+            lines.append(snippet)
+        return "\n".join(lines)
 
     # -- actions ----------------------------------------------------------------
 

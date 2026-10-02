@@ -210,9 +210,10 @@ def test_typing_searches_off_the_ui_thread(window, monkeypatch):
     def slow(query, limit=50, **kwargs):
         started.set()
         release.wait(5)
-        return []
+        return [], None
 
-    monkeypatch.setattr(window.service, "search", slow)
+    # Phase 042: the window calls `search_or_error`, so a spy stands there.
+    monkeypatch.setattr(window.service, "search_or_error", slow)
     window.query_var.set("lento")
     began = time.perf_counter()
     window._execute_search()
@@ -236,10 +237,13 @@ def test_stale_results_never_replace_a_newer_query(window, monkeypatch):
         if query == "viejo":
             first.set()
             release.wait(5)
-            return [SearchResult(Path("viejo.md"), "viejo.md", "local", "x", 0.0)]
-        return []
+            return (
+                [SearchResult(Path("viejo.md"), "viejo.md", "local", "x", 0.0)],
+                None,
+            )
+        return [], None
 
-    monkeypatch.setattr(window.service, "search", slow)
+    monkeypatch.setattr(window.service, "search_or_error", slow)
     window.query_var.set("viejo")
     window._execute_search()
     assert first.wait(5)

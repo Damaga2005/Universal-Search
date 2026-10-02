@@ -209,6 +209,11 @@ class AppConfig:
     contexts: tuple[dict, ...] = ()
     active_context: str = ""
     usage_tracking: bool = False
+    # Phase 042: the fuzzy layer (031) in the window. It has always been
+    # available on the command line behind `--no-fuzzy`; this makes the same
+    # switch reachable from configuration, so a user who does not want the
+    # extra work at query time can turn it off where they can see it.
+    fuzzy_enabled: bool = True
     recent_queries: tuple[str, ...] = ()
     recent_queries_enabled: bool = True
     # Phase 036: saved searches (query + sort + group + filters). Plain
@@ -259,6 +264,7 @@ class AppConfig:
             contexts=_context_dicts(raw.get("contexts"), defaults.contexts),
             active_context=_str(raw.get("active_context"), defaults.active_context),
             usage_tracking=_bool(raw.get("usage_tracking"), defaults.usage_tracking),
+            fuzzy_enabled=_bool(raw.get("fuzzy_enabled"), defaults.fuzzy_enabled),
             recent_queries=_str_tuple(
                 raw.get("recent_queries"), defaults.recent_queries
             ),
@@ -286,6 +292,10 @@ class AppConfig:
 
 
 MAX_RECENT_QUERIES = 20
+# The other half of the retention policy, named because phase 042 asks for
+# retention to be explicit and the window states it to the user. It used to be
+# a bare `[:200]` here and nothing else knew about it.
+MAX_QUERY_CHARS = 200
 
 
 def remember_query(config: AppConfig, query: str) -> AppConfig:
@@ -293,9 +303,10 @@ def remember_query(config: AppConfig, query: str) -> AppConfig:
 
     Pure, so every caller shares the same policy: empty or disabled
     configurations come back untouched, entries are deduplicated
-    case-insensitively and capped at ``MAX_RECENT_QUERIES``.
+    case-insensitively, capped at ``MAX_RECENT_QUERIES`` and truncated at
+    ``MAX_QUERY_CHARS``.
     """
-    cleaned = " ".join(str(query).split())[:200]
+    cleaned = " ".join(str(query).split())[:MAX_QUERY_CHARS]
     if not cleaned or not config.recent_queries_enabled:
         return config
     kept = [

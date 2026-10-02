@@ -118,7 +118,14 @@ class SearchResult:
     # second query per row.
     modified_at: str | None = None
     size: int = 0
-    explain: dict[str, float] | None = None
+    # The annotation said `dict[str, float]` and was wrong: the phase 031 fuzzy
+    # layer puts structured match details in here alongside its numeric
+    # `fuzzy_overlap`, and `tests/test_fuzzy_search.py` pins that shape. Phase
+    # 042 found it by putting `explain` on screen, where a list where a number
+    # was declared does not survive contact with `"{:.3f}"`. The value is
+    # therefore `object`: a consumer that formats it has to say what it does
+    # with a number and with something that is not one.
+    explain: dict[str, object] | None = None
     explain_notes: tuple[str, ...] = ()
 
 
