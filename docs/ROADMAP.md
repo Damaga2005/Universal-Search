@@ -184,4 +184,19 @@ two-character term). The exchange is a net loss, so the limitation is declared
 with its reason, excluded from the exact-match threshold by name, and asserted
 by three tests.
 
-Current test count: 1395 tests collected.
+With the machine finally idle, every gate was run rather than left declared.
+Two of them closed -- U9 at **106 ms** of a 200 ms budget and V11 at **174 ms**
+of 600 ms, both comfortably inside, which settles the question phase 045 left
+open about whether a 44%-larger corpus threatens the fill budget. The fuzzy gate
+had fallen to 6/10 and the cause was its own label, not its layer: the
+expectation was a substring matched against a corpus id, so `"bjt"` had always
+meant "an id starting with bjt-" -- and the corpus had just gained a document
+whose body reads "el transistor bipolar" and whose file name is that acronym, so
+the layer was correctly returning it and the gate was correctly, wrongly
+failing. And `perf_gate` was found blaming the machine for its own metric: it
+demanded byte-exact index size on the premise that two runs produce the same
+bytes, which measurement disproved -- the WAL is already empty here and the 16 KB
+difference is in the main database file, because the indexer follows filesystem
+enumeration order, which is not sorted.
+
+Current test count: 1410 tests collected.

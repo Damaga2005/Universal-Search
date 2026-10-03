@@ -41,7 +41,6 @@ from datetime import datetime
 from pathlib import Path
 
 from evaluation import corpus as corpus_module
-from universal_search.index.database import SearchDatabase
 from universal_search.index.search import SearchEngine, SearchResult
 
 # The ten classes, in the order the probes run. A tuple, not a set: the order
@@ -93,41 +92,7 @@ class Verdict:
 RANKING_REACHABLE = frozenset({"ranking", "phrase handling", "filename/path"})
 
 
-@dataclass(frozen=True, slots=True)
-class IndexProbe:
-    """What the index itself says, independent of any query."""
-
-    indexed: dict[str, str]
-    by_path: dict[str, str]
-    last_seen: dict[str, int]
-
-
-def probe_index(database: SearchDatabase) -> IndexProbe:
-    """Every indexed document's id, path and last-seen run.
-
-    Read from the database rather than inferred from search results, because
-    "the document is missing" and "the document was there but ranked low" look
-    identical from the outside and are different problems.
-    """
-    with database.connect() as connection:
-        rows = connection.execute(
-            "SELECT id, path, last_seen_run FROM documents"
-        ).fetchall()
-    indexed: dict[str, str] = {}
-    by_path: dict[str, str] = {}
-    last_seen: dict[str, int] = {}
-    for row in rows:
-        path = str(row["path"])
-        by_path[path] = row["id"]
-        indexed[path] = row["name"]
-        try:
-            last_seen[row["id"]] = int(row["last_seen_run"] or 0)
-        except (TypeError, ValueError):
-            last_seen[row["id"]] = 0
-    return IndexProbe(indexed=indexed, by_path=by_path, last_seen=last_seen)
-
-
-def _ids_for(engine: SearchEngine, corpus_root: Path) -> dict[str, str]:
+def document_ids_for(engine: SearchEngine, corpus_root: Path) -> dict[str, str]:
     """Corpus id -> database id.
 
     The two are not interchangeable and the difference is not cosmetic: the
@@ -198,7 +163,7 @@ def diagnose(
     those are diagnosed, because a query that answered correctly has no cause
     and inventing one would put noise in the inventory.
     """
-    ids = _ids_for(engine, corpus_root)
+    ids = document_ids_for(engine, corpus_root)
     returned: dict[str, list[SearchResult]] = {
         labelled.query: engine.search(labelled.query, limit=limit, now=now)
         for labelled in corpus_module.LABELLED_QUERIES
@@ -279,8 +244,8 @@ def _diagnose_one(
         return verdict("extraction", "documento binario sin capa de texto")
 
     # 3. Does the query carry filters that exclude it?
-    filters = _filters_in(query)
-    if filters and not _passes_filters(str(row["path"]), filters):
+    filters = filters_in(query)
+    if filters and not passes_filters(str(row["path"]), filters):
         return verdict(
             "filtering",
             f"el documento no cumple {filters}, que la consulta pide",
@@ -376,7 +341,7 @@ _SUFFIXES = (
 )
 
 
-def _stem(word: str) -> str:
+def stem_of(word: str) -> str:
     lowered = word.casefold()
     for suffix in _SUFFIXES:
         if lowered.endswith(suffix) and len(lowered) - len(suffix) >= 3:
@@ -390,12 +355,12 @@ def _has_stem_variant(term: str, haystack: str, name_terms: set[str]) -> bool:
     Tokenised rather than substring-compared, so ``receta`` does not match
     ``recrear`` by accident.
     """
-    stem = _stem(term)
+    stem = stem_of(term)
     if len(stem) < 3:
         return False
     words = set(_wordlike(haystack)) | name_terms
     return any(
-        word == term.casefold() or _stem(word) == stem
+        word == term.casefold() or stem_of(word) == stem
         for word in words
     )
 
@@ -407,7 +372,7 @@ def _corpus_document(document: str):
     return None
 
 
-def _filters_in(query: str) -> tuple[tuple[str, str], ...]:
+def filters_in(query: str) -> tuple[tuple[str, str], ...]:
     """The ``key:value`` filters in a query, as the parser resolved them.
 
     Read from the parsed plan rather than by regexing the raw string, so the
@@ -434,7 +399,7 @@ def _filters_in(query: str) -> tuple[tuple[str, str], ...]:
     return tuple(found)
 
 
-def _passes_filters(path: str, filters) -> bool:
+def passes_filters(path: str, filters) -> bool:
     lowered = path.casefold()
     suffix = Path(lowered).suffix
     for key, value in filters:

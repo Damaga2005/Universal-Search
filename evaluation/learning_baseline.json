@@ -6,14 +6,14 @@
       "measured": 0.0,
       "threshold": 0.0,
       "passed": true,
-      "detail": "18 consultas, misma respuesta con y sin historial"
+      "detail": "30 consultas, misma respuesta con y sin historial"
     },
     {
       "gate": "L2 diferencias con una sola apertura",
       "measured": 0.0,
       "threshold": 0.0,
       "passed": true,
-      "detail": "una sola apertura no cambia ninguna de las 18 respuestas"
+      "detail": "una sola apertura no cambia ninguna de las 30 respuestas"
     },
     {
       "gate": "L3 ejecuciones no deterministas",
@@ -55,21 +55,21 @@
       "measured": 0.0,
       "threshold": 0.0,
       "passed": true,
-      "detail": "con doc_type=md y 40 aperturas aprendidas de un .txt, 3 resultados y ninguno de otro tipo"
+      "detail": "con doc_type=md y 40 aperturas aprendidas de un .txt, 4 resultados y ninguno de otro tipo"
     },
     {
       "gate": "L9 flujos que el aprendizaje no ayudo",
       "measured": 0.0,
       "threshold": 0.0,
       "passed": true,
-      "detail": "de 33 pares (consulta, documento), 6 mejoran y 0 bajan tras 6 aperturas repetidas; 11 ya estaban primeros"
+      "detail": "de 47 pares (consulta, documento), 11 mejoran y 0 bajan tras 6 aperturas repetidas; 14 ya estaban primeros"
     },
     {
       "gate": "L10 regresion de MRR sin historial",
       "measured": 0.0,
       "threshold": 0.0,
       "passed": true,
-      "detail": "MRR 0.0556 sin aprendizaje y 0.0556 con aprendizaje activo y sin historial; 0 de 18 consultas cambian de puntaje"
+      "detail": "MRR 0.0333 sin aprendizaje y 0.0333 con aprendizaje activo y sin historial; 0 de 30 consultas cambian de puntaje"
     },
     {
       "gate": "L11 impulsos sin explicacion",
@@ -102,9 +102,21 @@
     "margin_over_effect": 11.6
   },
   "sweep": {
-    "considered": 33,
-    "already_first": 11,
+    "considered": 47,
+    "already_first": 14,
     "improved": [
+      [
+        "\"ebers moll\"",
+        "practica3_polarizacion.pdf",
+        4,
+        3
+      ],
+      [
+        "ebers moll",
+        "practica3_polarizacion.pdf",
+        4,
+        3
+      ],
       [
         "CMOS",
         "logica_cmos.md",
@@ -119,25 +131,25 @@
       ],
       [
         "polarizacion",
-        "BJT_Ebers_Moll.md",
-        1,
-        0
-      ],
-      [
-        "polarizacion",
-        "Tema_6_BJT.md",
-        2,
-        0
-      ],
-      [
-        "notas",
-        "tension_base_emisor.md",
+        "bjt_punto_operacion.md",
         2,
         1
       ],
       [
-        "punto Q",
+        "polarizacion",
         "BJT_Ebers_Moll.md",
+        3,
+        1
+      ],
+      [
+        "polarizacion",
+        "Tema_6_BJT.md",
+        4,
+        1
+      ],
+      [
+        "notas",
+        "T6_BJT_Apuntes.md",
         2,
         1
       ]
@@ -145,8 +157,8 @@
     "demoted": []
   },
   "mrr": {
-    "baseline": 0.055556,
-    "with_learning": 0.055556,
+    "baseline": 0.033333,
+    "with_learning": 0.033333,
     "queries_moved": []
   },
   "decay": {

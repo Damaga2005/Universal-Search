@@ -252,6 +252,107 @@ Cinco, y **cuatro los causó esta fase al tocar lo que ya existía**:
    cobertura. Una carga sin cubrir es una carga que no puede regresar, y eso no
    es lo mismo que funcionar.
 
+## Addendum: running every gate on a quiet machine
+
+This phase was committed with two gates unrun. With the machine idle, all of
+them ran, and running them found four defects that reading the code had not.
+
+### U9 and V11 close
+
+| Puerta | Antes | Ahora | Presupuesto |
+|---|---|---|---|
+| U9, 50 filas en el panel | 176,3 ms (con veto de carga) | **106,0 ms** | 200 ms |
+| V11, pulsación → resultado | 192 ms (con veto de carga) | **174 ms** | 600 ms |
+
+La cifra de 176 ms que este informe declaraba «no concluye nada» era de
+máquina ocupada. En reposo, el corpus un 44 % mayor **no** compromete el
+presupuesto de U9, que era la pregunta abierta.
+
+### `test_cli_module_guard_propagates_tray_exit_code`: un fallo real
+
+Era **el único fallo de los 1395 tests** de la suite completa, y verificado con
+`git stash` que ya fallaba antes de esta fase. La 043 cambió `setup_logging` de
+un argumento a dos y este stub conservó la forma antigua, así que la prueba
+murió en la firma antes de llegar a lo que verifica.
+
+Arreglado, y no apagado: el stub registra ambos argumentos y la prueba afirma
+que la bandeja se configura con el **nivel de registro resuelto**. Una
+regresión ahí falla ahora con el valor, no con un `TypeError`.
+
+### `fuzzy_gate` T1 bajó a 6/10, y la culpa era de la etiqueta
+
+`ROBUST_QUERIES` guardaba una **cadena** comparada con `in` contra un id de
+corpus. `"bjt" in nombre` siempre significó «un id que empieza por `bjt-»»:
+un accidente de nomenclatura, no una afirmación sobre qué documentos responden
+a «transisto» mal escrito.
+
+El corpus recibió `T6_BJT_Apuntes.md`, cuyo cuerpo dice «el **transistor**
+bipolar» y cuyo nombre es ese acrónimo. La capa difusa lo devuelve primero, lo
+cual es **correcto**, y la puerta lo contaba como fallo.
+
+| | |
+|---|---|
+| Antes | la respuesta correcta se marcaba como fallo |
+| Ahora | el esperado es un conjunto explícito de ids |
+| Umbral | **0,80, sin tocar** |
+| Consulta inalcanzable | `azaarfann`, declarada con su razón medida |
+
+Ampliar una etiqueta con una razón no es lo mismo que bajar un umbral: ésta
+sigue pudiendo fallar, y `tests/test_fuzzy_gate.py` (15 pruebas) exige que todo
+id que la puerta aceptará contenga una palabra dentro del **presupuesto de dos
+ediciones** de la consulta. Dos versiones anteriores de esa comprobación fueron
+incorrectas y ambas están escritas en el fichero: comparar carácter a carácter
+contra el principio de la ruta, y un umbral de trigramas que rechazaba
+«azarfan» aunque la capa la responde, porque una transposición está dentro de un
+presupuesto que los trigramas no ven.
+
+### `perf_gate`: dos defectos
+
+**1. Echaba la culpa a la máquina sin medirla.** Cuando dos pasadas del mismo
+build discrepaban, imprimía «la máquina no está en reposo o hay otro proceso
+compilando» — incondicionalmente, sin medir ninguna de las dos cosas. Se le
+vio hacerlo con la CPU al **2 %** y la calibración en **1,02×**. Ahora informa
+de la carga que sí midió y dice hacia dónde apunta.
+
+**2. Exigía tamaño de índice byte a byte, y la premisa era falsa.** El caso
+especial afirmaba «dos pasadas producen los mismos bytes o una está rota». Al
+medir los tres componentes por separado:
+
+```
+WAL:   0 bytes en ambas pasadas   (SQLite hace auto-checkpoint)
+shm:  32768 en ambas              (constante)
+main: 3842048 frente a 3825664    <-- aquí está la diferencia de 16 KB
+```
+
+Y la causa **no es el reloj ni la máquina**: el indexador recorre el directorio
+en **orden de enumeración del sistema de ficheros**, que no está ordenado y
+difiere entre dos carpetas con los mismos ficheros. Distinto orden → distintos
+límites de transacción → distinto patrón de páginas libres → distinto recuento
+de bytes para el mismo contenido lógico.
+
+El tamaño es un **recuento, no una huella**, y ahora se compara con la
+tolerancia que la métrica ya declaraba (10 %, suelo de 0,10 MiB) frente a una
+variación medida del **0,2 %**. Verificado después del arreglo: `tamaño del
+índice 3,770` contra referencia `3,770`, **+0,0 %**.
+
+### Lo que queda INCONCLUYENTE, y por qué es correcto
+
+`perf_gate` sigue sin poder concluir en esta máquina, y esa es la respuesta
+correcta: en las últimas pasadas todo se infló entre un 25 % y un 29 % a la vez
+(indexado inicial, p95, y una dispersión del 49 %) con la CPU al 8 %. Eso es
+ruido de máquina, no un defecto del build, y la puerta se niega a declarar
+número — que es exactamente lo que se le pidió que hiciera en la 038.
+
+### Limpiezas hechas al medir
+
+- **Código muerto eliminado**: `probe_index` y `IndexProbe`, escritos para esta
+  fase y nunca llamados.
+- **Cuatro nombres de `diagnose.py` hechos públicos** (`document_ids_for`,
+  `filters_in`, `passes_filters`, `stem_of`): la puerta de calidad y las pruebas
+  los usan a través del módulo, y un prefijo de subrayado en un import entre
+  módulos es una mentira sobre la forma del código.
+
+
 ## Verificación
 
 - `python -m evaluation.quality_gate` → **13/13 SHIP**, salida 0.

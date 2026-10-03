@@ -20,21 +20,21 @@
       "measured": 0.0,
       "threshold": 0.0,
       "passed": true,
-      "detail": "MRR sigue en 0.8333"
+      "detail": "MRR sigue en 0.8667"
     },
     {
       "gate": "T4 index storage growth",
-      "measured": 0.058333333333333334,
+      "measured": 0.06470588235294118,
       "threshold": 0.15,
       "passed": true,
-      "detail": "57,344 B sobre 983,040 B, 1358 filas (50 por documento, tope 64)"
+      "detail": "90,112 B sobre 1,392,640 B, 2026 filas (52 por documento, tope 64)"
     },
     {
       "gate": "T5 added p95 (ms)",
-      "measured": 5.125800000314484,
+      "measured": 4.232600000250386,
       "threshold": 8.0,
       "passed": true,
-      "detail": "lexico p50=2.69 p95=4.07 | hibrido p50=5.86 p95=9.19 | carga de CPU 39%"
+      "detail": "lexico p50=3.23 p95=5.08 | hibrido p50=6.45 p95=9.32 | carga de CPU 46%"
     },
     {
       "gate": "T6 new runtime dependencies",
@@ -49,26 +49,34 @@
       "query": "transisto",
       "lexical": [],
       "fuzzy": [
+        "t6-abrev",
         "calculo-punto-operacion",
         "ebers-exacto",
-        "cmos-logica",
-        "tension-base-emisor",
-        "bjt-modelo"
+        "inventario-xlsx",
+        "cmos-logica"
       ],
-      "expected_fragment": "bjt",
+      "expected": [
+        "t6-abrev",
+        "bjt-modelo",
+        "transistor-bipolar"
+      ],
       "found": true
     },
     {
       "query": "transsistor",
       "lexical": [],
       "fuzzy": [
+        "t6-abrev",
         "calculo-punto-operacion",
         "ebers-exacto",
         "tension-base-emisor",
+        "inventario-xlsx"
+      ],
+      "expected": [
+        "t6-abrev",
         "bjt-modelo",
         "transistor-bipolar"
       ],
-      "expected_fragment": "bjt",
       "found": true
     },
     {
@@ -77,24 +85,32 @@
       "fuzzy": [
         "ebers-exacto",
         "tension-base-emisor",
+        "t6-abrev",
         "calculo-punto-operacion",
-        "cmos-logica",
-        "bjt-modelo"
+        "cmos-logica"
       ],
-      "expected_fragment": "bjt",
+      "expected": [
+        "t6-abrev",
+        "bjt-modelo",
+        "transistor-bipolar"
+      ],
       "found": true
     },
     {
       "query": "transltor",
       "lexical": [],
       "fuzzy": [
+        "t6-abrev",
         "calculo-punto-operacion",
         "ebers-exacto",
         "tension-base-emisor",
-        "bjt-modelo",
-        "ebers-lejos"
+        "bjt-modelo"
       ],
-      "expected_fragment": "bjt",
+      "expected": [
+        "t6-abrev",
+        "bjt-modelo",
+        "transistor-bipolar"
+      ],
       "found": true
     },
     {
@@ -104,9 +120,14 @@
         "bjt-amplificador",
         "bjt-notas",
         "polarizacion-acentuada",
-        "bjt-modelo"
+        "bjt-modelo",
+        "inventario-xlsx"
       ],
-      "expected_fragment": "bjt",
+      "expected": [
+        "polarizacion-acentuada",
+        "bjt-modelo",
+        "bjt-notas"
+      ],
       "found": true
     },
     {
@@ -116,9 +137,15 @@
         "bjt-modelo",
         "bjt-amplificador",
         "ebers-exacto",
+        "codigo-ebers",
         "ebers-lejos"
       ],
-      "expected_fragment": "ebers",
+      "expected": [
+        "ebers-exacto",
+        "ebers-lejos",
+        "bjt-modelo",
+        "codigo-ebers"
+      ],
       "found": true
     },
     {
@@ -127,7 +154,9 @@
       "fuzzy": [
         "paella"
       ],
-      "expected_fragment": "paella",
+      "expected": [
+        "paella"
+      ],
       "found": true
     },
     {
@@ -136,7 +165,9 @@
       "fuzzy": [
         "paella"
       ],
-      "expected_fragment": "paella",
+      "expected": [
+        "paella"
+      ],
       "found": true
     },
     {
@@ -145,14 +176,18 @@
       "fuzzy": [
         "paella"
       ],
-      "expected_fragment": "paella",
+      "expected": [
+        "paella"
+      ],
       "found": true
     },
     {
       "query": "azaarfann",
       "lexical": [],
       "fuzzy": [],
-      "expected_fragment": "paella",
+      "expected": [
+        "paella"
+      ],
       "found": false
     }
   ],
@@ -168,9 +203,13 @@
     {
       "query": "transistores",
       "reason": "already answered by the lexical engine"
+    },
+    {
+      "query": "azaarfann",
+      "reason": "doubled vowel and doubled consonant; shares nothing with paella. Measured: the fuzzy layer returns nothing for it"
     }
   ],
   "leaks": [],
-  "rows": 1358,
-  "documents": 27
+  "rows": 2026,
+  "documents": 39
 }

@@ -27,14 +27,14 @@
       "measured": 0.0,
       "threshold": 0.0,
       "passed": true,
-      "detail": "MRR sigue en 0.8333"
+      "detail": "MRR sigue en 0.8667"
     },
     {
       "gate": "T5 added p95, warm (ms)",
-      "measured": 6.439299999328796,
+      "measured": 6.95350000023609,
       "threshold": 8.0,
       "passed": true,
-      "detail": "sesion de busqueda viva; cold (una sola peticion) 24.58 ms"
+      "detail": "sesion de busqueda viva; cold (una sola peticion) 26.07 ms"
     },
     {
       "gate": "T6 persistent state left",
@@ -96,7 +96,15 @@
     {
       "query": "gaurrent",
       "expected": null,
-      "suggestions": [],
+      "suggestions": [
+        {
+          "query": "current",
+          "token": "gaurrent",
+          "replacement": "current",
+          "distance": 2,
+          "results": 1
+        }
+      ],
       "all_verified": true
     },
     {

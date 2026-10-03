@@ -7,6 +7,63 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 045b - Every gate run on a quiet machine, and four real defects
+The 044/045 work was committed with two gates (U9, V11) and the fuzzy gate
+unrun because the machine was busy. With the machine idle, all of them ran, and
+running them was worth more than another phase would have been: four defects
+surfaced that no amount of code reading had found.
+
+- **U9 and V11 close.** 50 rows in **106.0 ms** against a 200 ms budget, and
+  keystroke-to-result best of 3 in **174 ms** against 600 ms. The 176 ms
+  reported for U9 in the phase-045 report was a loaded number; on a quiet
+  machine the corpus being 44% larger does not threaten the budget.
+- **`test_cli_module_guard_propagates_tray_exit_code` failed and is fixed.** It
+  is the one failure in the whole 1395-test suite, and phase 043 changed
+  `setup_logging` from one argument to two while this stub kept the old shape,
+  so the test died on the signature before reaching the thing it is about. The
+  stub now records both arguments and the test asserts the tray is configured
+  from the resolved log level -- so a regression there fails on the value
+  instead of on a `TypeError`.
+- **`fuzzy_gate` T1 had fallen to 6/10 and the reason was a broken label, not a
+  broken layer.** `ROBUST_QUERIES` expected a *string* matched with `in` against
+  a corpus id, so `"bjt"` had always meant "an id that starts with bjt-". The
+  corpus grew `T6_BJT_Apuntes.md`, whose body reads "el transistor bipolar" and
+  whose file name is that acronym; the fuzzy layer returns it first for a
+  typo'd "transisto", which is *correct*, and the gate called it a miss. The
+  expectation is now an explicit set of ids, the threshold stayed at 0.80, and
+  the one genuinely unreachable query ("azaarfann", more than the two-edit
+  budget from every word in the recipe) is declared in `OUT_OF_SCOPE` with a
+  measured reason instead of being quietly absorbed.
+- **`perf_gate` blamed the machine for its own metric.** When two passes of the
+  same build disagreed, it printed "the machine is not at rest or another
+  process is compiling" -- unconditionally, without measuring either. It was
+  observed doing so at 2% CPU with a calibration of 1.02x. The message now
+  reports the load it actually measured and says which way it points.
+- **`perf_gate` demanded byte-exact index size, and the premise was false.**
+  The special case asserted "two runs produce the same bytes or one of them is
+  broken". Measuring all three components separately showed the WAL is already
+  0 bytes in this build and the 16 KB difference is in the *main database
+  file* -- because the indexer walks the directory in filesystem enumeration
+  order, which is not sorted and differs between two directories holding
+  identical files. Same content, different transaction boundaries, different
+  free-page pattern. The size is a count, not a fingerprint, and is now
+  compared with the tolerance the metric already declares (10%, 0.10 MiB floor)
+  against a measured variation of 0.2%.
+
+Plus two cleanups found while measuring: dead code (`probe_index` and its
+`IndexProbe`, written for phase 045 and never called) removed, and the four
+names the quality gate and the tests reach across module boundaries in
+`diagnose.py` made public, because a leading underscore on a cross-module
+import is a lie about the shape of the code.
+
+New `tests/test_fuzzy_gate.py`, 15 tests: every id the gate will accept must
+contain a word within the layer's own two-edit budget of the query, so a future
+corpus addition cannot widen the gate for free. Two earlier versions of that
+check were wrong and both are recorded in the file -- a character-by-character
+comparison against the start of the path, and a trigram threshold that
+rejected "azarfan" even though the layer answers it because a transposition is
+inside a budget trigrams cannot see.
+
 ### Phase 045 - Search quality measured by cause, and a ranking left alone
 - **The phase's rule is negative**, so the phase begins by measuring whether a
   ranking change is justified at all. It is not: `evaluation/diagnose.py` probes

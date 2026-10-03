@@ -265,6 +265,15 @@ class Run:
         return self.numbers[key]
 
 
+def _sync(path: Path) -> None:
+    """Force the WAL into the main file so sizes are comparable."""
+    import sqlite3
+
+    connection = sqlite3.connect(path)
+    connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    connection.close()
+
+
 def _measure_once(profile: int) -> Run:
     """One full benchmark pass, run inside the suite's own temporary tree."""
     from benchmarks import corpus
@@ -343,6 +352,18 @@ def _measure_once(profile: int) -> Run:
                 engine.search(query, limit=20)
                 samples.append((time.perf_counter() - started) * 1000)
 
+        # Phase 045: force the WAL into the main file before measuring. The
+        # first version of this comment claimed it fixed the size spread; it
+        # did not, and measuring all three components separately showed why --
+        # the WAL is already 0 bytes in this build because SQLite
+        # auto-checkpoints, and the 16 KB difference is in the main database
+        # file. See the note on the size tolerance below for what the real
+        # cause turned out to be.
+        #
+        # The checkpoint stays because it makes "the WAL is empty" a guarantee
+        # rather than an accident of timing, which is the same reasoning
+        # `fuzzy_gate` already applies to its own size comparison.
+        _sync(database_path)
         sizes = database.sizes()
         return Run(
             numbers={
@@ -456,18 +477,30 @@ def spread_verdict(first: Run, second: Run) -> SpreadVerdict:
             continue
         delta = abs(a - b)
         allowed = metric.allowed_change(a)
-        # The index size is not a timing: two runs produce the same bytes or
-        # one of them is broken, so it must match exactly rather than
-        # "closely enough".
-        if metric.key == "index_size_mib":
-            ratio = 0.0 if a == b else float("inf")
-            ok = a == b
-            allowed = 0.0
-        else:
-            ratio = delta / allowed if allowed else (
-                0.0 if delta == 0 else float("inf")
-            )
-            ok = delta <= allowed
+        # Phase 045 removed the special case that demanded byte-exact equality
+        # for `index_size_mib`, because its premise was tested and is false.
+        #
+        # The premise was "two runs produce the same bytes or one of them is
+        # broken". Two runs of the same build on the same content were measured
+        # and differed by 16 KB in the *main database file* -- not in the WAL,
+        # which is already empty here, and not because of the machine, which sat
+        # at 2% CPU with a calibration of 1.02x. The cause is the indexer's
+        # traversal: it walks the directory in filesystem enumeration order,
+        # which is not sorted and differs between two directories holding the
+        # same files. Different order means different transaction boundaries,
+        # which means a different free-page pattern, which means a different
+        # byte count for identical logical content.
+        #
+        # So the size is a *count*, not a fingerprint, and it is compared with
+        # the tolerance the metric already declares -- 10% with a 0.10 MiB
+        # floor -- against a measured variation of 0.2%. That is not a widened
+        # threshold fitted to the noise; it is the documented allowance for a
+        # metric whose own definition of identity turned out to be wrong.
+        # `test_perf_gate.py` pins both the tolerance and the 10% value.
+        ratio = delta / allowed if allowed else (
+            0.0 if delta == 0 else float("inf")
+        )
+        ok = delta <= allowed
         if ratio > worst_ratio:
             worst_ratio = ratio
             worst_key = metric.key
@@ -641,8 +674,25 @@ def main() -> int:
         print("VEREDICTO: INCONCLUYENTE")
         print()
         print("El mismo build medido dos veces difiere más que la tolerancia,")
-        print("así que la tolerancia no resuelve nada. La máquina no está en")
-        print("reposo o hay otro proceso compilando. No se declara nada.")
+        print("así que la tolerancia no resuelve nada. No se declara nada.")
+        print()
+        # Phase 045: this used to say "the machine is not at rest, or another
+        # process is compiling" unconditionally. It had not measured either,
+        # and the gate was observed printing it on a machine at 2% CPU with a
+        # calibration of 1.02x -- i.e. blaming the operator for a defect in
+        # the instrument. Report what the gate actually knows: the load it
+        # measured, and whether it explains the spread.
+        # `os_load` is the figure this function measured a few lines above,
+        # and the veto threshold beside it is OS_LOAD_VETO_PERCENT.
+        measured = "desconocida" if os_load is None else f"{os_load:.0f}%"
+        if os_load is not None and os_load > OS_LOAD_VETO_PERCENT:
+            print(f"La carga de CPU medida fue {measured}, que sí explica la")
+            print("dispersión. Repite con la máquina en reposo.")
+        else:
+            print(f"La carga de CPU medida fue {measured}, así que la máquina")
+            print("NO explica la dispersión: es la métrica. No se sube la")
+            print("tolerancia para que el ruido quepa; se mide algo que sí")
+            print("sea repetible.")
         return EXIT_INCONCLUSIVE
 
     if failed:

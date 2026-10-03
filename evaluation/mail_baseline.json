@@ -27,11 +27,11 @@
       "measured": 0,
       "threshold": 0,
       "passed": true,
-      "detail": "ningun documento salio del top-5; MRR 0.8333 -> 0.7778 (delta +0.0556)"
+      "detail": "ningun documento salio del top-5; MRR 0.8667 -> 0.8333 (delta +0.0333)"
     },
     {
       "gate": "T5 ms per mail document",
-      "measured": 3.8199000009626616,
+      "measured": 2.4417999998149753,
       "threshold": 60.0,
       "passed": true,
       "detail": "peor de cinco extracciones"

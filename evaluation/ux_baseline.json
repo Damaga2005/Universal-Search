@@ -20,7 +20,7 @@
       "measured": 0.0,
       "threshold": 0.0,
       "passed": true,
-      "detail": "6 pasos del recorrido; anillo ['Entry', 'Combobox', 'Combobox', 'Combobox', 'Menubutton', 'Treeview']"
+      "detail": "6 pasos del recorrido; anillo ['Entry', 'Combobox', 'Combobox', 'Combobox', 'Combobox', 'Combobox', 'Menubutton', 'Treeview']"
     },
     {
       "gate": "U4 fallos que parecen un estado normal",
@@ -61,13 +61,13 @@
       "gate": "U9 relleno del panel por encima del presupuesto",
       "measured": 0.0,
       "threshold": 0.0,
-      "passed": false,
-      "detail": "INCONCLUYENTE: CPU del sistema al 79% antes de medir (> 60%): hay otro programa usando la máquina, así que una cifra de latencia no concluiría nada; 50 filas en 155.0 ms (presupuesto 200 ms)"
+      "passed": true,
+      "detail": "50 filas en 119.6 ms (presupuesto 200 ms)"
     }
   ],
   "window_checked": true,
   "window_reason": null,
-  "render_ms": 155.01,
+  "render_ms": 119.56,
   "render_budget_ms": 200.0,
-  "load_ok": false
+  "load_ok": true
 }

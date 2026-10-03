@@ -202,7 +202,7 @@ def main() -> int:
         lexical = SearchEngine(_engine_database(tree, workspace / "lexical.db"))
         fuzzy = FuzzySearchEngine(lexical)
         hybrid = HybridSearchEngine(lexical, SemanticIndex(lexical.database))
-        ids = diagnose_module._ids_for(lexical, tree)
+        ids = diagnose_module.document_ids_for(lexical, tree)
 
         report = _measure(lexical, tree)
         aggregates = _aggregates(report)
@@ -550,14 +550,14 @@ def _filter_accuracy(engine: SearchEngine, tree: Path) -> dict[str, object]:
     cases: list[tuple[str, bool]] = []
     unlabelled: list[str] = []
     for labelled in corpus_module.LABELLED_QUERIES:
-        filters = diagnose_module._filters_in(labelled.query)
+        filters = diagnose_module.filters_in(labelled.query)
         if not filters:
             continue
         results = engine.search(
             labelled.query, limit=runner_module.DEFAULT_LIMIT, now=MEASUREMENT_NOW
         )
         satisfied = all(
-            diagnose_module._passes_filters(str(result.path), filters)
+            diagnose_module.passes_filters(str(result.path), filters)
             for result in results
         )
         cases.append((labelled.query, satisfied))

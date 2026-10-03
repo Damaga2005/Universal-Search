@@ -41,11 +41,11 @@
       "measured": 0,
       "threshold": 0,
       "passed": true,
-      "detail": "MRR 0.8333 -> 0.8333"
+      "detail": "MRR 0.8667 -> 0.8667"
     },
     {
       "gate": "T7 ms per archive",
-      "measured": 17.989600000873907,
+      "measured": 1.1472999999568856,
       "threshold": 250.0,
       "passed": true,
       "detail": "peor de cinco, con un zip de 7 miembros"

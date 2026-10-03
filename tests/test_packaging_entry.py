@@ -41,10 +41,20 @@ def test_packaging_entry_maps_legacy_none_to_zero(monkeypatch) -> None:
 
 def test_cli_module_guard_propagates_tray_exit_code(tmp_path, monkeypatch) -> None:
     from universal_search import appconfig, tray
+    from universal_search.appconfig import AppConfig, AppPaths
 
     calls = []
+    logged = []
     monkeypatch.setenv("UNIVERSAL_SEARCH_HOME", str(tmp_path / "home"))
-    monkeypatch.setattr(appconfig, "setup_logging", lambda paths: None)
+    # Phase 043 gave setup_logging a second argument, and this stub kept the
+    # old one-argument shape -- so the test failed on the signature before it
+    # ever reached the thing it is about. The stub now records both arguments
+    # instead of ignoring them, because the level the tray hands over is now
+    # part of what this path is supposed to get right.
+    monkeypatch.setattr(
+        appconfig, "setup_logging",
+        lambda paths, level=None: logged.append((paths, level)),
+    )
     monkeypatch.setattr(
         tray,
         "run_tray",
@@ -57,3 +67,8 @@ def test_cli_module_guard_propagates_tray_exit_code(tmp_path, monkeypatch) -> No
 
     assert exit_info.value.code == 17
     assert len(calls) == 1
+    assert len(logged) == 1
+    # The tray is configured from the resolved log level, not from a constant:
+    # that was phase 043's whole point, and until this assertion existed a
+    # regression here would have failed on a TypeError instead of on the value.
+    assert logged[0][1] == AppConfig.load(AppPaths.discover()).log_level

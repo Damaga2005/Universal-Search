@@ -204,7 +204,7 @@ def test_a_stem_guess_is_declared_and_not_invented():
 
 
 def learn_stem(word: str) -> str:
-    return diagnose_module._stem(word)
+    return diagnose_module.stem_of(word)
 
 
 def test_a_verbose_inventory_is_never_mislabelled_as_known():
@@ -302,7 +302,7 @@ def test_a_missing_document_is_reported_as_stale_not_as_anything_else(tmp_path):
     labelled = next(
         l for l in corpus_module.LABELLED_QUERIES if l.query == "notas"
     )
-    ids = diagnose_module._ids_for(engine, tree)
+    ids = diagnose_module.document_ids_for(engine, tree)
     victim = ids["bjt-notas"]
     with engine.database.connect() as connection:
         connection.execute("DELETE FROM documents_fts WHERE document_id = ?",

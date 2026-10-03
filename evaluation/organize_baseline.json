@@ -6,7 +6,7 @@
       "measured": 0,
       "threshold": 0,
       "passed": true,
-      "detail": "8 de 19 candidatos, 12 combinaciones; reordenando cambian 15 subconjuntos (es lo pedido); orden por relevancia intacto: True"
+      "detail": "8 de 27 candidatos, 12 combinaciones; reordenando cambian 15 subconjuntos (es lo pedido); orden por relevancia intacto: True"
     },
     {
       "gate": "T2 sort is monotonic",
@@ -62,9 +62,9 @@
       "measured": 0.0,
       "threshold": 0.0,
       "passed": true,
-      "detail": "MRR sigue en 0.8333"
+      "detail": "MRR sigue en 0.8667"
     }
   ],
-  "candidates": 19,
+  "candidates": 27,
   "page": 8
 }
