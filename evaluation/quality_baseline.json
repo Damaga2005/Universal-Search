@@ -1,0 +1,375 @@
+{
+  "phase": "045",
+  "clock": "2026-01-15T12:00:00+00:00",
+  "corpus": {
+    "documents": 39,
+    "queries": 30
+  },
+  "verdicts": [
+    {
+      "gate": "Q1 regresion de MRR respecto al baseline",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "MRR 0.8667 en el baseline, 0.8667 ahora"
+    },
+    {
+      "gate": "Q2 P@1 por debajo del baseline",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "P@1 0.8667 -> 0.8667"
+    },
+    {
+      "gate": "Q3 R@10 por debajo del baseline",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "R@10 0.8625 -> 0.8625"
+    },
+    {
+      "gate": "Q4 exactitud de coincidencia exacta",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "18 consultas con coincidencia exacta, correccion 1.0000; 1 limitacion(es) declarada(s) excluidas y nombradas"
+    },
+    {
+      "gate": "Q5 consultas filtradas que filtraron mal",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "2 consultas con filtro, correccion 1.0000"
+    },
+    {
+      "gate": "Q6 consultas ruidosas que debian callar",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "1 consultas que deben callar, silenciadas 1"
+    },
+    {
+      "gate": "Q7 fallos sin causa diagnosticada",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "8 fallos diagnosticados, 0 sin clase"
+    },
+    {
+      "gate": "Q8 cargas de trabajo sin representar",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "10 de 10 cargas presentes"
+    },
+    {
+      "gate": "Q9 fallos que un peso podria alcanzar",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "de 8 fallos, 0 alcanzables cambiando un peso; solo el motor lexico: 0"
+    },
+    {
+      "gate": "Q10 la ordenacion cambio",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "12 señales, pesos idénticos al baseline de la fase 040"
+    },
+    {
+      "gate": "Q11 clases fuera de la taxonomia",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "clases: extraction=1, lexical mismatch=1, semantic fallback=6"
+    },
+    {
+      "gate": "Q12 pesos candidatos con mejora medida",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "9 pesos candidatos medidos contra el corpus, 0 mejoran el MRR; ninguno, y ese es el resultado"
+    },
+    {
+      "gate": "Q13 ganancia neta de cambiar de tokenizador",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "los dos tokenizadores sobre las 30 consultas: trigram responde a 2 mas y 4 menos (ganancia neta -2); la limitacion declarada se justifica por medicion; rotas: '\"ebers moll\"', 'punto Q', 'gain de tension', 'T6 BJT Apuntes'"
+    }
+  ],
+  "metrics": {
+    "mrr": 0.866667,
+    "mean_precision_at_k": {
+      "1": 0.866667,
+      "3": 0.5,
+      "5": 0.373333,
+      "10": 0.22
+    },
+    "mean_recall_at_k": {
+      "1": 0.623611,
+      "3": 0.7875,
+      "5": 0.8375,
+      "10": 0.8625
+    }
+  },
+  "exact_match_correctness": 1.0,
+  "coverage": {
+    "university/technical": true,
+    "code": true,
+    "pdf": true,
+    "office": true,
+    "office table": true,
+    "duplicated material": true,
+    "short document": true,
+    "long document": true,
+    "abbreviated filename": true,
+    "multilingual": true
+  },
+  "inventory": {
+    "by_class": {
+      "stale index": 0,
+      "extraction": 1,
+      "filtering": 0,
+      "ranking": 0,
+      "phrase handling": 0,
+      "morphology/fuzzy": 0,
+      "semantic fallback": 6,
+      "filename/path": 0,
+      "lexical mismatch": 1,
+      "interaction/UI": 0
+    },
+    "ranking_reachable": 0,
+    "unclassified": 0,
+    "verdicts": [
+      {
+        "query": "BJT",
+        "document": "transistor-bipolar",
+        "cause": "lexical mismatch",
+        "evidence": [
+          "la consulta exige ['bjt'] y el documento no los tiene"
+        ],
+        "reachable_by_ranking": false
+      },
+      {
+        "query": "voltaje base emisor",
+        "document": "bjt-notas",
+        "cause": "semantic fallback",
+        "evidence": [
+          "solo la capa semantica lo encuentra"
+        ],
+        "reachable_by_ranking": false
+      },
+      {
+        "query": "voltaje base emisor",
+        "document": "tension-base-emisor",
+        "cause": "semantic fallback",
+        "evidence": [
+          "solo la capa semantica lo encuentra"
+        ],
+        "reachable_by_ranking": false
+      },
+      {
+        "query": "como se determina el punto de trabajo",
+        "document": "bjt-modelo",
+        "cause": "semantic fallback",
+        "evidence": [
+          "solo la capa semantica lo encuentra"
+        ],
+        "reachable_by_ranking": false
+      },
+      {
+        "query": "como se determina el punto de trabajo",
+        "document": "bjt-notas",
+        "cause": "semantic fallback",
+        "evidence": [
+          "solo la capa semantica lo encuentra"
+        ],
+        "reachable_by_ranking": false
+      },
+      {
+        "query": "como se determina el punto de trabajo",
+        "document": "calculo-punto-operacion",
+        "cause": "semantic fallback",
+        "evidence": [
+          "solo la capa semantica lo encuentra"
+        ],
+        "reachable_by_ranking": false
+      },
+      {
+        "query": "receta paella",
+        "document": "paella",
+        "cause": "semantic fallback",
+        "evidence": [
+          "solo la capa semantica lo encuentra"
+        ],
+        "reachable_by_ranking": false
+      },
+      {
+        "query": "テスト",
+        "document": "notas-ja",
+        "cause": "extraction",
+        "evidence": [
+          "el texto esta en el documento pero el tokenizador no produce ese token para ['テスト']"
+        ],
+        "reachable_by_ranking": false
+      }
+    ]
+  },
+  "inventory_lexical_only": {
+    "by_class": {
+      "stale index": 0,
+      "extraction": 1,
+      "filtering": 0,
+      "ranking": 0,
+      "phrase handling": 0,
+      "morphology/fuzzy": 1,
+      "semantic fallback": 0,
+      "filename/path": 0,
+      "lexical mismatch": 6,
+      "interaction/UI": 0
+    },
+    "ranking_reachable": 0,
+    "unclassified": 0,
+    "verdicts": [
+      {
+        "query": "BJT",
+        "document": "transistor-bipolar",
+        "cause": "lexical mismatch",
+        "evidence": [
+          "la consulta exige ['bjt'] y el documento no los tiene"
+        ],
+        "reachable_by_ranking": false
+      },
+      {
+        "query": "voltaje base emisor",
+        "document": "bjt-notas",
+        "cause": "lexical mismatch",
+        "evidence": [
+          "la consulta exige ['voltaje', 'base', 'emisor'] y el documento no los tiene"
+        ],
+        "reachable_by_ranking": false
+      },
+      {
+        "query": "voltaje base emisor",
+        "document": "tension-base-emisor",
+        "cause": "lexical mismatch",
+        "evidence": [
+          "la consulta exige ['voltaje', 'base', 'emisor'] y el documento no los tiene"
+        ],
+        "reachable_by_ranking": false
+      },
+      {
+        "query": "como se determina el punto de trabajo",
+        "document": "bjt-modelo",
+        "cause": "lexical mismatch",
+        "evidence": [
+          "la consulta exige ['como', 'se', 'determina', 'el', 'punto', 'de', 'trabajo'] y el documento no los tiene"
+        ],
+        "reachable_by_ranking": false
+      },
+      {
+        "query": "como se determina el punto de trabajo",
+        "document": "bjt-notas",
+        "cause": "lexical mismatch",
+        "evidence": [
+          "la consulta exige ['como', 'se', 'determina', 'el', 'punto', 'de', 'trabajo'] y el documento no los tiene"
+        ],
+        "reachable_by_ranking": false
+      },
+      {
+        "query": "como se determina el punto de trabajo",
+        "document": "calculo-punto-operacion",
+        "cause": "lexical mismatch",
+        "evidence": [
+          "la consulta exige ['como', 'se', 'determina', 'el', 'punto', 'de', 'trabajo'] y el documento no los tiene"
+        ],
+        "reachable_by_ranking": false
+      },
+      {
+        "query": "receta paella",
+        "document": "paella",
+        "cause": "morphology/fuzzy",
+        "evidence": [
+          "los terminos ['receta'] solo aparecen en otra forma flexionada"
+        ],
+        "reachable_by_ranking": false
+      },
+      {
+        "query": "テスト",
+        "document": "notas-ja",
+        "cause": "extraction",
+        "evidence": [
+          "el texto esta en el documento pero el tokenizador no produce ese token para ['テスト']"
+        ],
+        "reachable_by_ranking": false
+      }
+    ]
+  },
+  "candidate_weights": [
+    {
+      "weight": "filename_exact",
+      "value": 6.0,
+      "mrr": 0.866667,
+      "mrr_delta": 0.0,
+      "improved_mrr": false
+    },
+    {
+      "weight": "filename_tokens",
+      "value": 4.0,
+      "mrr": 0.866667,
+      "mrr_delta": 0.0,
+      "improved_mrr": false
+    },
+    {
+      "weight": "phrase_exact",
+      "value": 4.0,
+      "mrr": 0.866667,
+      "mrr_delta": 0.0,
+      "improved_mrr": false
+    },
+    {
+      "weight": "term_freq",
+      "value": 3.0,
+      "mrr": 0.866667,
+      "mrr_delta": 0.0,
+      "improved_mrr": false
+    },
+    {
+      "weight": "proximity",
+      "value": 3.0,
+      "mrr": 0.866667,
+      "mrr_delta": 0.0,
+      "improved_mrr": false
+    },
+    {
+      "weight": "bm25",
+      "value": 4.0,
+      "mrr": 0.866667,
+      "mrr_delta": 0.0,
+      "improved_mrr": false
+    },
+    {
+      "weight": "recency",
+      "value": 0.0,
+      "mrr": 0.866667,
+      "mrr_delta": 0.0,
+      "improved_mrr": false
+    },
+    {
+      "weight": "recency",
+      "value": 0.6,
+      "mrr": 0.866667,
+      "mrr_delta": 0.0,
+      "improved_mrr": false
+    },
+    {
+      "weight": "path_match",
+      "value": 1.6,
+      "mrr": 0.866667,
+      "mrr_delta": 0.0,
+      "improved_mrr": false
+    }
+  ],
+  "decision": "ranking unchanged"
+}

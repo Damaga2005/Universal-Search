@@ -11,6 +11,10 @@ hand as often as the weights are touched.
 Everything is local and deterministic: a synthetic labelled corpus, the
 real search engine, SQLite, and Precision@K / Recall@K / MRR. No network,
 no service, no external API.
+
+Phase 045: ``evaluation.diagnose`` turns a miss into a cause, and
+``evaluation.quality_gate`` is the executable form of the phase's rule that a
+ranking change needs a reproducible failure behind it.
 """
 
 from evaluation.corpus import (
@@ -21,17 +25,21 @@ from evaluation.corpus import (
     LabelledQuery,
 )
 from evaluation.metrics import (
+    DEFAULT_K_VALUES,
     EvaluationReport,
     QueryScore,
     evaluate,
+    filter_accuracy,
     first_relevant_rank,
     precision_at_k,
     recall_at_k,
     reciprocal_rank,
     score_query,
+    zero_result_accuracy,
 )
 
 __all__ = [
+    "DEFAULT_K_VALUES",
     "DOCUMENTS",
     "DOCUMENT_IDS",
     "LABELLED_QUERIES",
@@ -40,9 +48,11 @@ __all__ = [
     "LabelledQuery",
     "QueryScore",
     "evaluate",
+    "filter_accuracy",
     "first_relevant_rank",
     "precision_at_k",
     "recall_at_k",
     "reciprocal_rank",
     "score_query",
+    "zero_result_accuracy",
 ]

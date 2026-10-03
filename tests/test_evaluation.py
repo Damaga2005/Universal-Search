@@ -173,12 +173,22 @@ def test_every_non_failure_query_reports_a_relevant_document_first(report):
     # the failure classes a semantic layer must fix, so the lexical MRR
     # drops to a measured 0.833 — and the queries that fail are EXACTLY
     # the labelled synonym/paraphrase/morphological ones, not accidents.
-    assert report.mrr() == pytest.approx(0.8333, abs=1e-3)
+    # Phase 045: 0.833 -> 0.867, and the two are NOT comparable. The corpus
+    # grew from 27 documents / 18 queries to 39 / 30 (code, Office, a readable
+    # PDF, English, French, a duplicate pair, abbreviated names), so this is a
+    # different question with a different denominator, not an improvement.
+    assert report.mrr() == pytest.approx(0.8667, abs=1e-3)
     # The queries that retrieve NOTHING are exactly the total failures.
     failed = {
         score.query for score in report.scores if score.reciprocal_rank == 0.0
     }
-    assert failed == {"voltaje base emisor", "como se determina el punto de trabajo", "receta paella"}
+    # The phase-026 set, unchanged, plus exactly one case: CJK tokenisation.
+    assert failed == {
+        "voltaje base emisor",
+        "como se determina el punto de trabajo",
+        "receta paella",
+        "\u30c6\u30b9\u30c8",
+    }
     # Every query that is NOT a total failure still answers first.
     clean = [score for score in report.scores if score.reciprocal_rank > 0.0]
     assert clean
@@ -224,11 +234,20 @@ def test_path_noise_never_outranks_relevant_content(report):
     # Accidental generic path match: a CV inside descargas/notas/.
     notas = scores["notas"]
     assert notas.ranked[0] == "bjt-notas"
-    assert notas.ranked[1] == "notas-generico"
+    # Phase 045 added notas/algebra/resumen_algebra.md, a second document whose
+    # only claim on this query is the parent directory. It now outranks the CV
+    # and it is a bigger distractor: its body has nothing to do with "notas"
+    # either. Which one lands at rank 1 among the intruders is not the point;
+    # that none of them is the answer is.
+    assert "notas-generico" in notas.ranked
+    intruder_name = next(
+        name for name in notas.ranked
+        if name in {"notas-generico", "algebra-original", "t6-abrev"}
+    )
     # It is retrieved (the index is honest) but loses by a clear margin.
     assert (notas.relevance_margin() or 0.0) > 0.20
     # Its points come almost entirely from the path, never from content.
-    intruder = notas.points[notas.ranked.index("notas-generico")]
+    intruder = notas.points[notas.ranked.index(intruder_name)]
     assert intruder["path_match"] > 0.0
     assert intruder["phrase_exact"] == 0.0
     assert intruder["filename_tokens"] == 0.0
@@ -255,9 +274,12 @@ def test_metadata_only_binary_is_retrievable_by_name_and_by_filter(report):
     scores = report.by_query()
     assert "bjt-datasheet" in scores["BJT"].ranked
     # Filter-only query: no text to rank, score 0.0, recency order.
+    # Phase 045 added a second, readable PDF, so this query stopped meaning
+    # "that one PDF" and started meaning "any PDF". While the corpus had one
+    # PDF, the filter was a lookup, not a filter.
     pdf = scores["type:pdf"]
-    assert list(pdf.ranked) == ["bjt-datasheet"]
-    assert list(pdf.scores) == [0.0]
+    assert set(pdf.ranked) == {"bjt-datasheet", "manual-pdf"}
+    assert list(pdf.scores) == [0.0, 0.0]
     # Nothing was scored at all: a filter-only query bypasses the ranker,
     # so there is no signal breakdown to explain.
     assert pdf.points[0] == {}
@@ -388,11 +410,23 @@ def test_phase026_lexical_engine_fails_the_labelled_failure_queries(report):
         assert scores[query].ranked == (), query
         assert scores[query].reciprocal_rank == 0.0, query
     # Partial failure: the BJT synonym document is never retrieved, so the
-    # query tops out at 6 of 7 relevant (5 of 7 within the first five).
+    # query tops out at 7 of 8. Phase 045 added T6_BJT_Apuntes.md, whose file
+    # name is the acronym itself, which is why the denominator moved from 7.
     bjt = scores["BJT"]
     assert "transistor-bipolar" not in bjt.ranked
-    assert bjt.recall[5] == pytest.approx(5 / 7)
+    assert bjt.recall[5] == pytest.approx(5 / 8)
+    assert bjt.recall[10] == pytest.approx(7 / 8)
     assert list(bjt.missing()) == ["transistor-bipolar"]
+    # The CJK case, which no layer can fix: unicode61 indexes a run of
+    # ideographs as ONE token. Declared in known_limitation, measured by
+    # quality gate Q13, and asserted here so that deleting the declaration
+    # without fixing the tokenizer is a failing test rather than a silent pass.
+    cjk = scores["\u30c6\u30b9\u30c8"]
+    assert cjk.ranked == ()
+    assert any(
+        labelled.known_limitation for labelled in corpus_module.LABELLED_QUERIES
+        if labelled.query == "\u30c6\u30b9\u30c8"
+    )
 
 
 def test_phase026_malformed_document_is_indexed_and_findable_by_name(report):
@@ -444,18 +478,38 @@ def test_exact_targets_find_name_and_content_matches():
     assert exact_targets("type:pdf", documents) == frozenset()
 
 
-def test_exact_match_correctness_is_perfect_for_the_lexical_engine(report):
-    correctness, rows = exact_match_summary(report, corpus_module.DOCUMENTS)
-    assert correctness == 1.0
-    assert rows  # there is at least one exact query
-    assert all(row["correct"] for row in rows)
+def test_exact_match_correctness_is_perfect_over_the_claimed_corpus(report):
+    """1.0 over every query this build claims to answer.
+
+    Phase 045 added a CJK query unicode61 cannot answer. The honest handling
+    is not to pretend it is 1.0 over everything: compute the threshold over
+    the claimed set, name the exclusion, and prove the alternative is worse.
+    Quality gate Q13 measures that alternative on every run.
+    """
+    declared = {
+        labelled.query for labelled in corpus_module.LABELLED_QUERIES
+        if labelled.known_limitation
+    }
+    _all, rows = exact_match_summary(report, corpus_module.DOCUMENTS)
+    claimed = [row for row in rows if row["query"] not in declared]
+    assert len(claimed) == 18
+    assert all(row["correct"] for row in claimed)
+    # And the declared one is genuinely a failure, not a declared success.
+    excluded = [row for row in rows if row["query"] in declared]
+    assert excluded and not all(row["correct"] for row in excluded)
 
 
 def test_failure_inventory_lists_the_measured_failures(report):
     rows = failure_inventory(report, corpus_module.LABELLED_QUERIES)
     by_query = {row["query"]: row for row in rows}
     # Three total failures and one partial, worst first.
-    assert [row["kind"] for row in rows] == ["total", "total", "total", "partial"]
+    # Four total (the three phase-026 ones plus CJK) and one partial.
+    # Phase 045 created no new *kind*: the new case is the same total failure
+    # the corpus already had, with a different cause.
+    assert [row["kind"] for row in rows] == [
+        "total", "total", "total", "total", "partial",
+    ]
+    assert by_query["\u30c6\u30b9\u30c8"]["missing"] == ["notas-ja"]
     assert by_query["como se determina el punto de trabajo"]["retrieved"] == 0
     assert by_query["voltaje base emisor"]["relevant"] == 2
     assert by_query["BJT"]["missing"] == ["transistor-bipolar"]
@@ -474,8 +528,13 @@ def test_build_semantic_baseline_records_hash_metrics_and_failures(report, tmp_p
     assert payload["queries"] == len(report.scores)
     assert payload["corpus_hash"] == corpus_hash(tree)
     assert payload["metrics"]["mrr"] == pytest.approx(report.mrr())
-    assert payload["exact_match_correctness"] == 1.0
-    assert len(payload["failures"]) == 4
+    # Phase 045: 27 -> 39 documents, 18 -> 30 queries, 4 -> 5 failures, and
+    # exact-match correctness is no longer 1.0 *overall* -- it is 1.0 over the
+    # claimed set, with the CJK query declared. See the sibling test.
+    assert payload["documents"] == 39
+    assert payload["queries"] == 30
+    assert payload["exact_match_correctness"] < 1.0
+    assert len(payload["failures"]) == 5
     # Latency is recorded but marked informational (machine-dependent).
     assert payload["latency_ms"]["informational"] is True
     assert payload["latency_ms"]["mean"] == pytest.approx(2.0)
@@ -498,8 +557,21 @@ def test_committed_semantic_baseline_records_the_measured_gate():
         "T1_min_failure_recall5"
     ]
     assert measured["lexical_failure_recall5"] < measured["hybrid_failure_recall5"]
-    assert measured["exact_match_correctness"] == 1.0
     assert measured["preexisting_top1_regressions"] == 0
+    # Phase 045 re-measured the block on the grown corpus. Exact-match
+    # correctness is no longer 1.0 *overall*, for exactly one declared reason:
+    # the CJK query, which is a tokenisation gap. Over the queries this build
+    # claims to answer it is still 1.0, which is the threshold that was
+    # actually about the semantic layer all along -- the layer must not cost an
+    # exact match. Quality gate Q4 measures that, and Q13 measures whether
+    # switching tokenizer would be any better.
+    assert decision["remeasured_in"] == "045"
+    assert measured["exact_match_correctness"] < 1.0
+    declared = {
+        labelled.query for labelled in corpus_module.LABELLED_QUERIES
+        if labelled.known_limitation
+    }
+    assert declared == {"\u30c6\u30b9\u30c8"}
     # The recorded model version must be the one in the code, or the record
     # describes a model that no longer ships.
     assert decision["model"]["ngram_version"] == NGRAM_VERSION
@@ -530,7 +602,11 @@ def test_semantic_layer_wins_on_the_labelled_failures_and_keeps_nonsense_empty(
         ]
 
     for labelled in corpus_module.LABELLED_QUERIES:
-        if not labelled.failure_class:
+        if not labelled.failure_class or labelled.known_limitation:
+            # The CJK query is skipped for the same reason it is excluded from
+            # Q4: it is a tokenisation gap, not a lexical or semantic one, and
+            # the declaration names it. Q13 measures whether the alternative
+            # is any better.
             continue
         found = ranked(hybrid, labelled.query)
         assert found, labelled.query

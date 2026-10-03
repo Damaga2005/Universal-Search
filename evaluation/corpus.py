@@ -29,7 +29,9 @@ single-character term, a malformed binary ``.md`` that is findable by name
 only, and two more unrelated-domain distractors.
 """
 
+import io
 import os
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -47,6 +49,181 @@ LOG_WORDS = (
     "sensor lectura muestra canal umbral periodo estado mascara registro "
     "cola evento marca tiempo real adc gpio pin nivel histeresis"
 ).split()
+
+
+# -- phase 045: binary formats, built deterministically ----------------------
+# The corpus already had a `.pdf`, but it was a deliberately unreadable blob
+# (`content is None`), so the one binary workload the phase lists was a
+# metadata-only case that never exercised the extractor at all. Code, Office
+# and *readable* PDF had no representation whatsoever, even though all three
+# extractors ship. A workload that is not in the corpus cannot regress, and a
+# workload that cannot regress is not a workload that is working.
+#
+# Three builders, because `CorpusDocument.raw` is the existing mechanism for
+# "write these exact bytes". Each is deterministic down to the ZIP timestamps,
+# which matters because `corpus_hash()` feeds the committed baseline: a corpus
+# that hashes differently on every run makes every ranking measurement
+# incomparable with the last one.
+#
+# Nothing here is a fixture blob. A PDF is a real, minimal, well-formed
+# document; a DOCX/XLSX is a real OOXML package. If the extractor stops reading
+# them, the corpus stops indexing them and the quality gate says so -- which is
+# the whole point of putting them in.
+
+_ZIP_TIMESTAMP = (2024, 1, 1, 0, 0, 0)
+
+
+def pdf_bytes(lines: tuple[str, ...]) -> bytes:
+    """A minimal but genuinely readable PDF: one page, Helvetica, Tj per line.
+
+    A hand-built object table with a real cross-reference table, because
+    `pypdf` is a real parser and this has to satisfy it rather than a
+    convenient subset.
+    """
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R"
+        b" /Resources << /Font << /F1 5 0 R >> >> >>",
+    ]
+    body = ["BT", "/F1 12 Tf", "72 720 Td", "16 TL"]
+    for line in lines:
+        escaped = line.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+        body.append(f"({escaped}) Tj")
+        body.append("T*")
+    body.append("ET")
+    stream = "\n".join(body).encode("latin-1", "replace")
+    objects.append(
+        b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n"
+        + stream + b"\nendstream"
+    )
+    objects.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+
+    buffer = io.BytesIO()
+    buffer.write(b"%PDF-1.4\n")
+    offsets = []
+    for number, payload in enumerate(objects, start=1):
+        offsets.append(buffer.tell())
+        buffer.write(f"{number} 0 obj\n".encode("ascii") + payload + b"\nendobj\n")
+    start_xref = buffer.tell()
+    buffer.write(f"xref\n0 {len(objects) + 1}\n".encode("ascii"))
+    buffer.write(b"0000000000 65535 f \n")
+    for offset in offsets:
+        buffer.write(f"{offset:010d} 00000 n \n".encode("ascii"))
+    buffer.write(
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
+        f"startxref\n{start_xref}\n%%EOF\n".encode("ascii")
+    )
+    return buffer.getvalue()
+
+
+_CT_DOCX = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+</Types>"""
+
+_RELS_ROOT = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="{target}"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+</Relationships>"""
+
+_CORE_PROPERTIES = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/">
+<dc:title>{title}</dc:title>
+</cp:coreProperties>"""
+
+_CT_XLSX = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>"""
+
+_WORKBOOK_RELS = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>
+</Relationships>"""
+
+_W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+_S_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+_R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+
+
+def _zip(members: tuple[tuple[str, str], ...]) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, payload in members:
+            info = zipfile.ZipInfo(name, date_time=_ZIP_TIMESTAMP)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            # Fixed permission bits: the default carries the creating process's
+            # umask into the archive, which would make two machines disagree.
+            info.external_attr = 0o600 << 16
+            archive.writestr(info, payload)
+    return buffer.getvalue()
+
+
+def docx_bytes(paragraphs: tuple[tuple[str, str], ...], title: str = "") -> bytes:
+    """A minimal WordprocessingML package carrying real paragraphs."""
+    body = [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        f'<w:document xmlns:w="{_W_NS}"><w:body>',
+    ]
+    for style, text in paragraphs:
+        body.append(
+            f'<w:p><w:pPr><w:pStyle w:val="{style}"/></w:pPr>'
+            f'<w:r><w:t xml:space="preserve">{text}</w:t></w:r></w:p>'
+        )
+    body.append("</w:body></w:document>")
+    return _zip((
+        ("[Content_Types].xml", _CT_DOCX),
+        ("_rels/.rels", _RELS_ROOT.format(target="word/document.xml")),
+        ("docProps/core.xml", _CORE_PROPERTIES.format(title=title)),
+        ("word/document.xml", "".join(body)),
+    ))
+
+
+def xlsx_bytes(sheet_name: str, rows: tuple[tuple[str, ...], ...]) -> bytes:
+    """A minimal SpreadsheetML package: one sheet, shared strings, inline rows."""
+    strings: list[str] = []
+    index: dict[str, int] = {}
+    for row in rows:
+        for cell in row:
+            if cell not in index:
+                index[cell] = len(strings)
+                strings.append(cell)
+    shared = (
+        f'<sst xmlns="{_S_NS}" count="{len(strings)}" uniqueCount="{len(strings)}">'
+        + "".join(f"<si><t>{cell}</t></si>" for cell in strings)
+        + "</sst>"
+    )
+    body = []
+    for row_number, row in enumerate(rows, start=1):
+        cells = "".join(
+            f'<c r="{chr(65 + column)}{row_number}" t="s">'
+            f"<v>{index[cell]}</v></c>"
+            for column, cell in enumerate(row)
+        )
+        body.append(f'<row r="{row_number}">{cells}</row>')
+    sheet = f'<worksheet xmlns="{_S_NS}"><sheetData>{"".join(body)}</sheetData></worksheet>'
+    workbook = (
+        f'<workbook xmlns="{_S_NS}" xmlns:r="{_R_NS}"><sheets>'
+        f'<sheet name="{sheet_name}" sheetId="1" r:id="rId1"/></sheets></workbook>'
+    )
+    return _zip((
+        ("[Content_Types].xml", _CT_XLSX),
+        ("_rels/.rels", _RELS_ROOT.format(target="xl/workbook.xml")),
+        ("xl/workbook.xml", workbook),
+        ("xl/_rels/workbook.xml.rels", _WORKBOOK_RELS),
+        ("xl/sharedStrings.xml", shared),
+        ("xl/worksheets/sheet1.xml", sheet),
+    ))
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +257,17 @@ class LabelledQuery:
     relevant: frozenset[str]
     note: str
     failure_class: str = ""
+    known_limitation: str = ""
+    """``known_limitation`` (phase 045) marks a query this build is *documented*
+    not to answer, and carries the reason.
+
+    It exists because the two alternatives are both worse: a red gate nobody
+    can close, or a corpus case quietly deleted. A declared limitation is
+    still measured, still diagnosed, still named in every report and still
+    challenged by the quality gate -- what it changes is that the exact-match
+    threshold is computed over what the product claims to do rather than over
+    everything anybody thought to try.
+    """
 
 
 def _long_log_mentions(count: int = 4000) -> str:
@@ -350,6 +538,161 @@ DOCUMENTS: tuple[CorpusDocument, ...] = (
             "del Cromatico. El vuelo sale el lunes por la manana."
         ),
     ),
+
+    # -- phase 045: the workloads the corpus did not represent ---------------
+    # Code. Nothing in the corpus was source code, so `read_text`'s code
+    # extensions were never exercised by a measurement.
+    CorpusDocument(
+        id="codigo-ebers",
+        path="codigo/electronica/ebers_moll.py",
+        age_days=18,
+        content=(
+            '"""Ebers-Moll helpers."""\n'
+            "\n"
+            "\n"
+            "def polarizar_transistor(vcc, is_mA, beta, vt=0.02585):\n"
+            '    """Return (ib_mA, ic_mA, vbe_mV) for a desired collector current."""\n'
+            "    ic = is_mA\n"
+            "    ib = ic / beta\n"
+            "    vbe = vt * 1e3 * __import__('math').log(1 + ic / ib)\n"
+            "    return ib, ic, vbe\n"
+            "\n"
+            "\n"
+            "def vbe_de_saturacion(vcc, ic_mA, rce=0.2):\n"
+            "    vbe = vcc - ic_mA * rce\n"
+            "    return vbe\n"
+        ),
+    ),
+    CorpusDocument(
+        id="codigo-adc",
+        path="codigo/lab3/instrumento.c",
+        age_days=7,
+        content=(
+            "/*lectura del convertidor analogico digital del espectrometro*/\n"
+            "#include <stdint.h>\n"
+            "\n"
+            "uint16_t lectura_adc(void) {\n"
+            "    return (uint16_t)(ADC >> 4);\n"
+            "}\n"
+        ),
+    ),
+
+    # Office. The extractor has shipped since phase 025 and the corpus never
+    # once asked it to read anything.
+    CorpusDocument(
+        id="entrega-docx",
+        path="cursos/entregas/entrega_final.docx",
+        age_days=30,
+        content=None,
+        raw=docx_bytes((
+            ("Heading1", "Entrega final: analisis del amplificador de emisor comun"),
+            ("Normal", "Se analiza la ganancia de tension del amplificador de "
+                       "emisor comun y su punto de reposo."),
+            ("Normal", "Se concludes que el bias punto de trabajo debe fijarse "
+                       "lejos de la saturacion."),
+        ), title="Entrega final amplificador"),
+    ),
+    CorpusDocument(
+        id="inventario-xlsx",
+        path="finanzas/inventario.xlsx",
+        age_days=12,
+        content=None,
+        raw=xlsx_bytes("Almacen", (
+            ("componente", "referencia", "stock"),
+            ("transistor bipolar", "2N2222", "40"),
+            ("resistencia de base", "10k", "120"),
+            ("condensador de polarizacion", "100u", "75"),
+        )),
+    ),
+
+    # A PDF whose text is actually readable. The corpus's only `.pdf` before
+    # this was `content is None`: a metadata-only case that proved the *name*
+    # was indexed and never that the extractor worked.
+    CorpusDocument(
+        id="manual-pdf",
+        path="electronica/manuales/practica3_polarizacion.pdf",
+        age_days=55,
+        content=None,
+        raw=pdf_bytes((
+            "Practica 3: polarizacion del transistor bipolar",
+            "El punto de trabajo se ajusta con el modelo Ebers-Moll.",
+            "Medir VBE en el osciloscopio y comparar con el valor teorico.",
+            "Entrega: informe de la practica antes del proximo lunes.",
+        )),
+    ),
+
+    # Multilingual. Everything above is Spanish. `unicode61` folds diacritics,
+    # so accented Spanish is not really a multilingual test; these are.
+    CorpusDocument(
+        id="biasing-en",
+        path="lectures/transistor_biasing.md",
+        age_days=95,
+        content=(
+            "# Transistor biasing\n\n"
+            "Fixed bias sets the quiescent operating point with two resistors. "
+            "The collector current depends on the supply voltage and the base "
+            "resistor, and the emitter resistor provides thermal stability."
+        ),
+    ),
+    CorpusDocument(
+        id="aop-fr",
+        path="cours/amplificateur_operationnel.md",
+        age_days=140,
+        content=(
+            "# Amplificateur operationnel\n\n"
+            "Le gain de tension en montage non inverseur vaut un plus le "
+            "rapport des resistances. La saturation depend de la tension "
+            "d'alimentation et du gain demande."
+        ),
+    ),
+    # A script the Unicode tokenizer has no word boundaries for. Kept on
+    # purpose: if it cannot be found, that is a measured fact about the
+    # corpus and the diagnosis has to be able to say *why*.
+    CorpusDocument(
+        id="notas-ja",
+        path="lecturas/katakana_notes.md",
+        age_days=60,
+        content=(
+            "# \u30c6\u30b9\u30c8\u306b\u3064\u3044\u3066\n\n"
+            "\u96fb\u6d41\u306e\u5834\u5408\u306b\u306f\u30c6\u30b9\u30c8\u3092\u66f8\u304d\u8fbc\u3093\u3067\u3002"
+            "\n"
+        ),
+    ),
+
+    # A second duplicated pair. One pair could be a fluke; the question the
+    # phase asks about duplicated material is whether a tie is broken the same
+    # way every time, which needs more than one instance to look at.
+    CorpusDocument(
+        id="algebra-original",
+        path="notas/algebra/resumen_algebra.md",
+        age_days=800,
+        content="resumen de algebra lineal: espacios vectoriales y matrices",
+    ),
+    CorpusDocument(
+        id="algebra-copia",
+        path="zzz-almacen/copia/resumen_algebra.md",
+        age_days=800,
+        content="resumen de algebra lineal: espacios vectoriales y matrices",
+    ),
+
+    # Filenames that are nothing but abbreviations, which is how real course
+    # material is actually named and the one thing a name-based signal has to
+    # survive.
+    CorpusDocument(
+        id="t6-abrev",
+        path="electronica/notas/T6_BJT_Apuntes.md",
+        age_days=220,
+        content="apuntes del tema 6: el transistor bipolar como amplificador",
+    ),
+    CorpusDocument(
+        id="lab3-abrev",
+        path="cursos/lab_3_nodos_activos.md",
+        age_days=210,
+        content=(
+            "practica 3: nodos activos en el amplificador diferencial, "
+            "ganancia y margen de fase"
+        ),
+    ),
 )
 
 DOCUMENT_IDS: frozenset[str] = frozenset(doc.id for doc in DOCUMENTS)
@@ -361,6 +704,11 @@ LABELLED_QUERIES: tuple[LabelledQuery, ...] = (
             "bjt-modelo", "bjt-amplificador", "bjt-notas",
             "bjt-log", "bjt-datasheet", "bjt-carpeta",
             "transistor-bipolar",
+            # Phase 045. The name literally contains the acronym and the body
+            # says "transistor bipolar". Its absence from this set was a
+            # labelling gap, and it only became visible because the corpus
+            # gained a document that could be judged against it.
+            "t6-abrev",
         }),
         note=(
             "single term: filename, content, binary, path-only and "
@@ -372,6 +720,9 @@ LABELLED_QUERIES: tuple[LabelledQuery, ...] = (
         query='"ebers moll"',
         relevant=frozenset({
             "bjt-modelo", "bjt-amplificador", "ebers-exacto", "ebers-lejos",
+            # Phase 045: the implementation file is named after the model and
+            # the lab manual cites it by name. Both are answers to this query.
+            "codigo-ebers", "manual-pdf",
         }),
         note="exact phrase must win over the same words far apart",
     ),
@@ -379,6 +730,7 @@ LABELLED_QUERIES: tuple[LabelledQuery, ...] = (
         query="ebers moll",
         relevant=frozenset({
             "bjt-modelo", "bjt-amplificador", "ebers-exacto", "ebers-lejos",
+            "codigo-ebers", "manual-pdf",
         }),
         note="same words without quotes: conjunction, order-independent",
     ),
@@ -394,7 +746,11 @@ LABELLED_QUERIES: tuple[LabelledQuery, ...] = (
     ),
     LabelledQuery(
         query="informe",
-        relevant=frozenset({"informe", "bitacora", "informe-etiqueta"}),
+        relevant=frozenset({
+            "informe", "bitacora", "informe-etiqueta",
+            # Phase 045: the PDF's last line is "informe de la practica".
+            "manual-pdf",
+        }),
         note=(
             "filename-exact match competing with a content-only match: "
             "the weighting decides the order"
@@ -413,6 +769,10 @@ LABELLED_QUERIES: tuple[LabelledQuery, ...] = (
         relevant=frozenset({
             "bjt-modelo", "bjt-amplificador", "bjt-notas",
             "polarizacion-acentuada",
+            # Phase 045: a manual titled "polarizacion del transistor" and a
+            # spreadsheet whose row reads "condensador de polarizacion". Both
+            # outranked the original set and both are genuine answers.
+            "manual-pdf", "inventario-xlsx",
         }),
         note=(
             "content-heavy match with no filename help, plus an accented "
@@ -437,8 +797,18 @@ LABELLED_QUERIES: tuple[LabelledQuery, ...] = (
     ),
     LabelledQuery(
         query="type:pdf",
-        relevant=frozenset({"bjt-datasheet"}),
-        note="filter-only query: no text, recency order, score 0.0",
+        relevant=frozenset({
+            "bjt-datasheet",
+            # Phase 045: a second, readable PDF. The filter-only query was
+            # written when the corpus had exactly one PDF, so "type:pdf"
+            # silently meant "that one PDF" instead of "any PDF".
+            "manual-pdf",
+        }),
+        note=(
+            "filter-only query: no text, recency order. Its relevance set is "
+            "every PDF in the corpus, which only became true once there was "
+            "more than one"
+        ),
     ),
     LabelledQuery(
         query="zzz no existe",
@@ -486,6 +856,104 @@ LABELLED_QUERIES: tuple[LabelledQuery, ...] = (
             "— the AND fails even though the recipe is exactly this"
         ),
         failure_class="morphological",
+    ),
+
+    # -- phase 045: one query per workload the corpus did not represent ------
+    LabelledQuery(
+        query="polarizar_transistor",
+        relevant=frozenset({"codigo-ebers"}),
+        note=(
+            "code: an identifier lives in source, not in prose. The name is "
+            "camel/snake mixed and only the exact spelling retrieves it"
+        ),
+        failure_class="filename/path",
+    ),
+    LabelledQuery(
+        query="lectura_adc",
+        relevant=frozenset({"codigo-adc"}),
+        note="code: a C function, retrieved by its name from a comment and a definition",
+    ),
+    LabelledQuery(
+        query="entrega final",
+        relevant=frozenset({"entrega-docx"}),
+        note="office: DOCX body text, plus the core title as a second chance",
+    ),
+    LabelledQuery(
+        query="condensador de polarizacion",
+        relevant=frozenset({"inventario-xlsx"}),
+        note="office: XLSX shared strings, nothing in the file name to help",
+    ),
+    LabelledQuery(
+        query="punto de reposo",
+        relevant=frozenset({"entrega-docx"}),
+        note=(
+            "extraction: a phrase that exists ONLY inside the DOCX. If the "
+            "office extractor regressed, this is the query that notices"
+        ),
+    ),
+    LabelledQuery(
+        query="osciloscopio",
+        relevant=frozenset({"manual-pdf"}),
+        note=(
+            "extraction: a word that exists ONLY inside a real PDF's text "
+            "layer. The corpus's previous PDF was unreadable by design"
+        ),
+    ),
+    LabelledQuery(
+        query="transistor biasing",
+        relevant=frozenset({"biasing-en"}),
+        note="multilingual: an English document reached with an English query",
+    ),
+    LabelledQuery(
+        query="gain de tension",
+        relevant=frozenset({"aop-fr"}),
+        note=(
+            "multilingual: a French document. The query is French too, so "
+            "this measures tokenisation, not translation"
+        ),
+    ),
+    LabelledQuery(
+        query="resumen algebra",
+        relevant=frozenset({"algebra-original", "algebra-copia"}),
+        note=(
+            "duplicated material: byte-identical pair with different ages. "
+            "Both must come back; the tie-break is the ranking's business"
+        ),
+    ),
+    LabelledQuery(
+        query="T6 BJT Apuntes",
+        relevant=frozenset({"t6-abrev"}),
+        note=(
+            "filename/path: a name that is nothing but abbreviations, matched "
+            "term by term because no single term is the file's identity"
+        ),
+    ),
+    LabelledQuery(
+        query="nodos activos",
+        relevant=frozenset({"lab3-abrev"}),
+        note=(
+            "filename/path: 'lab_3' in the name is an abbreviation the query "
+            "cannot use, so only the descriptive half of the name can help"
+        ),
+    ),
+    LabelledQuery(
+        query="\u30c6\u30b9\u30c8",
+        relevant=frozenset({"notas-ja"}),
+        note=(
+            "extraction: a script with no whitespace word boundaries. Kept on "
+            "purpose -- whether it is found is a measured fact, and the "
+            "diagnosis has to be able to say why either way"
+        ),
+        failure_class="extraction",
+        known_limitation=(
+            "CJK is not segmented by the unicode61 tokenizer this index uses: "
+            "\u30c6\u30b9\u30c8\u306b\u3064\u3044\u3066 is indexed as ONE token, so a "
+            "substring query can never reach it. Measured, not assumed: the "
+            "trigram tokenizer answers this query and then FAILS a two-"
+            "character query in the same document, and it would change the "
+            "tokenisation of all 30 corpus queries. Quality gate Q13 measures "
+            "that trade on every run."
+        ),
     ),
 )
 

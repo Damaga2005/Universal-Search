@@ -7,6 +7,49 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 045 - Search quality measured by cause, and a ranking left alone
+- **The phase's rule is negative**, so the phase begins by measuring whether a
+  ranking change is justified at all. It is not: `evaluation/diagnose.py` probes
+  every missed (query, document) pair down the phase's ten causes and reports
+  the evidence, and **none of the eight measured failures enters the candidate
+  pool even at `limit=500`**. Ranking only reorders what retrieval returned.
+- **`evaluation/quality_gate.py`: 13 invariants, all passing.** Nine candidate
+  weights were measured end to end; none moved MRR. Q10 pins the weights, so a
+  dial turned inside this phase without a reproducible failure behind it is a
+  failing gate.
+- **The corpus grew from 27 documents / 18 queries to 39 / 30**, covering the
+  workloads it had none of: code, Office, a *readable* PDF, English, French, a
+  second duplicated pair, and filenames that are nothing but abbreviations. The
+  binary cases are built by deterministic generators in `corpus.py` -- a real
+  PDF with a real cross-reference table, real OOXML packages -- because a
+  workload that is not in the corpus cannot regress, and a workload that cannot
+  regress is not a workload that is tested.
+- **Growing the corpus made five existing relevance sets visibly incomplete.**
+  Two queries looked like ranking regressions until each was judged
+  individually, and two of the new intruders turned out to be distractors that
+  had to stay *out* of the relevance set. The committed baseline was
+  regenerated with the measurement that justifies it.
+- **Two metrics the repository had never had.** Filter accuracy, because a
+  relevance metric cannot see a filter leak; and zero-result accuracy, which
+  the corpus supported with exactly one query. P@10 and R@10 now exist too --
+  `K_VALUES` was `(1, 3, 5)` in four places.
+- **`failure_class` is now a computed diagnosis, not a remembered one.** It was
+  a human label on 4 of 18 queries, copied into a JSON row and never used to
+  decide anything. Two probes matter most: one separates "the words are not
+  there" from "the words are there and it still fails", and one distinguishes
+  simple inflection from genuine vocabulary absence.
+- **One limitation declared, challenged on every run.** `unicode61` indexes a
+  run of CJK ideographs as one token, so no substring query reaches it. The
+  gate measures the alternative rather than asserting the limitation: `trigram`
+  answers that query and then answers **four** labelled queries less well,
+  because a three-character tokenizer cannot match a two-character term. Net
+  loss, so the exchange is declined and the threshold is computed over what the
+  build claims to answer, with the exclusion named and asserted by tests.
+- **A stale measurement was re-measured, not inherited.** The `docs/RANKING.md`
+  headroom table was from phase 013 on a corpus that no longer exists. Two rows
+  had changed without a line of ranking code changing.
+- Test count 1365 -> 1395. `evaluation.gate` stays PASS 23/23. No push.
+
 ### Phase 044 - Local learning that actually learns, and a weight measured
 - **`learn.py` is the value of a set of events**, as pure functions over numbers.
   A ranking signal that cannot be evaluated on its own cannot be argued about.

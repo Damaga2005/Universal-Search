@@ -63,43 +63,71 @@ mentions of *bjt*) scores `bm25 = 0.40` against `1.01` for a focused
 document, and needs a 4.5× increase of `term_freq` to overtake it. Bulk
 never wins.
 
-## Measured headroom (phase 013)
+## Measured headroom (re-measured in phase 045)
 
-Precision@K saturate on a corpus this small — the default weighting already
-puts a relevant document first for every labelled query (P@1 = 1.000,
-MRR = 1.000). Metrics alone therefore cannot tell a safe weight change from
-a harmful one, so the instrument also answers a sharper question: **is the
-signal load-bearing (does zeroing it change a ranking?), and how far can it
-move before it does?**
+Precision@K is not saturated on this corpus — the default weighting puts a
+relevant document first for 26 of 30 labelled queries (P@1 = 0.867, MRR =
+0.867). Metrics alone still cannot tell a safe weight change from a harmful one,
+so the instrument also answers a sharper question: **is the signal load-bearing
+(does zeroing it change a ranking?), and how far can it move before it does?**
+
+**These rows are measurements, and the corpus they were taken on changed in
+phase 045** (27 documents / 18 queries → 39 / 30). Three rows moved, and two of
+them moved for a reason worth reading: `phrase_exact` and `proximity` are no
+longer load-bearing for `"ebers moll"` because the corpus gained
+`codigo/electronica/ebers_moll.py`, an implementation file whose name matches
+the phrase better than the scattered document the row used to detect.
 
 | Weight | Query | Load-bearing? | Boundary | Headroom |
 |---|---|---|---|---|
 | `recency` | `diagrama` | yes — at 0 the tie falls back to alphabetical order | none ≤ 8.0 | ≥ 26.7× |
 | `path_match` | `BJT` | no | 5.75 | 7.2× |
-| `term_freq` | `BJT` | no | 6.79 | 4.5× |
+| `term_freq` | `BJT` | no | none ≤ 8.0 (was 6.79) | ≥ 20.0× |
 | `bm25` | `BJT` | yes — at 0 the long log rises to #3 | none ≤ 8.0 | ≥ 4.0× |
-| `phrase_exact` | `"ebers moll"` | yes — at 0 the scattered document enters the top 3 | none ≤ 8.0 | ≥ 4.0× |
-| `proximity` | `"ebers moll"` | yes — at 0 the scattered document enters the top 3 | none ≤ 8.0 | ≥ 5.3× |
+| `phrase_exact` | `"ebers moll"` | **no** (was yes) | none ≤ 8.0 | ≥ 4.0× |
+| `proximity` | `"ebers moll"` | **no** (was yes) | none ≤ 8.0 | ≥ 5.3× |
 | `filename_tokens` | `informe` | yes — at 0 a content-only document takes #1 | none ≤ 8.0 | ≥ 4.0× |
-| `filename_exact` | `informe` | yes | **3.67** | **1.2×** |
+| `filename_exact` | `informe` | yes | **3.66** | **1.22×** |
 | `doc_type` | `BJT` | no | none ≤ 8.0 | ≥ 16.0× |
 
-Two readings worth keeping in mind:
+Three readings worth keeping in mind:
 
-- **No weight is decorative.** Eight of the ten textual signals change a
-  measured ranking when switched off. `path_match` and `doc_type` are
-  guard rails: they never decide an ordering on their own, which is exactly
-  what they are for.
+- **No weight is decorative**, and no *row* is permanent. Four of the nine
+  signals change a measured ranking when switched off; `path_match`,
+  `term_freq` and `doc_type` are guard rails that never decide an ordering on
+  their own, which is exactly what they are for.
 - **`filename_exact` is the tightest number in the system** (+22 % swaps the
   two exact-name documents). It is also a deliberate design choice — a file
-  called exactly what you searched for should come first — so it is the one
-  to leave alone.
+  called exactly what you searched for should come first — so it is the one to
+  leave alone. Phase 044 added a mechanical guard on top: learning never boosts
+  a document whose name is the query.
+- **A headroom table is a measurement with a corpus hash attached, not a
+  property of the code.** Two rows changed without a line of ranking code
+  changing. `evaluation/quality_gate` Q10 exists to catch the *weights*
+  drifting; nothing catches the *table* drifting, so it was re-measured by hand
+  and the previous values are marked rather than quietly replaced.
 
 Reproduce any row with:
 
 ```bash
 python -m evaluation --flip path_match BJT
 ```
+
+## When the ranking must not change
+
+Phase 045 added `evaluation/diagnose.py` and `evaluation/quality_gate.py`,
+which answer the question this section is about from the other direction: given
+the current corpus, **is there any reproducible failure a weight could reach?**
+
+The answer today is **no**. All eight measured failures are lexical —
+synonym, paraphrase, morphology, CJK tokenisation — and **not one of the missing
+documents enters the candidate pool at all**, even at `limit=500`. Ranking only
+reorders what retrieval returned, so no weighting change can reach them; six of
+the eight are already recovered by the semantic fallback layer that shipped in
+phase 026. Nine candidate weights were measured end to end and none moved MRR.
+
+That is why `docs/RANKING.md` did not gain a single new number this phase. The
+instruments got sharper and the answer got firmer, and the file is unchanged.
 
 ## Signals that are deliberately *not* added
 

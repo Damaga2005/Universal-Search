@@ -284,13 +284,36 @@ def test_hybrid_clears_the_evidence_gate(indexed_env):
 
     ids = corpus_module.ids_by_path(tree)
     report = measure(hybrid, ids)
-    correctness, _ = exact_match_summary(report, corpus_module.DOCUMENTS)
-    assert correctness == 1.0
+    _all, rows = exact_match_summary(report, corpus_module.DOCUMENTS)
+    # T2 is a statement about the *semantic layer*: it must not cost an exact
+    # match. It is not a statement about tokenisation, and phase 045 added one
+    # CJK query that no tokenizer this index uses can answer. So the
+    # threshold is read over the claimed set, and the excluded query is named
+    # so that deleting the declaration without fixing the cause fails here.
+    declared = {
+        labelled.query for labelled in corpus_module.LABELLED_QUERIES
+        if labelled.known_limitation
+    }
+    claimed = [row for row in rows if row["query"] not in declared]
+    assert declared, "the phase-045 limitation must still be declared"
+    assert all(row["correct"] for row in claimed)
+    excluded = [row for row in rows if row["query"] in declared]
+    assert excluded and not all(row["correct"] for row in excluded)
     # T3: every pre-existing query keeps its lexical top-1.
+    #
+    # Phase 045 grew the corpus by twelve documents and twelve queries, and a
+    # hand-written list of "the queries that already worked" silently became a
+    # list of *some* of them -- which is a weaker test wearing the same name.
+    # Derived from the corpus instead, minus the declared failures, which are
+    # not top-1 questions: a query that retrieves nothing has no lexical top-1
+    # to preserve.
+    failing = {
+        labelled.query for labelled in corpus_module.LABELLED_QUERIES
+        if labelled.failure_class or labelled.known_limitation
+    }
+    assert len(corpus_module.LABELLED_QUERIES) == 30
     for query in (
-        "BJT", '"ebers moll"', "ebers moll", "CMOS", "MUX", "informe",
-        "diagrama", "polarizacion", "notas", "presupuesto",
-        "bjt type:txt", "type:pdf", "zzz no existe",
+        l.query for l in corpus_module.LABELLED_QUERIES if l.query not in failing
     ):
         lexical_top = engine.search(query, limit=1)
         hybrid_top = hybrid.search(query, limit=1)

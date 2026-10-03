@@ -13,10 +13,29 @@ Definitions, for a ranked list of document ids and a set of relevant ids:
 A query with an **empty relevance set** is the "must retrieve nothing"
 case. All three metrics are then ``1.0`` for an empty result list and
 ``0.0`` otherwise, so a corpus full of noise can never be rewarded.
+
+Phase 045 adds the three the phase asks for and the repository did not have.
+``DEFAULT_K_VALUES`` now includes ``10`` because P@1/5/10 and R@5/10 are the
+phase's numbers and a harness that cannot produce P@10 cannot report them.
+
+* **filter accuracy** -- of the queries carrying a filter, how many returned
+  *only* results satisfying it. A relevance metric cannot see this: a query can
+  have a perfect P@5 and still hand four PDFs back to somebody who asked for
+  text.
+* **zero-result accuracy** -- of the queries that must return nothing, how many
+  did. Separate from the empty-set branch above because that branch rewards
+  silence *inside* a P@K; this asks the question on its own terms and
+  aggregates it, and the committed corpus had exactly one such query, which is
+  not a number.
+* **exact-match accuracy** already existed in ``runner.py``; it is re-exported
+  here so that one import answers "how good is this?" completely.
 """
 
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass, field
+
+#: The K values every report is measured at. Phase 045.
+DEFAULT_K_VALUES: tuple[int, ...] = (1, 3, 5, 10)
 
 
 def precision_at_k(
@@ -148,7 +167,7 @@ class EvaluationReport:
     """Aggregate of every :class:`QueryScore` in one run."""
 
     scores: tuple[QueryScore, ...]
-    k_values: tuple[int, ...] = (1, 3, 5)
+    k_values: tuple[int, ...] = DEFAULT_K_VALUES
 
     def mean_precision(self, k: int) -> float:
         if not self.scores:
@@ -193,7 +212,7 @@ def score_query(
     query: str,
     ranked: Sequence[str],
     relevant: Collection[str],
-    k_values: Sequence[int] = (1, 3, 5),
+    k_values: Sequence[int] = DEFAULT_K_VALUES,
     scores: Sequence[float] = (),
     points: Sequence[dict[str, float]] = (),
 ) -> QueryScore:
@@ -221,7 +240,7 @@ def evaluate(
         tuple[str, Sequence[str], frozenset[str], Sequence[float],
                Sequence[dict[str, float]]]
     ],
-    k_values: Sequence[int] = (1, 3, 5),
+    k_values: Sequence[int] = DEFAULT_K_VALUES,
 ) -> EvaluationReport:
     """Build an :class:`EvaluationReport` from
     (query, ranked, relevant, scores, points) tuples."""
@@ -232,3 +251,70 @@ def evaluate(
         ),
         k_values=tuple(k_values),
     )
+
+
+# -- phase 045: correctness metrics a relevance metric cannot see ---------------
+
+
+def filter_accuracy(
+    cases: Sequence[tuple[str, bool]], *, unlabelled: Sequence[str] = ()
+) -> dict[str, object]:
+    """How often a filtered query returned only results satisfying the filter.
+
+    ``cases`` is ``(query, every_result_satisfied_the_filter)`` per query that
+    carried at least one filter. ``unlabelled`` names filtered queries the
+    caller could not evaluate, which are reported separately rather than
+    counted as passes: a metric that silently drops the queries it cannot
+    judge is a metric that reports 1.0 because it looked at nothing.
+
+    A relevance metric genuinely cannot see this failure. ``type:pdf`` with a
+    perfect P@5 is still wrong if the fifth result is a text file, and the only
+    thing that notices is a predicate that asks the question directly.
+    """
+    if not cases:
+        return {
+            "queries": 0,
+            "correct": 0,
+            "accuracy": 1.0,
+            "unlabelled": list(unlabelled),
+            "wrong": [],
+        }
+    wrong = [query for query, ok in cases if not ok]
+    correct = len(cases) - len(wrong)
+    return {
+        "queries": len(cases),
+        "correct": correct,
+        "accuracy": correct / len(cases),
+        "unlabelled": list(unlabelled),
+        "wrong": wrong,
+    }
+
+
+def zero_result_accuracy(
+    cases: Sequence[tuple[str, bool]], *, unlabelled: Sequence[str] = ()
+) -> dict[str, object]:
+    """How often a "must return nothing" query actually returned nothing.
+
+    Distinct from the empty-relevance branch inside :func:`precision_at_k`,
+    which rewards silence as a side effect of scoring one query. This asks the
+    question on its own terms and aggregates it, so the answer survives a
+    corpus that happens to contain one such query -- which, until phase 045, it
+    did.
+    """
+    if not cases:
+        return {
+            "queries": 0,
+            "silent": 0,
+            "accuracy": 1.0,
+            "unlabelled": list(unlabelled),
+            "noisy": [],
+        }
+    noisy = [query for query, silent in cases if not silent]
+    silent = len(cases) - len(noisy)
+    return {
+        "queries": len(cases),
+        "silent": silent,
+        "accuracy": silent / len(cases),
+        "unlabelled": list(unlabelled),
+        "noisy": noisy,
+    }

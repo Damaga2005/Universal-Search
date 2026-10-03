@@ -81,7 +81,7 @@
 - [x] Interactive Search Experience (042)
 - [x] Settings & Configuration (043)
 - [x] Local learning v2 (044)
-- [ ] Search Quality & Relevance (045)
+- [x] Search Quality & Relevance (045)
 - [ ] Indexing Scalability & Performance (046)
 - [ ] Storage & data lifecycle (047)
 - [ ] Windows & Environment Matrix (048)
@@ -156,4 +156,32 @@ at 0.5 the signal was worth 3.45% of the score against `recency`'s 2.14%, i.e.
 near-ties. Learning promotes 6 of 33 (query, candidate) pairs and demotes none;
 with no history MRR is unchanged and not one of the 18 corpus queries moves.
 
-Current test count: 1365 tests collected.
+Phase 045's governing rule is negative — *if no reproducible failure justifies a
+ranking change, do not change the ranking* — so the phase starts by measuring
+whether such a failure exists. `evaluation/diagnose.py` probes every missed
+(query, document) pair down the phase's ten causes and reports the evidence;
+`evaluation/quality_gate.py` runs 13 invariants over the result and all 13 pass.
+The answer is **no**: none of the eight measured failures enters the candidate
+pool at all, even at `limit=500`, so no weight can reach them, and six of the
+eight are already recovered by the semantic layer. Nine candidate weights were
+measured end to end and none moved MRR, so **the ranking did not change**.
+
+What did change is the instrument. The corpus grew from 27 documents and 18
+queries to **39 and 30** — code, Office, a *readable* PDF, English, French, a
+second duplicated pair, abbreviated filenames and a CJK document, each built by
+a deterministic generator so `corpus_hash()` stays stable. P@10/R@10 now exist,
+and so do the two metrics the repository had never had: filter accuracy and
+zero-result accuracy. Growing the corpus immediately paid for itself: it made
+five existing relevance sets visibly incomplete, which looked like a ranking
+regression until each case was judged individually — and two of the new
+intruders were distractors that had to stay out.
+
+One limitation is declared rather than hidden. `unicode61` indexes a run of CJK
+ideographs as a single token, so no substring query can reach it. The gate
+measures the alternative: `trigram` answers that query and then answers **four
+labelled queries less well** (a three-character tokenizer cannot match a
+two-character term). The exchange is a net loss, so the limitation is declared
+with its reason, excluded from the exact-match threshold by name, and asserted
+by three tests.
+
+Current test count: 1395 tests collected.

@@ -17,6 +17,7 @@ import time
 from pathlib import Path
 
 from evaluation import corpus as corpus_module
+from evaluation import metrics as metrics_module
 from evaluation.metrics import EvaluationReport, evaluate
 from universal_search.index.database import SearchDatabase
 from universal_search.index.indexer import Indexer
@@ -25,7 +26,8 @@ from universal_search.index.search import SearchEngine
 from universal_search.query import parse_query, translate
 
 DEFAULT_LIMIT = 10
-K_VALUES = (1, 3, 5)
+# Phase 045: P@1/5/10 and R@5/10 are the numbers this phase reports.
+K_VALUES = metrics_module.DEFAULT_K_VALUES
 
 
 def _index(
