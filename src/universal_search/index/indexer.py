@@ -37,6 +37,41 @@ log = logging.getLogger("universal_search.indexer")
 # (disposable) intelligence table, never in the canonical document row.
 # A rebuild preserves these columns and a privacy forget deletes the row,
 # so diagnostics are explainable without outliving the document.
+# Phase 046: one query for "what is already stored about this file", including
+# the outcome of its last extraction. The extraction status lives in
+# `document_intelligence` (the indexer writes it there and nowhere else), so the
+# join is on that table's primary key -- one lookup per file, no scan.
+_STORED_ROW_SQL = (
+    "SELECT d.id AS id, d.size AS size, d.mtime_ns AS mtime_ns, "
+    "d.content_hash AS content_hash, d.source AS source, "
+    "d.availability AS availability, i.extraction_status AS extraction_status "
+    "FROM documents AS d "
+    "LEFT JOIN document_intelligence AS i ON i.document_id = d.id "
+    "WHERE path = ?"
+)
+
+# Statuses whose extraction is worth trying again, because the *next* attempt
+# can plausibly succeed.
+#
+# Phase 046 first put `error` in here as well, and immediately met the cost:
+# the evaluation corpus contains a deliberately unreadable PDF, and a permanently
+# broken file is re-read on every single pass, for the life of the index. It also
+# marked the semantic and fuzzy layers dirty forever, so a pass over an
+# unchanged tree was never unchanged. Before phase 046 that document was
+# recorded as `ok` despite failing, which is the lie this phase removed -- and
+# that lie was load-bearing, it was what kept the test green.
+#
+# The distinction is transient against permanent, not success against failure:
+#
+#   cancelled  we were told to stop. Nothing is wrong with the file, and the
+#              next pass is a fresh attempt.
+#   error      the extractor failed *on those bytes*. The same extractor on the
+#              same input fails the same way, so retrying is work for nothing.
+#              A later real change to the file moves its mtime and triggers a
+#              re-extraction anyway.
+_RETRY_STATUSES = ("cancelled",)
+
+
 _EXTRACTION_DIAGNOSTICS_SQL = """
 INSERT INTO document_intelligence (
     document_id, version, extraction_status, extraction_warnings,
@@ -401,6 +436,20 @@ class Indexer:
             )
             try:
                 for item in items:
+                    # Phase 046. `scan_local` takes no cancel token -- the
+                    # token is only threaded through a *provider*'s
+                    # `iter_files` -- so the default path, which is the one
+                    # the background worker uses, indexed every document of a
+                    # cancelled pass. Measured: a token cancelled before the
+                    # pass still created all six documents, with empty bodies.
+                    #
+                    # The check belongs at the head of the loop because that is
+                    # the only place it runs for both paths, and stopping here
+                    # is safe: the post-loop guard below already treats a
+                    # cancelled pass as incomplete and skips `_delete_missing`,
+                    # so breaking cannot delete rows that were never reached.
+                    if cancel is not None and cancel.cancelled:
+                        break
                     if isinstance(item, IgnoredPath):
                         stats.ignored += 1
                         continue
@@ -419,8 +468,7 @@ class Indexer:
 
                     if provider is None:
                         stored = connection.execute(
-                            "SELECT id, size, mtime_ns, content_hash, source, "
-                            "availability FROM documents WHERE path = ?",
+                            _STORED_ROW_SQL,
                             (str(item.path),),
                         ).fetchone()
                     else:
@@ -428,8 +476,9 @@ class Indexer:
                         # lookup by source so one provider never reads or
                         # re-extracts another provider's row.
                         stored = connection.execute(
-                            "SELECT id, size, mtime_ns, content_hash, source, "
-                            "availability FROM documents WHERE path = ? AND source = ?",
+                            _STORED_ROW_SQL.replace(
+                                "WHERE path = ?", "WHERE path = ? AND source = ?"
+                            ),
                             (str(item.path), source_value),
                         ).fetchone()
                     if (
@@ -438,6 +487,20 @@ class Indexer:
                         and stored["mtime_ns"] == item.mtime_ns
                         and stored["source"] == source_value
                         and stored["availability"] == availability
+                        # Phase 046. Size and mtime match, but the last
+                        # extraction of this document *failed*. Treating that as
+                        # "unchanged" made one cancelled extraction permanent:
+                        # the document was written with no text and no FTS row,
+                        # and every later pass took this branch, never re-read
+                        # the file, and never repaired it. Measured: a clean
+                        # second pass reported `unchanged=6` with the blanked
+                        # document still blank and unsearchable.
+                        #
+                        # `no_content` is deliberately *not* here: a binary the
+                        # extractor cannot read has no text layer by nature and
+                        # must stay on the fast path, or every metadata-only
+                        # document in the corpus would be re-read on every pass.
+                        and stored["extraction_status"] not in _RETRY_STATUSES
                     ):
                         stats.unchanged += 1
                         connection.execute(
@@ -458,8 +521,24 @@ class Indexer:
                             if cancel is not None:
                                 # Forward the cooperative cancel so a long
                                 # extraction can be stopped mid-document.
+                                #
+                                # Phase 046: this read `cancel=cancelled`,
+                                # which is the token's *boolean property* --
+                                # a value, not the `CancelCheck` callable the
+                                # extractors expect. `check_cancel` does
+                                # `cancel()`, so every extraction raised
+                                # `TypeError: 'bool' object is not callable`,
+                                # the `except` two lines below swallowed it
+                                # into an `ExtractionResult`, and a pass with a
+                                # real CancelToken indexed **every document with
+                                # no content and no FTS row** while reporting
+                                # zero errors. Measured: 6 of 6 documents empty.
+                                #
+                                # A lambda, not a snapshot, because a snapshot
+                                # would freeze `False` at bind time and the
+                                # check would never see a later cancellation.
                                 reader = functools.partial(
-                                    read_content, cancel=cancel.cancelled
+                                    read_content, cancel=lambda: cancel.cancelled
                                 )
                                 outcome = reader(item.path)
                             else:

@@ -1,0 +1,86 @@
+{
+  "phase": "046",
+  "clock": "2026-10-03T23:02:00.462503+00:00",
+  "sizes": {
+    "small": 1000,
+    "large": 4000
+  },
+  "verdicts": [
+    {
+      "gate": "S1 coste por documento al crecer el corpus",
+      "measured": 1.258960297835689,
+      "threshold": 2.5,
+      "passed": true,
+      "detail": "1000 docs: 7.226 ms/doc; 4000 docs: 9.097 ms/doc; crece x1.26 con el corpus x4 (todo el coste esta en los merges de FTS5, que son 87%)"
+    },
+    {
+      "gate": "S2 tamano de indice por documento",
+      "measured": 0.9465226554267651,
+      "threshold": 1.35,
+      "passed": true,
+      "detail": "3.80 -> 3.59 KiB/doc (x0.95); el indice escala linealmente"
+    },
+    {
+      "gate": "S3 memoria pico al crecer el corpus",
+      "measured": 1.387335427793156,
+      "threshold": 4.0,
+      "passed": true,
+      "detail": "pico 2.42 MiB -> 3.36 MiB con el corpus x4; la memoria no escala con el indice"
+    },
+    {
+      "gate": "S4 documentos distintos entre dos pasadas",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "0.0 documentos o hashes distintos entre dos indices del mismo contenido"
+    },
+    {
+      "gate": "S5 documentos sin texto tras una pasada limpia",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "0 documentos localizables tras una pasada limpia; ninguno sin texto"
+    },
+    {
+      "gate": "S6 documentos que una pasada limpia no repara",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "1 documento quedo sin texto por una extraccion fallida y la pasada limpia lo reparo; doc-000007.txt"
+    },
+    {
+      "gate": "S7 borrados por una pasada cancelada",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "una pasada cancelada antes de empezar dejo el indice intacto"
+    },
+    {
+      "gate": "S8 errores en una pasada limpia",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "0.0 errores al indexar 1000 documentos sin ningun lector inyectado"
+    }
+  ],
+  "curve": {
+    "small": {
+      "documents": 1000,
+      "seconds": 7.226,
+      "ms_per_document": 7.2256,
+      "kib_per_document": 3.796
+    },
+    "large": {
+      "documents": 4000,
+      "seconds": 36.387,
+      "ms_per_document": 9.0967,
+      "kib_per_document": 3.593
+    },
+    "peak_mib": {
+      "small": 2.42,
+      "large": 3.36
+    },
+    "fts_share": 0.8729
+  },
+  "decision": "no optimization shipped; three correctness defects fixed"
+}

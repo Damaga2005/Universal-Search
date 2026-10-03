@@ -353,6 +353,40 @@ SCHEMA_OBJECTS = (
 #   cache_size          16 MiB of page cache per connection.
 #   mmap_size           256 MiB of memory-mapped reads (skips read() calls).
 #   temp_store=MEMORY   sorts and FTS temporaries never touch the disk.
+#
+# Phase 046 measured one more setting and rejected it, and the numbers are kept
+# here so the next person does not have to earn the same answer.
+#
+# `wal_autocheckpoint` is never set, so SQLite uses its default of 1000 pages.
+# That looked like the reason indexing was superlinear: FTS5 is ~86% of a pass
+# at 10k documents (10k rows through raw SQL: 1.539 s with FTS, 0.249 s
+# without), and an automatic checkpoint rewrites the WAL into the main file
+# while FTS5 is mid-merge. Raising it to 20000 pages in an insert-only probe
+# halved the time --
+#
+#     5000 documents     default 0.720 s  ->  20000 pages  0.350 s
+#     10000 documents    default 1.521 s  ->  20000 pages  0.695 s
+#
+# -- and made no difference to the product. Measured end to end through
+# `index_root`, best of three at 5000 documents:
+#
+#     20000 pages        51.862 s / 54.944 s / 56.423 s
+#     sqlite default     50.740 s / 52.552 s / 53.557 s
+#
+# 0.98x, inside the run-to-run noise this machine shows. The probe was measuring
+# a different workload: the indexer reads once per file *between* writes, so a
+# larger WAL penalises exactly the reads the insert-only probe never performs.
+#
+# Two other candidates were measured and rejected the same way:
+# `cache_size=-64000` gave 1.556 s against a 1.521 s default, and
+# `mmap_size=1GiB` gave 1.651 s with one run at 55 s -- memory-mapping a
+# multi-gigabyte working set on Windows is a trap, not a tuning knob.
+#
+# What that leaves is the measured shape: space is linear (3.72 -> 3.51 KiB per
+# document from 1k to 10k) and peak memory is modest (2.4 -> 5.4 MiB), while
+# time is dominated by FTS5's own segment merging inside SQLite. That is not a
+# bottleneck this project can optimise without changing the index design, which
+# phase 046 explicitly rules out. See `docs/RANKING.md` and the phase report.
 _PER_CONNECTION_PRAGMAS = (
     "PRAGMA journal_mode=WAL",
     "PRAGMA foreign_keys=ON",

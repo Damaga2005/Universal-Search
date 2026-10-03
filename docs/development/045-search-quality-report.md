@@ -324,11 +324,20 @@ shm:  32768 en ambas              (constante)
 main: 3842048 frente a 3825664    <-- aquí está la diferencia de 16 KB
 ```
 
-Y la causa **no es el reloj ni la máquina**: el indexador recorre el directorio
-en **orden de enumeración del sistema de ficheros**, que no está ordenado y
-difiere entre dos carpetas con los mismos ficheros. Distinto orden → distintos
-límites de transacción → distinto patrón de páginas libres → distinto recuento
-de bytes para el mismo contenido lógico.
+**CORRECCIÓN de la fase 046.** La causa que este párrafo daba —«el indexador
+recorre el directorio en orden de enumeración del sistema de ficheros, que no
+está ordenado»— **es falsa**, y la fase 045 la afirmó sin medirla:
+`providers/local.py:140` ordena cada directorio con
+`sorted(scanner, key=lambda e: e.name.lower())`. Lo que sí es cierto es que
+**no es el reloj ni la máquina**.
+
+La segunda teoría que merecía prueba — la longitud de la ruta absoluta, ya que
+cada pasada corre en una raíz `mkdtemp()` nueva y el texto absoluto se guarda
+dos veces — queda **refutada por medición**: cuatro raíces distintas, cuatro
+rutas de 79 caracteres, cuatro totales idénticos.
+
+Lo que mueve esos bytes **sigue sin estar explicado**, y la puerta lo dice en
+lugar de adivinar una tercera vez.
 
 El tamaño es un **recuento, no una huella**, y ahora se compara con la
 tolerancia que la métrica ya declaraba (10 %, suelo de 0,10 MiB) frente a una

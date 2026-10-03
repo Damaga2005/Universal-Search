@@ -7,6 +7,67 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 046 - Indexing measured at scale, three correctness defects, no optimisation
+Phase 046's rule is that optimisation requires a *measured* bottleneck. The
+honest outcome was that **no optimisation ships**: the bottleneck is FTS5's
+segment merging, which lives inside SQLite, and three candidate changes were
+measured and rejected.
+
+- **Three real defects, invisible to all 1410 tests**, because each only appears
+  when a real object meets a real reader.
+  - `index_root` bound `cancel=cancel.cancelled` -- the token's boolean
+    *property* where the extractors expect a `CancelCheck` callable. Measured:
+    6 documents in, 6 extraction errors, all 6 indexed with empty bodies, and
+    zero errors surfaced anywhere a user would see.
+  - The loop never consulted the token. `scan_local` does not receive one, so
+    the default path -- the one the background worker uses -- indexed a
+    *cancelled* pass in full.
+  - `ExtractionResult(error=...)` left `status = OK`. `ExtractionStatus`
+    documents that `error` outranks everything and did not enforce it, so a
+    failed extraction was recorded as a successful one. The consequence is the
+    serious one: the fast path compares size and mtime, so a blanked row looked
+    unchanged forever. Measured: one cancelled extraction, then a clean pass
+    reporting `unchanged=6` with the document still blank and unsearchable.
+    The fix is a `__post_init__` that makes "an error with status ok"
+    unrepresentable, because a status field that can lie is worse than none.
+  - `no_content` deliberately stays on the fast path, or every metadata-only
+    binary in the corpus would be re-extracted on every pass forever.
+- **A false claim of ours, corrected in the code and in three prose copies.**
+  Phase 045 explained a 16 KiB index-size spread by saying the traversal is not
+  sorted. It is sorted: `providers/local.py:140`. The second theory worth
+  testing -- absolute path length, since every pass runs in a fresh `mkdtemp()`
+  root -- was refuted by measurement (four roots, four 79-character paths, four
+  identical totals). What moves those bytes is still unknown, and the gate now
+  records its ignorance instead of guessing a third time.
+- **The curve, measured.** Space is linear and memory nearly constant: 3.79 ->
+  3.59 KiB per document and 2.42 -> 3.36 MiB peak from 1k to 4k documents, while
+  cost per document rises 1.64x. The time is not ours: raw SQL through 10k rows
+  takes 0.249 s without FTS and 1.539 s with it, so FTS5 is ~90% of a pass, and
+  its cost is bursty rather than smooth (5k took 2.779 s, 10k took 1.539 s) --
+  the signature of segment merging.
+- **Three optimisations measured and rejected.** `wal_autocheckpoint=20000`
+  halved an insert-only probe (1.521 s -> 0.695 s at 10k) and changed the
+  product by nothing: best of three through `index_root` at 5k, 51.86 s against
+  SQLite's 50.74 s, 0.98x and inside the noise. The probe measured a different
+  workload -- the indexer reads once per file *between* writes, so a larger WAL
+  penalises the reads the probe never performs. `cache_size=-64000` and
+  `mmap_size=1GiB` (one run at 55 s) were worse. All three numbers are written
+  next to the pragma that was **not** changed.
+- **New gate, `python -m evaluation.scale_gate`: 8 invariants, all passing.**
+  It measures the *shape* of the curve rather than an absolute latency, because
+  a millisecond threshold on a shared machine is a coin toss and `perf_gate`
+  already owns that job with a load veto and a machine fingerprint.
+- **Two defects in the measuring instrument itself, found and fixed.** The first
+  curve was taken with `tracemalloc` attached, which instruments every
+  allocation, so the pass measured the profiler as much as the indexer. And S6
+  computed `blank_before - blank_after` -- the set of documents that *were*
+  repaired -- so it reported one unrepaired document on a run where the repair
+  worked perfectly.
+- Declared and not done: the 100k profile is extrapolated, not measured; the
+  WAL's run-to-run variance is measured (1.5 s to 5.6 s on identical input) and
+  unexplained; and the junction case in `scan_local`, which has no visited set
+  and is the one resource without a bound.
+
 ### Phase 045b - Every gate run on a quiet machine, and four real defects
 The 044/045 work was committed with two gates (U9, V11) and the fuzzy gate
 unrun because the machine was busy. With the machine idle, all of them ran, and
@@ -43,11 +104,14 @@ surfaced that no amount of code reading had found.
   The special case asserted "two runs produce the same bytes or one of them is
   broken". Measuring all three components separately showed the WAL is already
   0 bytes in this build and the 16 KB difference is in the *main database
-  file* -- because the indexer walks the directory in filesystem enumeration
-  order, which is not sorted and differs between two directories holding
-  identical files. Same content, different transaction boundaries, different
-  free-page pattern. The size is a count, not a fingerprint, and is now
-  compared with the tolerance the metric already declares (10%, 0.10 MiB floor)
+  file*. **The mechanism phase 045 gave for it was wrong**, and phase 046 says
+  so: the traversal is sorted (`providers/local.py:140`), and the second
+  theory worth testing -- every pass runs in a fresh `mkdtemp()` root and the
+  absolute path text is stored twice -- was refuted by measurement (four roots,
+  four 79-character paths, four identical totals). What moves those bytes is
+  still unknown, and the gate now records its own ignorance instead of
+  guessing a cause a third time. The size is a count, not a fingerprint, and is
+  now compared with the tolerance the metric already declares (10%, 0.10 MiB floor)
   against a measured variation of 0.2%.
 
 Plus two cleanups found while measuring: dead code (`probe_index` and its

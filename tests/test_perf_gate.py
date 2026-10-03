@@ -162,10 +162,28 @@ def test_the_spread_allowance_is_the_same_one_a_regression_gets() -> None:
 
 
 def test_index_size_must_be_identical_between_runs() -> None:
-    """Two runs produce the same bytes or one of them is broken, so this is an
-    equality and not a tolerance."""
+    """The index size is compared against the declared tolerance.
+
+    This used to assert a strict equality, on the premise that "two runs
+    produce the same bytes or one of them is broken". Phase 046 measured that
+    premise and it does not hold: two passes of the same build over identical
+    content differed by 16 KiB in the main database file, on a machine at 2%
+    CPU. The traversal is sorted, the WAL is already empty, and the
+    absolute-path-length theory is refuted (four fresh temp roots all produced
+    79-character paths and identical totals). What moves the bytes is still
+    unknown, and the gate says so instead of guessing.
+
+    The assertion is now the one the code actually makes: the same size twice
+    repeats, and a size far outside the tolerance does not. 9.9 MiB against
+    3.8 is a 160% gap, which no reading of "repeatable" survives.
+    """
     assert spread_verdict(_run(), _run()).repeatable
     assert not spread_verdict(_run(), _run(index_size_mib=9.9)).repeatable
+
+    # And just inside the declared allowance is still repeatable: 3.83 MiB is
+    # +0.6% on a 10% tolerance, which is the behaviour the fix intends and the
+    # behaviour an equality could not express.
+    assert spread_verdict(_run(), _run(index_size_mib=3.83)).repeatable
 
 
 def test_the_spread_names_the_worst_metric() -> None:

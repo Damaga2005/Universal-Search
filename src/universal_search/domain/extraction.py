@@ -132,3 +132,28 @@ class ExtractionResult:
     structure: DocumentStructure | None = None
     resource_usage: ResourceUsage | None = None
     truncated: bool = False
+
+    def __post_init__(self) -> None:
+        """Make an error and a status of ``ok`` unrepresentable together.
+
+        Phase 046. The precedence documented on :class:`ExtractionStatus` says
+        ``error`` outranks everything, and it was documented but not enforced:
+        ``ExtractionResult(error="cancelled")`` -- exactly what
+        ``extractors.extract`` builds when an extractor raises, and what every
+        test reader builds when it refuses -- left ``status`` at its ``ok``
+        default. The indexer persists status + warnings, so the database
+        recorded a *successful* extraction for a document with no text and no
+        FTS row.
+
+        That is not cosmetic. The indexer's fast path compares size, mtime,
+        source and availability, so the next pass took the "unchanged" branch,
+        never re-read the file, and never repaired it. Measured: one cancelled
+        extraction, then a clean second pass reporting ``unchanged=6`` with the
+        blanked document still blank and unsearchable, permanently.
+
+        The type is the right place for this. A status field that can be a
+        lie is worse than no status field, and every fix attempted at the call
+        site leaves the next caller to make the same mistake.
+        """
+        if self.error is not None and self.status == ExtractionStatus.OK:
+            object.__setattr__(self, "status", ExtractionStatus.ERROR)

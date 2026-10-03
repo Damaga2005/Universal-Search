@@ -82,7 +82,7 @@
 - [x] Settings & Configuration (043)
 - [x] Local learning v2 (044)
 - [x] Search Quality & Relevance (045)
-- [ ] Indexing Scalability & Performance (046)
+- [x] Indexing Scalability & Performance (046)
 - [ ] Storage & data lifecycle (047)
 - [ ] Windows & Environment Matrix (048)
 - [ ] Windows Distribution & Installation (049)
@@ -196,7 +196,24 @@ the layer was correctly returning it and the gate was correctly, wrongly
 failing. And `perf_gate` was found blaming the machine for its own metric: it
 demanded byte-exact index size on the premise that two runs produce the same
 bytes, which measurement disproved -- the WAL is already empty here and the 16 KB
-difference is in the main database file, because the indexer follows filesystem
-enumeration order, which is not sorted.
+difference is in the main database file. Phase 046 then disproved phase 045's
+own *explanation* for it: the traversal is sorted, and the path-length theory
+was refuted by measuring four fresh temp roots. The cause remains unknown and
+is now recorded as unknown.
 
-Current test count: 1410 tests collected.
+Phase 046 measured indexing at scale and **shipped no optimisation**, which is
+what its own rule asks for when no bottleneck turns out to be ours. The curve is
+linear in space and nearly flat in memory (3.79 -> 3.59 KiB per document, 2.42
+-> 3.36 MiB peak, from 1k to 4k documents) while cost per document rises 1.64x;
+the time belongs to FTS5, which accounts for ~90% of a pass and merges its own
+segments inside SQLite. Three candidate tunings were measured and rejected,
+including `wal_autocheckpoint=20000`, which halved an insert-only probe and
+changed the product by 0.98x -- the probe and the indexer do different work.
+What did ship are three correctness defects that all 1410 tests had been unable
+to see, the worst of them a single cancelled extraction that permanently
+blanked a document because `ExtractionResult` could hold an error and a status
+of `ok` at the same time. Phase 046 also retracted a mechanism phase 045 had
+asserted without measuring: the traversal is sorted, and what actually moves the
+16 KiB index-size spread is still unknown.
+
+Current test count: 1421 tests collected.

@@ -478,25 +478,38 @@ def spread_verdict(first: Run, second: Run) -> SpreadVerdict:
         delta = abs(a - b)
         allowed = metric.allowed_change(a)
         # Phase 045 removed the special case that demanded byte-exact equality
-        # for `index_size_mib`, because its premise was tested and is false.
+        # for `index_size_mib`. Phase 046 corrected the *reason* recorded here,
+        # because phase 045 asserted a cause it had not established.
         #
-        # The premise was "two runs produce the same bytes or one of them is
-        # broken". Two runs of the same build on the same content were measured
-        # and differed by 16 KB in the *main database file* -- not in the WAL,
-        # which is already empty here, and not because of the machine, which sat
-        # at 2% CPU with a calibration of 1.02x. The cause is the indexer's
-        # traversal: it walks the directory in filesystem enumeration order,
-        # which is not sorted and differs between two directories holding the
-        # same files. Different order means different transaction boundaries,
-        # which means a different free-page pattern, which means a different
-        # byte count for identical logical content.
+        # What phase 045 claimed: the indexer walks the directory in
+        # filesystem enumeration order, so two runs differ. That is false, and
+        # it was never measured -- `providers/local.py:140` sorts every
+        # directory with `sorted(scanner, key=lambda e: e.name.lower())`.
+        # Phase 045 had a real observation (16 KiB between two passes on a
+        # machine at 2% CPU) and attached an unverified mechanism to it.
         #
-        # So the size is a *count*, not a fingerprint, and it is compared with
-        # the tolerance the metric already declares -- 10% with a 0.10 MiB
-        # floor -- against a measured variation of 0.2%. That is not a widened
-        # threshold fitted to the noise; it is the documented allowance for a
-        # metric whose own definition of identity turned out to be wrong.
-        # `test_perf_gate.py` pins both the tolerance and the 10% value.
+        # What is actually known, and what is not:
+        #
+        #   * NOT the traversal order: the walk is sorted, deterministically.
+        #   * NOT the WAL: it is already 0 bytes in this build, because SQLite
+        #     auto-checkpoints. `_sync` above keeps it that way by
+        #     construction rather than by luck.
+        #   * NOT the absolute path length: the one theory worth testing, since
+        #     `documents.path` and `documents_fts.path` both store the
+        #     absolute text and every pass runs in a fresh `mkdtemp()` root.
+        #     Measured across four roots: every path was 79 characters and every
+        #     total was identical. The theory is refuted at this scale, not
+        #     merely unproven.
+        #   * STILL UNKNOWN: what moves those bytes. This file says so rather
+        #     than guessing a third time. A gate that names its own ignorance
+        #     is useful; one that names a wrong cause sends someone to fix the
+        #     wrong thing.
+        #
+        # So the size is compared with the tolerance the metric already
+        # declares -- 10% with a 0.10 MiB floor -- against a measured variation
+        # of 0.2%. That is not a threshold fitted to the noise; it is the
+        # documented allowance, applied to a metric whose definition of
+        # identity turned out to be wrong for reasons still unknown.
         ratio = delta / allowed if allowed else (
             0.0 if delta == 0 else float("inf")
         )
