@@ -209,11 +209,44 @@ def test_context_boost_reasons_and_cap() -> None:
 
 
 def test_usage_boost_from_saturates() -> None:
+    """The phase-008 curve, with phase 044's floor.
+
+    Two values changed on purpose. One open now buys **nothing**: a single
+    accidental click must not reorder anybody's results, and that is what makes
+    cold start deterministic rather than merely quiet. The shape above the floor
+    is unchanged -- 2 is less than 4, 4 saturates, a thousand is still 1.0.
+    """
+    from universal_search.learn import MIN_EFFECTIVE_EVENTS
+
     assert usage_boost_from(0) == 0.0
     assert usage_boost_from(-3) == 0.0
-    assert 0.0 < usage_boost_from(1) < usage_boost_from(2) < usage_boost_from(4)
+    assert usage_boost_from(1) == 0.0, "one accidental open must change nothing"
+    assert usage_boost_from(1.5) == 0.0
+    assert usage_boost_from(MIN_EFFECTIVE_EVENTS) > 0.0
+    assert 0.0 < usage_boost_from(2) < usage_boost_from(4)
     assert usage_boost_from(4) == pytest.approx(1.0)
     assert usage_boost_from(1000) == 1.0
+
+
+def test_usage_boost_decays_with_age() -> None:
+    """Phase 044: the forgetting curve, with the numbers.
+
+    This is the "learning cannot permanently bury new documents" rule as a
+    number rather than as a promise. Four events inside a month are the whole
+    signal; the same four spread over a year and a half are worth nothing at
+    all, because the decay floor alone leaves them below the minimum.
+    """
+    # Fresh: four opens inside the first bucket saturate the signal.
+    assert usage_boost_from(4, 10) == pytest.approx(1.0)
+    # 90 days: four opens are worth 4 x 0.6 = 2.4 effective, above the floor.
+    assert 0.0 < usage_boost_from(4, 90) < usage_boost_from(4, 30)
+    # 365 days: 4 x 0.3 = 1.2, below the minimum of 2, so nothing at all.
+    assert usage_boost_from(4, 365) == 0.0
+    assert usage_boost_from(4, 5000) == 0.0
+    # A history big enough to survive its own age is still remembered.
+    assert usage_boost_from(40, 500) > 0.0
+    # A clock that disagrees is not evidence of age.
+    assert usage_boost_from(4, -10) == usage_boost_from(4, 0)
 
 
 # -- ranking integrity --------------------------------------------------------

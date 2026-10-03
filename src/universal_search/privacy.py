@@ -127,9 +127,20 @@ INVENTORY: tuple[DataItem, ...] = (
         key="usage",
         what="document id + query text of opened results, timestamps",
         where="SQLite table `usage_events`",
-        purpose="optional local ranking boost (phase 008)",
-        retention="until cleared; disabled by default",
-        deletion="`universal-search usage clear`, `diagnose repair all`",
+        purpose=(
+            "optional local ranking boost, scoped to the query it was recorded "
+            "under and decayed by age (phase 044)"
+        ),
+        retention=(
+            "rows are kept until cleared, but their influence fades on a fixed "
+            "schedule -- full weight for 30 days, then 0.6/0.3/0.1 -- so an old "
+            "habit stops steering results even though the row is still there; "
+            "disabled by default"
+        ),
+        deletion=(
+            "`universal-search usage clear`, `privacy forget`, deletion of the "
+            "document, `diagnose repair all`"
+        ),
         optional=True,
     ),
     DataItem(

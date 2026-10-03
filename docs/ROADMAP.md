@@ -80,7 +80,7 @@
 - [x] Product experience & UX (041)
 - [x] Interactive Search Experience (042)
 - [x] Settings & Configuration (043)
-- [ ] Local learning v2 (044)
+- [x] Local learning v2 (044)
 - [ ] Search Quality & Relevance (045)
 - [ ] Indexing Scalability & Performance (046)
 - [ ] Storage & data lifecycle (047)
@@ -142,4 +142,18 @@ pass, including keystroke-to-result at 185 ms against a 600 ms budget.
 
 Phase 043 turned configuration from a bag of fields into a contract. `python -m evaluation.settings_gate` runs 13 invariants over it, and none needs a window. The measurement that justified it: a negative `indexer_file_delay` in `config.json` reached `time.sleep(-1)`, which raises inside the indexing loop and fails the whole pass — reachable only by editing a JSON file, and now refused by the schema.
 
-Current test count: 1342 tests collected.
+Phase 044 took the one ranking signal that is not derived from the query and
+found that it had never learned anything: `USAGE_COUNTS_SQL` counted opens and
+ignored the `query` column it had been writing since phase 008, so a document
+opened for `examen` was also boosted for `receta paella`, and `opened_at` was in
+the schema unread, so a 2024 event weighed the same as yesterday's. Events are
+now scoped to the query they were recorded under and decay on a four-step
+schedule, and `python -m evaluation.learning_gate` runs 11 invariants over a
+synthetic history. All 11 pass. The weight was measured rather than inherited:
+at 0.5 the signal was worth 3.45% of the score against `recency`'s 2.14%, i.e.
+*stronger* than the signal the project already calls secondary, so it is now
+0.25 and 1.75% — at a cost of two reorderable pairs out of 23, both of them
+near-ties. Learning promotes 6 of 33 (query, candidate) pairs and demotes none;
+with no history MRR is unchanged and not one of the 18 corpus queries moves.
+
+Current test count: 1365 tests collected.

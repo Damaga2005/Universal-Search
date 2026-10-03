@@ -50,7 +50,7 @@ El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
 | 041 | Experiencia de producto: resultados con columnas y estados reales | ✅ Completada | — | [informe](development/041-product-experience-report.md) · [checklist](development/041-windows-ux-checklist.md) |
 | 042 | Búsqueda como flujo: ordenar, agrupar, guardar, historial, explicaciones | ✅ Completada | — | [informe](development/042-search-experience-report.md) |
 | 043 | Un sistema de ajustes tipado, validado y migrado | ✅ Completada | — | [informe](development/043-settings-report.md) |
-| 044 | Aprendizaje local v2 | ⬜ Planificada | — | [plan](development/044-local-learning-v2.md) |
+| 044 | Aprendizaje local v2: ámbito de consulta, decaimiento y peso medido | ✅ Completada | — | [informe](development/044-local-learning-report.md) |
 | 045 | Calidad y relevancia de búsqueda | ⬜ Planificada | — | [plan](development/045-search-quality-v3.md) |
 | 046 | Escalabilidad y rendimiento de indexación | ⬜ Planificada | — | [plan](development/046-indexing-performance-v3.md) |
 | 047 | Almacenamiento y ciclo de vida | ⬜ Planificada | — | [plan](development/047-storage-and-data-lifecycle.md) |
@@ -88,7 +88,7 @@ nombrados, puertas de CI verificadas por test y un gate v2 ejecutable de 13
 invariantes (`python -m evaluation.gate`); detalles y límites en el
 [informe de la fase 030](development/030-v2-quality-gate-report.md).
 
-Current test count: 1342 tests collected.
+Current test count: 1365 tests collected.
 
 ## Cómo ejecutar
 

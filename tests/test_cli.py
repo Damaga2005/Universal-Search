@@ -161,6 +161,15 @@ def test_cli_usage_learning_commands(tmp_path: Path, monkeypatch, capsys) -> Non
     shown = capsys.readouterr().out
     assert "amplificador" in shown and "«amplificador»" in shown
 
+    # Phase 044: `show` answers "what did I open"; `effect` answers the
+    # question the new model raises, which is "what is my history still doing".
+    # With a single open the answer is that it is doing nothing.
+    run_cli(monkeypatch, "usage", "effect", "--database", database)
+    main()
+    effect = capsys.readouterr().out
+    assert "amplificador" in effect
+    assert "0.00" in effect
+
     run_cli(monkeypatch, "usage", "clear", "--database", database)
     main()
     assert "1 evento(s)" in capsys.readouterr().out

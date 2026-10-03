@@ -18,10 +18,10 @@ separate, disabled-by-default signal recorded in the local database only
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 
+from universal_search import learn
 from universal_search.appconfig import AppConfig
 
 # Additive bonuses composing one bounded signal (sum is capped at 1.0).
@@ -32,8 +32,10 @@ CONTEXT_SOURCE_BONUS = 0.10
 CONTEXT_RECENCY_BONUS = 0.10
 CONTEXT_BOOST_CAP = 1.0
 
-# Opens needed to saturate the usage signal (4+ opens => 1.0).
-USAGE_SATURATION_OPENS = 4.0
+# Opens needed to saturate the usage signal (4+ opens => 1.0) is no longer
+# declared here: phase 044 moved the signal itself to `universal_search.learn`,
+# and the name is re-exported at the bottom of this module next to the function
+# it belongs to. One value, one place.
 
 
 @dataclass(frozen=True, slots=True)
@@ -299,8 +301,10 @@ def context_boost_for(
     return min(boost, CONTEXT_BOOST_CAP), tuple(reasons)
 
 
-def usage_boost_from(open_count: int) -> float:
-    """Saturating usage signal: 0 opens -> 0, 4+ opens -> 1."""
-    if open_count <= 0:
-        return 0.0
-    return min(1.0, math.log1p(open_count) / math.log1p(USAGE_SATURATION_OPENS))
+# Phase 044 moved the usage signal into `universal_search.learn`, where it is
+# query-scoped and decays with age instead of being one global counter. The
+# name is re-exported here rather than kept as a second implementation: two
+# saturating curves that agree today and a gate that reads only one of them is
+# how the wrong one gets measured later.
+USAGE_SATURATION_OPENS = learn.USAGE_SATURATION_OPENS
+usage_boost_from = learn.usage_boost_from

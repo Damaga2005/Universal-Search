@@ -307,6 +307,15 @@ class Indexer:
         connection.execute(
             "DELETE FROM document_graph_nodes WHERE document_id = ?", (document_id,)
         )
+        # Local usage events (044) are not derived data -- they are a record of
+        # what somebody did -- but they are unusable once the document is gone
+        # and they keep the query text alive, which is exactly what a privacy
+        # inventory promises not to do. `privacy forget <path>` already removed
+        # them on demand; leaving them to accumulate until someone remembered
+        # that command was the gap.
+        connection.execute(
+            "DELETE FROM usage_events WHERE document_id = ?", (document_id,)
+        )
         # The optional derived layers (026 semantic vectors, 031 blocking
         # fingerprints) follow the canonical document too. They are disposable
         # and rebuildable, so deleting them here is always safe — and leaving

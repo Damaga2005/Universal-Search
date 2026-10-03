@@ -221,7 +221,7 @@ def test_a_very_long_document_keeps_every_signal_bounded():
 # -- personal signals stay optional and separate -------------------------------
 
 def test_personal_signals_are_off_unless_they_are_supplied():
-    item = candidate(name="bjt.md", content="bjt en el contenido")
+    item = candidate(name="notas-bjt.md", content="bjt en el contenido")
     base = Ranker().signals(item, ("bjt",), now=NOW)
     assert base["usage"] == 0.0
     assert base["context"] == 0.0
@@ -235,6 +235,34 @@ def test_personal_signals_are_off_unless_they_are_supplied():
     textual = {"filename_exact", "filename_tokens", "phrase_exact", "term_freq",
                "proximity", "bm25", "path_match", "doc_type", "source", "recency"}
     assert {k: boosted[k] for k in textual} == {k: base[k] for k in textual}
+
+
+def test_learning_never_boosts_an_exact_filename_match():
+    """Phase 044: the contract's first rule, enforced rather than argued.
+
+    The weight ordering cannot promise this on its own. ``usage`` is a quarter
+    of ``filename_exact``, but a rival whose content signals are stronger sits
+    within one usage step of the exact match -- which is exactly the situation
+    the corpus's near-ties create. So the ranker refuses the boost outright.
+    """
+    exact = candidate(name="bjt.md", content="bjt en el contenido")
+    signals = Ranker().signals(
+        exact, ("bjt",), usage_boost=1.0, context_boost=1.0, now=NOW
+    )
+    assert signals["filename_exact"] == 1.0
+    assert signals["usage"] == 0.0
+    # The personal *context* layer is a different thing and stays allowed to
+    # apply: it changes what is retrieved, not what the user just typed.
+    assert signals["context"] == 1.0
+
+    # A multi-word query that still matches the name exactly, likewise.
+    dashed = candidate(name="notas-bjt.md", content="notas bjt")
+    assert Ranker().signals(
+        dashed, ("notas", "bjt"), usage_boost=1.0, now=NOW
+    )["filename_exact"] == 1.0
+    assert Ranker().signals(
+        dashed, ("notas", "bjt"), usage_boost=1.0, now=NOW
+    )["usage"] == 0.0
 
 
 def test_activated_personal_weights_keep_the_score_normalized():

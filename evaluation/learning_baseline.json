@@ -1,0 +1,174 @@
+{
+  "phase": "044",
+  "verdicts": [
+    {
+      "gate": "L1 diferencias en arranque en frio",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "18 consultas, misma respuesta con y sin historial"
+    },
+    {
+      "gate": "L2 diferencias con una sola apertura",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "una sola apertura no cambia ninguna de las 18 respuestas"
+    },
+    {
+      "gate": "L3 ejecuciones no deterministas",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "3 búsquedas con historial dan el mismo orden: True"
+    },
+    {
+      "gate": "L4 historiales que no olvidaron",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "6 aperturas de hoy cambian el orden; las mismas de hace 1200 días vuelven al orden base"
+    },
+    {
+      "gate": "L5 aprendizaje mas fuerte que la recencia",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "aprendizaje 1.75% del puntaje frente a recencia 2.14%; margen x0.8187; nombre exacto 21.4% (peso total 14.0)"
+    },
+    {
+      "gate": "L6 coincidencias exactas impulsadas",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "0 coincidencias exactas recibieron impulso; el efecto máximo del aprendizaje es 0.0175 de puntaje"
+    },
+    {
+      "gate": "L7 coincidencias exactas derrotadas",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "tras 40 aperturas de «factura_detalle.md», «factura.md» sigue primero (['factura.md', 'factura_detalle.md']); su margen (0.2036) es 11.6× el efecto máximo del aprendizaje"
+    },
+    {
+      "gate": "L8 filtros anulados por una preferencia",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "con doc_type=md y 40 aperturas aprendidas de un .txt, 3 resultados y ninguno de otro tipo"
+    },
+    {
+      "gate": "L9 flujos que el aprendizaje no ayudo",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "de 33 pares (consulta, documento), 6 mejoran y 0 bajan tras 6 aperturas repetidas; 11 ya estaban primeros"
+    },
+    {
+      "gate": "L10 regresion de MRR sin historial",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "MRR 0.0556 sin aprendizaje y 0.0556 con aprendizaje activo y sin historial; 0 de 18 consultas cambian de puntaje"
+    },
+    {
+      "gate": "L11 impulsos sin explicacion",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "1 resultados con señal de aprendizaje, 1 con una frase que la explique"
+    }
+  ],
+  "shares": {
+    "usage": 0.017544,
+    "recency": 0.021429,
+    "filename_exact": 0.214286,
+    "phrase_exact": 0.142857,
+    "total_weight": 14.0,
+    "usage_weight": 0.25
+  },
+  "headroom": 0.8187,
+  "dominance": {
+    "baseline_order": [
+      "factura.md",
+      "factura_detalle.md"
+    ],
+    "learned_order": [
+      "factura.md",
+      "factura_detalle.md"
+    ],
+    "exact_margin": 0.203571,
+    "max_learning_effect": 0.017544,
+    "margin_over_effect": 11.6
+  },
+  "sweep": {
+    "considered": 33,
+    "already_first": 11,
+    "improved": [
+      [
+        "CMOS",
+        "logica_cmos.md",
+        1,
+        0
+      ],
+      [
+        "MUX",
+        "mux_cmos.md",
+        1,
+        0
+      ],
+      [
+        "polarizacion",
+        "BJT_Ebers_Moll.md",
+        1,
+        0
+      ],
+      [
+        "polarizacion",
+        "Tema_6_BJT.md",
+        2,
+        0
+      ],
+      [
+        "notas",
+        "tension_base_emisor.md",
+        2,
+        1
+      ],
+      [
+        "punto Q",
+        "BJT_Ebers_Moll.md",
+        2,
+        1
+      ]
+    ],
+    "demoted": []
+  },
+  "mrr": {
+    "baseline": 0.055556,
+    "with_learning": 0.055556,
+    "queries_moved": []
+  },
+  "decay": {
+    "0": {
+      "four": 1.0,
+      "forty": 1.0
+    },
+    "30": {
+      "four": 1.0,
+      "forty": 1.0
+    },
+    "90": {
+      "four": 0.760374,
+      "forty": 1.0
+    },
+    "365": {
+      "four": 0.0,
+      "forty": 1.0
+    },
+    "1200": {
+      "four": 0.0,
+      "forty": 1.0
+    }
+  }
+}

@@ -167,7 +167,21 @@ DEFAULT_WEIGHTS = RankingWeights()
 
 # Raised only when the corresponding optional, user-enabled signal takes part
 # (phase 008). The defaults above keep both at 0.0.
-ACTIVATED_USAGE_WEIGHT = 0.5
+#
+# Phase 044 measured this instead of inheriting it. At 0.5 the usage signal was
+# worth 3.45% of the final score against ``recency``'s 2.14% -- *stronger* than
+# the signal the project already documents as "secondary and bounded", which
+# contradicts the contract that learning is always secondary. The ceiling on a
+# weighted mean is ``usage / (total + usage)``, so 0.25 puts it at 1.75%, below
+# recency.
+#
+# The cost of halving it is small and was measured too: across the 23 adjacent
+# score gaps in the evaluation corpus, 0.5 could reorder 9 of them and 0.25
+# still reorders 7. The gaps that matter are the near-ties, and the near-ties
+# are all under 0.024 -- a tenth of what 0.5 could reach and still less than
+# half of what the second tier needed. A learning signal that only mattered on
+# gaps nothing else could resolve was the wrong shape of signal.
+ACTIVATED_USAGE_WEIGHT = 0.25
 ACTIVATED_CONTEXT_WEIGHT = 1.0
 
 
@@ -289,6 +303,18 @@ class Ranker:
         # local usage learning and the personal context preference.
         signals["usage"] = min(max(usage_boost, 0.0), 1.0)
         signals["context"] = min(max(context_boost, 0.0), 1.0)
+
+        # Phase 044, the ranking contract's first rule made mechanical instead
+        # of argued: "learning is always secondary to explicit intent". A
+        # document whose file name *is* what you typed has already been
+        # answered; history has nothing to add and is not allowed to try.
+        # The weight ordering alone cannot promise this -- usage is 0.25 against
+        # filename_exact's 3.0, but a rival whose other signals are stronger
+        # can sit within one usage step of the exact match, which is exactly
+        # what the corpus's near-ties produce -- so the guarantee is written
+        # here rather than left to the numbers.
+        if signals["filename_exact"] >= 1.0:
+            signals["usage"] = 0.0
         return signals
 
     @staticmethod

@@ -26,7 +26,7 @@ Every signal is normalized to `[0, 1]`, therefore every score lies in
 | 8 | `doc_type` | 0.5 | Extractable content = 1.0, metadata-only (binary) = 0.4 |
 | 9 | `source` | 0.4 | Provider/context weight (`local`/`onedrive`/`other` = 1.0 today) |
 | 10 | `recency` | 0.3 | `0.5 + 0.5·e^(−age_days/180)` — bounded to [0.5, 1.0] |
-| 11 | `usage` | 0.0 | **Optional** local usage learning; 0.0 until the user enables it (then 0.5) |
+| 11 | `usage` | 0.0 | **Optional** local usage learning; 0.0 until the user enables it (then 0.25, phase 044) |
 | 12 | `context` | 0.0 | **Optional** personal-context boost; 0.0 unless a context is active (then 1.0) |
 
 All of it lives in one immutable value: `RankingWeights` in
@@ -123,6 +123,59 @@ only collected when the user turns usage learning on (phase 008), and a
 personal context only applies when one is active. Textual relevance is
 provably untouched by both: a test compares every textual signal with and
 without the boosts and requires them to be identical.
+
+## Local learning (phase 044)
+
+Learning is the one signal that is not derived from the query, so the whole
+section exists to keep it secondary. Its value lives in
+`universal_search/learn.py`, as pure functions over numbers.
+
+**Scope.** An event counts for the query it was recorded under (80 %) and for
+the document in general (20 %). Four opens under a *different* query move
+nothing at all — four fifths of four is below the floor.
+
+**Floor.** Below `MIN_EFFECTIVE_EVENTS = 2.0` effective events the signal is
+exactly zero. One accidental click must not reorder anybody's results, and
+that is what makes cold start deterministic rather than merely quiet.
+
+**Decay.** Four buckets, a step rather than a curve because a step can be read
+on a screen: full weight to 30 days, then 0.6, 0.3, and a floor of 0.1. Four
+opens inside a month are the whole signal; the same four spread over a year and
+a half are worth nothing, because 4 × 0.3 = 1.2 is below the floor.
+
+**The weight, measured.** The ceiling on any signal in a weighted mean is
+`weight / (total + weight)`. At 0.5 the usage signal was worth 3.45 % of the
+final score against `recency`'s 2.14 % — *stronger* than the signal the project
+already calls secondary. At **0.25** it is 1.75 %, i.e. 0.82× `recency`. The
+23 consecutive score gaps in the evaluation corpus are bimodal: a cluster of
+near-ties below 0.024 and a bulk of real margins above 0.044. Halving the
+weight costs two reorderable pairs out of 23 and both are near-ties, which is
+the only place learning was ever going to act.
+
+**Dominance, not argument.** The weight ordering cannot promise that exact
+matches stay dominant — a quarter of `filename_exact` is nothing when a rival's
+content signals are stronger and the two sit within one usage step of each
+other. So the ranker refuses the boost outright:
+
+```python
+if signals["filename_exact"] >= 1.0:
+    signals["usage"] = 0.0
+```
+
+A document whose file name *is* what you typed has already been answered. The
+rule lives in the ranker, not in the SQL, so a caller that computes a boost by
+hand gets the same answer.
+
+**Inspectable.** `universal-search usage effect` reports, per (document,
+query), how many opens survive the decay, what they are worth now, and how many
+signals no longer move anything while their row is still on disk.
+`usage clear` and `privacy forget` delete them; `Indexer._delete()` deletes them
+too, so a document that leaves the disk does not leave its query text behind.
+
+Evidence: `python -m evaluation.learning_gate` — 11 invariants, including that
+learning promotes 6 of 33 (query, candidate) pairs and demotes none, and that
+with no history MRR is unchanged and not one of the 18 corpus queries moves by
+so much as a rounding step.
 
 ## Retrieval
 

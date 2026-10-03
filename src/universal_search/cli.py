@@ -175,6 +175,13 @@ def main() -> None:
     usage_sub.add_parser("on", help="enable local usage learning")
     usage_sub.add_parser("off", help="disable local usage learning")
     usage_show = usage_sub.add_parser("show", help="inspect recorded signals")
+    usage_effect = usage_sub.add_parser(
+        "effect", help="what the recorded history is worth right now"
+    )
+    usage_effect.add_argument("--database", type=Path, default=default_database,
+        help="index database (default: the user data directory)",
+    )
+    usage_effect.add_argument("--limit", type=int, default=20)
     usage_show.add_argument("--database", type=Path, default=default_database,
         help="index database (default: the user data directory)",
     )
@@ -1149,6 +1156,26 @@ def _usage_command(args) -> int:
             query = row["query"] or "(sin consulta)"
             location = row["path"] or row["document_id"]
             print(f"{row['opened_at']}  «{query}»  ->  {row['name']}  {location}")
+        return 0
+
+    if command == "effect":
+        effects = engine.usage_effects(args.limit)
+        if not effects:
+            print("sin señales de uso: nada que aprender todavía")
+            return 0
+        print("consulta                   para esa  total  peso  documento")
+        for row in effects:
+            query = row["query"] or "(sin consulta)"
+            print(
+                f"{query[:28]:<28} {row['query_events']:>8.1f} "
+                f"{row['global_events']:>6.1f} {row['boost']:>5.2f}  {row['name']}"
+            )
+        faded = [row for row in effects if row["boost"] == 0.0]
+        if faded:
+            print(
+                f"\n{len(faded)} de {len(effects)} señales ya no mueven nada: "
+                "el peso de un evento baja solo con el tiempo"
+            )
         return 0
 
     if command == "clear":

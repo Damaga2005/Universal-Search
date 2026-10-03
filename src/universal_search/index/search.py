@@ -1,13 +1,13 @@
 import sqlite3
 import time
 from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 from pathlib import Path
 
 from universal_search.context import (
     Context,
     context_boost_for,
     expansion_terms,
-    usage_boost_from,
 )
 from universal_search.index.database import SearchDatabase
 from universal_search.metrics import record_search
@@ -47,11 +47,15 @@ RESULTS_SQL = """
     ORDER BY f.rank, d.path
 """
 
-USAGE_COUNTS_SQL = """
-    SELECT document_id, COUNT(*) AS opens
+# Phase 044. Before this it counted opens and ignored which query they happened
+# under, so the `query` column had been recorded since phase 008 and read by
+# exactly one query -- the one a user inspects. Learning that cannot tell one
+# task from another is noise with extra storage. `opened_at` comes back for the
+# same reason: an event from 2024 used to carry full weight.
+USAGE_EVENTS_SQL = """
+    SELECT document_id, query, opened_at
     FROM usage_events
     WHERE document_id IN ({placeholders})
-    GROUP BY document_id
 """
 
 USAGE_ROWS_SQL = """
@@ -64,6 +68,29 @@ USAGE_ROWS_SQL = """
 """
 
 SNIPPET_RADIUS = 80
+
+
+def _age_days(opened_at: str, now: datetime) -> float:
+    """How old a usage event is, in days, against an injected clock.
+
+    An unparsable or absent timestamp is treated as very old rather than as
+    new: an event whose age cannot be established is not evidence of a recent
+    habit, and guessing "new" would give it the strongest possible weight.
+    """
+    from universal_search.learn import UNBOUNDED_AGE_DAYS
+
+    if not opened_at:
+        return float(UNBOUNDED_AGE_DAYS)
+    text = str(opened_at).strip().replace("Z", "+00:00")
+    try:
+        moment = datetime.fromisoformat(text)
+    except ValueError:
+        return float(UNBOUNDED_AGE_DAYS)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    return max(0.0, (now - moment).total_seconds() / 86400.0)
 
 
 def _pool_sql(clauses: list[str]) -> str:
@@ -207,12 +234,14 @@ class SearchEngine:
         explain: bool = False,
         source: str | None = None,
         doc_type: str | None = None,
+        now: datetime | None = None,
     ) -> list[SearchResult]:
         """Rank ``query`` and record latency + result count (spec 011).
 
         Thin wrapper: every CLI/GUI/service path funnels through here, so
         the local metrics observe real usage — counters only, never the
-        query text itself.
+        query text itself. ``now`` passes the clock through to the ranking
+        layer; see :meth:`_search`.
         """
         started = time.perf_counter()
         results = self._search(
@@ -223,6 +252,7 @@ class SearchEngine:
             explain=explain,
             source=source,
             doc_type=doc_type,
+            now=now,
         )
         record_search((time.perf_counter() - started) * 1000, len(results))
         return results
@@ -237,6 +267,7 @@ class SearchEngine:
         explain: bool = False,
         source: str | None = None,
         doc_type: str | None = None,
+        now: datetime | None = None,
     ) -> list[SearchResult]:
         """Rank the index for ``query``.
 
@@ -248,6 +279,10 @@ class SearchEngine:
         breakdown so any personalization can be inspected. ``source`` and
         ``doc_type`` are SQL-level filters — still pure index queries, the
         filesystem is never touched during a search.
+
+        ``now`` is the clock the usage decay and the recency signal are
+        measured against. Phase 044 made both accept one, because a ranking
+        signal that reads the clock itself cannot be tested for determinism.
 
         ``query`` goes through the query language of spec 012 (lexer, parser,
         validation, translation). A malformed query raises
@@ -282,6 +317,7 @@ class SearchEngine:
             # an empty query means "no filter", not "everything".
             return []
         pool = self.candidate_pool or max(limit * 5, 50)
+        now = now or datetime.now(timezone.utc)
 
         expansions = expansion_terms(terms, context)
         base = plan.fts
@@ -309,14 +345,26 @@ class SearchEngine:
                 rows = connection.execute(
                     sql, [fallback, *params, pool]
                 ).fetchall()
-            usage_counts = (
-                self._usage_counts(connection, rows) if usage and rows else {}
+            usage_signals = (
+                self._usage_signals(connection, rows, query=query, now=now)
+                if usage and rows
+                else {}
             )
+            # Only documents whose learning actually does something raise the
+            # weight. Phase 044: with the weight raised but no effective signal,
+            # the denominator grew and every score moved for no reason, which is
+            # the difference between "learning is on" and "learning changed
+            # something".
+            active_usage = {
+                identifier: signal
+                for identifier, signal in usage_signals.items()
+                if not signal.is_inert
+            }
 
         weights = self.ranker.weights
         if context is not None and weights.context == 0.0:
             weights = replace(weights, context=ACTIVATED_CONTEXT_WEIGHT)
-        if usage_counts and weights.usage == 0.0:
+        if active_usage and weights.usage == 0.0:
             weights = replace(weights, usage=ACTIVATED_USAGE_WEIGHT)
         ranker = Ranker(weights)
 
@@ -335,14 +383,23 @@ class SearchEngine:
             context_boost = 0.0
             notes: tuple[str, ...] = ()
             if context is not None:
-                context_boost, notes = context_boost_for(
+                context_boost, context_notes = context_boost_for(
                     context,
                     path=row["path"],
                     source=row["source"],
                     doc_type=row["extension"],
                     modified_at=row["modified_at"],
                 )
-            usage_boost = usage_boost_from(usage_counts.get(row["document_id"], 0))
+                notes = context_notes
+            usage_signal = active_usage.get(row["document_id"])
+            usage_boost = usage_signal.boost if usage_signal else 0.0
+            if usage_signal is not None and explain:
+                # Phase 044's explainability rule. Usage used to move results
+                # with nothing in the explanation saying why; the context signal
+                # has had a sentence for it since phase 024.
+                note = usage_signal.note()
+                if note:
+                    notes = notes + (note,)
             if explain:
                 points, score = ranker.contributions(
                     candidate,
@@ -387,15 +444,29 @@ class SearchEngine:
     # -- local usage learning (privacy: only recorded when enabled) ----------
 
     @staticmethod
-    def _usage_counts(connection, rows) -> dict[str, int]:
-        identifiers = list({row["document_id"] for row in rows})
+    def _usage_signals(connection, rows, *, query: str, now: datetime) -> dict:
+        """What the learned events are worth for these candidates, today.
+
+        ``now`` is passed in rather than read from the clock, for two reasons:
+        the ranker already takes one for the recency signal, and a signal whose
+        value changes between two calls in the same statement cannot be tested
+        for determinism at all.
+        """
+        from universal_search import learn
+
+        identifiers = sorted({row["document_id"] for row in rows})
         if not identifiers:
             return {}
         placeholders = ",".join("?" for _ in identifiers)
         fetched = connection.execute(
-            USAGE_COUNTS_SQL.format(placeholders=placeholders), identifiers
+            USAGE_EVENTS_SQL.format(placeholders=placeholders), identifiers
         ).fetchall()
-        return {row["document_id"]: row["opens"] for row in fetched}
+        grouped: dict[str, list] = {}
+        for event in fetched:
+            grouped.setdefault(event["document_id"], []).append(
+                (event["query"], _age_days(event["opened_at"], now))
+            )
+        return learn.signals_by_document(grouped, query=query)
 
     def record_open(self, document_id: str, query: str = "") -> None:
         """Persist one local "result opened" signal (query/result association).
@@ -415,6 +486,46 @@ class SearchEngine:
         """Inspectable usage log (what was opened, for which query)."""
         with self.database.connect() as connection:
             return connection.execute(USAGE_ROWS_SQL, (limit,)).fetchall()
+
+    def usage_effects(self, limit: int = 20, *, now: datetime | None = None) -> list[dict]:
+        """What each learned (document, query) pair is worth *right now*.
+
+        Phase 044's inspectable face. The raw log answers "what did I open";
+        this answers the question the new model actually raises, which is "what
+        is my history still doing to my results" -- which pairs survive the
+        decay, and which have faded to nothing. An inspectable signal that can
+        only be inspected as a list of raw rows is half inspectable.
+        """
+        from universal_search import learn
+
+        now = now or datetime.now(timezone.utc)
+        with self.database.connect() as connection:
+            rows = connection.execute(USAGE_ROWS_SQL, (limit * 4,)).fetchall()
+        grouped: dict[tuple[str, str], list] = {}
+        meta: dict[tuple[str, str], tuple[str, str]] = {}
+        for row in rows:
+            query = row["query"] or ""
+            key = (row["document_id"], query)
+            grouped.setdefault(key, []).append(
+                (query, _age_days(row["opened_at"], now))
+            )
+            meta.setdefault(key, (row["name"] or row["document_id"], row["path"] or ""))
+        effects: list[dict] = []
+        for (document_id, query), events in grouped.items():
+            signal = learn.signal_for(document_id, events, query=query)
+            name, path = meta[(document_id, query)]
+            effects.append({
+                "document_id": document_id,
+                "name": name,
+                "path": path,
+                "query": query,
+                "query_events": round(signal.query_events, 3),
+                "global_events": round(signal.global_events, 3),
+                "boost": round(signal.boost, 3),
+                "note": signal.note(),
+            })
+        effects.sort(key=lambda item: (-item["boost"], item["query"], item["name"]))
+        return effects[:limit]
 
     def clear_usage(self) -> int:
         """Delete every usage event; returns how many were removed."""

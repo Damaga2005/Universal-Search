@@ -7,6 +7,52 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 044 - Local learning that actually learns, and a weight measured
+- **`learn.py` is the value of a set of events**, as pure functions over numbers.
+  A ranking signal that cannot be evaluated on its own cannot be argued about.
+- **Learning is scoped to the query it was learned from.** `USAGE_COUNTS_SQL`
+  counted opens and never read the `query` column it had been writing since
+  phase 008, so a document opened for `examen` was also boosted for `receta
+  paella`. An event now counts 80% for the query it was recorded under and 20%
+  for the document in general; four opens under a *different* query move nothing
+  at all.
+- **Old events fade.** `opened_at` was in the schema and unread, so a 2024 open
+  carried full weight with no cap and no expiry anywhere. Four buckets now
+  (30/90/365 days, then a floor) — a step rather than a curve, because a step can
+  be read on a screen. Four opens inside a month are the whole signal; the same
+  four spread over a year and a half are worth nothing.
+- **One accidental open changes nothing.** Below two effective events the signal
+  is exactly zero, which is what makes cold start *deterministic* rather than
+  merely quiet.
+- **The weight was measured, not inherited.** `ACTIVATED_USAGE_WEIGHT` 0.5 ->
+  0.25. At 0.5 the signal was 3.45% of the final score against `recency`'s
+  2.14%, i.e. stronger than the signal the project already documents as
+  secondary — a direct contradiction of the contract. The 23 consecutive score
+  gaps in the evaluation corpus are bimodal (near-ties under 0.024, real margins
+  over 0.044); halving the weight costs two reorderable pairs out of 23 and both
+  are near-ties.
+- **Dominance is enforced, not argued.** The weight ordering cannot promise exact
+  matches stay first — a quarter of `filename_exact` is nothing when a rival's
+  content signals are stronger. So `ranking.py` refuses the boost outright for
+  any candidate whose file name *is* the query, and the rule lives in the ranker
+  rather than in the SQL so a hand-computed boost gets the same answer.
+- **Learning explains itself.** `explain_notes` had an entry for the personal
+  context and none for the one signal that silently moved results.
+- **`universal-search usage effect`** reports what the recorded history is worth
+  *now*, per (document, query): opens surviving the decay, current weight, and
+  how many signals no longer move anything while their row is still on disk.
+- **Orphaned events are cleaned up.** `Indexer._delete()` removes a deleted
+  document's usage rows, so its query text does not outlive the file.
+- **New gate, `python -m evaluation.learning_gate`: 11 invariants**, all
+  passing over a synthetic interaction history on the fixed corpus. Learning
+  promotes 6 of 33 (query, candidate) pairs and demotes none; with no history
+  MRR is unchanged and not one of the 18 corpus queries moves by a rounding step.
+- **Declared, not built:** source and document-type preference. Both are by
+  definition query-independent, which is precisely the defect this phase
+  removed, and `SOURCE_SCORES` is still all 1.0.
+- Test count 1342 -> 1365. Per instruction only the tests touching the changed
+  modules were run. No push.
+
 ### Phase 043 - One typed, validated, migrated settings system
 - **`settings.py` is the schema.** For every user-configurable value: type,
   default, valid range, whether it is advanced, whether changing it needs a
