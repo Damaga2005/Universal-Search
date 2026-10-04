@@ -37,3 +37,6 @@ control-center.json
 # dist/, which are not committed. Publishing it would ship a checksum
 # for files nobody can obtain, so it is generated, not versioned.
 SHA256SUMS.txt
+
+# Phase 050: a run artefact with timings and temporary paths in it.
+product_scenario.json

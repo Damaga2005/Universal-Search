@@ -7,6 +7,54 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 050 - the 3.x product gate, which returns HOLD
+
+A gate, not a feature sprint and not a score. `evaluation/product_gate.py`
+produces one thing: a release state and the evidence behind every claim in it.
+Fifteen audit areas, each mapped to the gate that owns its evidence, plus the six
+claims a release would want to make and whether this machine can prove them.
+
+**Verdict: RETENIDO (HOLD).** All fifteen areas pass. What blocks the release is
+one measurement nobody has explained.
+
+**The blocker.** `install.ps1 -Repair` takes **940 s** inside the end-to-end
+scenario and **19 s** on a fresh directory, for the identical command. Measured
+about it: the process accumulates CPU continuously (512 s over ~18 minutes of
+wall clock) so it is computing, not waiting; it is past the file copy and past
+the Start Menu shortcut; the manifest's recursive enumeration is 0.26 s for the
+same 957 files; and `ConvertTo-Json -Depth 5` over 1908 strings is 0.14 s, which
+rules out manifest serialisation -- the hypothesis that fit best and was wrong.
+The cost sits after the shortcut and before the manifest write, in work not yet
+identified.
+
+**The eighteen-step scenario**, `evaluation/product_scenario.py`, run against
+the real installer and the real built executable with `UNIVERSAL_SEARCH_HOME`
+pointed at a temporary directory. **16 of 18 executed.** Global search needs a
+desktop session and result selection is a mouse gesture; both are recorded NOT
+RUN with the reason, and `interaction_gate` owns the latter's evidence.
+
+**Three defects of the gate itself, found by measuring rather than assuming:**
+
+* `read_baseline("ux_gate")` looked for `ux_gate_baseline.json` instead of
+  `ux_baseline.json`, so all fifteen areas reported themselves unproven -- a
+  correct-shaped conclusion from a wrong cause, which would have shipped;
+* two step counts carried a threshold of zero, so they could only ever fail;
+* the "is this limitation declared?" check compared the first 40 characters of
+  an English sentence against three documents, so rewording any of them reported
+  every limitation as undeclared. It now matches short markers.
+
+The scenario's own first run recorded step 11 as DONE on an `exit=2`, because
+the command it called (`privacy --database`) does not exist -- `privacy` takes a
+subcommand. A step that fails and is recorded as a pass is the specific thing
+this project does not do, and it was in the harness.
+
+`product_scenario.json` is **not** committed: it is a run artefact carrying
+timings and temporary paths, like the baselines reverted in phase 049 for
+holding a clock. The gate reads it when present and reports the scenario as
+unrun when it is not.
+
+No push.
+
 ### Phase 050 (part 2) - every gate is wired into the build, and the load veto learned to say no
 
 An audit of everything still declared open found that **fifteen of the

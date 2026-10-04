@@ -68,7 +68,31 @@ phase 023 adds a separate indexing control center with typed source actions,
 health/storage/derived-data state and explicit safety confirmations. The
 phase 024 formalised the provider contract (streaming `iter_files`, bounded errors, cancellation, capability/interface negotiation), made the provider key the canonical source discriminator with a `(source, path)` uniqueness migration, and added mounted-path NAS/removable providers plus mixed-provider indexing with per-provider failure isolation. Phase 025 added a versioned extraction contract with bounded PDF/Office resources and visible truncation diagnostics. Phase 026 measured a fixed lexical baseline and shipped a dependency-free, versioned n-gram fallback only where the evidence gate justified it; phase 027 added DPI awareness, `open`/`reveal` commands and reversible per-user Explorer integration. Phase 028 added bounded redacted JSON events, a seven-area `diagnose self-test`, a support bundle that declares what it does not contain, and four named recovery cases that never touch source files. Phase 029 made the CI gates a verified contract and the packaged smoke a real gate; that smoke found and fixed a semantic-layer defect (a zero idf on a one-document index, and a precision gate that rejected morphological variants), re-measured with no metric regression. Phase 030 closed the line with an executable gate: `python -m evaluation.gate` runs local invariants, including a behavioural proof that no repair can touch a user's files. Phases 031–040 then added the features the gate could not yet check, and phase 040 extended it to twenty-three: one invariant per promise the programme made, from removable optional layers to WCAG AA contrast and the strings catalogue. Phases 041–049 of the 3.x programme are implemented, each with a report in `docs/development/`; **050, the 3.x product gate, is the one still open**.
 
-Current test count: 1472 tests collected.
+Current test count: 1479 tests collected.
+
+## Release state
+
+`python -m evaluation.product_gate` is the 3.x product gate. It produces no
+score and no ranking: fifteen audit areas, each mapped to the gate that owns its
+evidence, plus the claims a release would want to make and whether this machine
+can prove them.
+
+**Verdict: RETENIDO (HOLD).** All fifteen areas have passing evidence. What
+blocks a release is one unexplained measurement and six limitations this machine
+cannot close -- see `docs/development/050-product-v3-gate-report.md`.
+
+The blocker is `install.ps1 -Repair`: **940 s inside the end-to-end scenario and
+19 s on a fresh directory**, for the same command. The process accumulates CPU
+rather than blocking, it is past the file copy, and the two candidates that fit
+were measured and ruled out (recursive enumeration 0.26 s, manifest
+serialisation 0.14 s). An upgrade that takes fifteen minutes for reasons nobody
+has identified is not shippable.
+
+The eighteen-step scenario runs for real against the built executable --
+`python evaluation/product_scenario.py` -- with `UNIVERSAL_SEARCH_HOME` pointed
+at a temporary directory so nothing real is touched. Sixteen of eighteen steps
+execute; the two that need a desktop session are recorded NOT RUN with the
+reason, which is not a pass.
 
 ## Known limitations
 
@@ -88,6 +112,7 @@ Read this before expecting more than the program does.
   documents or your queries leaves the machine. The dependency budget is
   `pypdf` and `watchdog`; `python -m evaluation.gate` fails if a third one
   appears.
+- **No latency figure in this repository was measured on a machine en reposo.** The five latency gates correctly refuse to conclude here, because a neighbour is running: another project's test suite and a game. They can conclude on a runner with `--require-conclusive`, and that has never been run.
 - **The CI matrix has never been run.** It now declares 3.12, 3.13 and
   3.14 (phase 048) and `requires-python` is bounded to `<3.15` so the
   promise matches the proof, but the workflow has only ever executed 3.12

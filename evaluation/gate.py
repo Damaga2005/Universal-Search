@@ -39,7 +39,12 @@ DOCS = ROOT / "docs"
 # were ticked. Every one of those was checked, by hand, by whoever finished the
 # phase -- which is how three README contradictions survived long enough for this
 # audit to find them.
-PHASES = range(1, 50)
+# Phase 050 completed with a report, so the range reaches it. The bound is
+# checked against the reports on disk by
+# `test_every_phase_of_the_programme_is_in_range`, which is how this value
+# stays honest: the phase-049 audit widened it by hand and it went stale
+# again the moment 050 landed.
+PHASES = range(1, 51)
 
 # Packages that must stay platform-independent: no Win32, no registry, no
 # ctypes, no shell. The core runs, and is tested, on any OS (phase 016).

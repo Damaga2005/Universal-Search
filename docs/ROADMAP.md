@@ -86,7 +86,9 @@
 - [x] Storage & data lifecycle (047)
 - [x] Windows & Environment Matrix (048)
 - [x] Windows Distribution & Installation (049)
-- [ ] Universal Search 3.x Product Gate (050)
+- [x] Universal Search 3.x Product Gate (050) — **HOLD**, no product invariant
+  failed; one unexplained measurement and six environment limitations block it.
+  Report: `docs/development/050-product-v3-gate-report.md`
 
 ---
 
@@ -335,4 +337,4 @@ that is correct locally and wrong on a runner with no neighbour, they accept
 `--require-conclusive`, which keeps the measurement and changes only the verdict
 to NO SHIP.
 
-Current test count: 1472 tests collected.
+Current test count: 1479 tests collected.
