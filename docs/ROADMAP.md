@@ -84,7 +84,7 @@
 - [x] Search Quality & Relevance (045)
 - [x] Indexing Scalability & Performance (046)
 - [x] Storage & data lifecycle (047)
-- [ ] Windows & Environment Matrix (048)
+- [x] Windows & Environment Matrix (048)
 - [ ] Windows Distribution & Installation (049)
 - [ ] Universal Search 3.x Product Gate (050)
 
@@ -239,4 +239,31 @@ phase also retracted a debt it had inherited: the claim that `runner.measure()`
 used `datetime.now()` was false, written without checking, and `runner.py`
 measures with `time.perf_counter()`.
 
-Current test count: 1446 tests collected.
+Phase 048 found the mismatch the phase was written to name: `requires-python`
+said `>=3.12` -- an open promise covering 3.15 and beyond -- while the CI proved
+exactly one version, 3.12, and the development machine ran **3.14.6**. The code
+was being written and run on a version nobody tested, and the package advertised
+versions nobody had measured. Both halves are now closed: `requires-python` is
+bounded at `<3.15`, and the gating CI job runs a 3.12/3.13/3.14 matrix, so what
+the project promises and what it proves are the same set. The package also had
+**no classifiers at all**, so nothing said it was a Windows application; it now
+declares Windows 10 and 11 and deliberately does not declare POSIX, because the
+Ubuntu job is a non-gating probe and a classifier reads as a support claim.
+
+Measuring the environment also turned up a real defect that twenty-five phases of
+documentation had been working around. Every file this project writes is UTF-8
+declared explicitly -- except the CLI's own output, which inherited the machine's
+code page. On this Spanish Windows install (`locale.getlocale()` is
+`('es_ES', 'cp1252')`), redirecting `search` to a file produced **bytes that are
+not valid UTF-8**, failing at byte 19. The characters survived, because `ó` and
+`ñ` exist in cp1252, so nothing looked broken on screen and the damage only
+appeared downstream. The CLI now declares `encoding="utf-8"`, which means the
+`$env:PYTHONIOENCODING="utf-8"` this project has prefixed to every command since
+phase 044 was never preventing anything -- it was hiding the defect.
+
+`docs/SUPPORT.md` states what is supported, what is probed, and what is neither,
+with the measured value beside every claim, including the two the project cannot
+answer: `windows-latest` is a Windows Server image rather than the Windows a user
+runs, and only one DPI/Tk combination has ever been observed.
+
+Current test count: 1463 tests collected.

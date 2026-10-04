@@ -54,7 +54,7 @@ El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
 | 045 | Calidad y relevancia: corpus ampliado, causas de fallo medidas y la ordenación intacta | ✅ Completada | — | [informe](development/045-search-quality-report.md) |
 | 046 | Escalabilidad de indexación: curva medida y tres defectos de corrección | ✅ Completada | — | [informe](development/046-indexing-scale-report.md) |
 | 047 | Almacenamiento: `compact()` verificado, contrato de ciclo de vida completo | ✅ Completada | — | [informe](development/047-storage-and-data-lifecycle-report.md) |
-| 048 | Windows y matriz de entornos | ⬜ Planificada | — | [plan](development/048-portability-and-environment-matrix.md) |
+| 048 | Matriz de soporte: rango de Python acotado, CI alineado, clasificadores declarados | ✅ Completada | — | [informe](development/048-support-matrix-report.md) |
 | 049 | Distribución e instalación Windows | ⬜ Planificada | — | [plan](development/049-distribution-and-installation-v2.md) |
 | 050 | Puerta de producto Universal Search 3.x | ⬜ Planificada | — | [plan](development/050-product-v3-gate.md) |
 
@@ -88,7 +88,7 @@ nombrados, puertas de CI verificadas por test y un gate v2 ejecutable de 13
 invariantes (`python -m evaluation.gate`); detalles y límites en el
 [informe de la fase 030](development/030-v2-quality-gate-report.md).
 
-Current test count: 1446 tests collected.
+Current test count: 1463 tests collected.
 
 ## Cómo ejecutar
 

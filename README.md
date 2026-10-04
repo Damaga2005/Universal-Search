@@ -68,7 +68,7 @@ phase 023 adds a separate indexing control center with typed source actions,
 health/storage/derived-data state and explicit safety confirmations. The
 phase 024 formalised the provider contract (streaming `iter_files`, bounded errors, cancellation, capability/interface negotiation), made the provider key the canonical source discriminator with a `(source, path)` uniqueness migration, and added mounted-path NAS/removable providers plus mixed-provider indexing with per-provider failure isolation. Phase 025 added a versioned extraction contract with bounded PDF/Office resources and visible truncation diagnostics. Phase 026 measured a fixed lexical baseline and shipped a dependency-free, versioned n-gram fallback only where the evidence gate justified it; phase 027 added DPI awareness, `open`/`reveal` commands and reversible per-user Explorer integration. Phase 028 added bounded redacted JSON events, a seven-area `diagnose self-test`, a support bundle that declares what it does not contain, and four named recovery cases that never touch source files. Phase 029 made the CI gates a verified contract and the packaged smoke a real gate; that smoke found and fixed a semantic-layer defect (a zero idf on a one-document index, and a precision gate that rejected morphological variants), re-measured with no metric regression. Phase 030 closed the line with an executable gate: `python -m evaluation.gate` runs local invariants, including a behavioural proof that no repair can touch a user's files. Phases 031–040 then added the features the gate could not yet check, and phase 040 extended it to twenty-three: one invariant per promise the programme made, from removable optional layers to WCAG AA contrast and the strings catalogue. Phases 041–050 are the next planned product programme and are not implemented yet.
 
-Current test count: 1446 tests collected.
+Current test count: 1463 tests collected.
 
 ## Known limitations
 
@@ -148,7 +148,7 @@ Read this before expecting more than the program does.
 | 045 | Calidad y relevancia de búsqueda | ✅ | [roadmap](docs/development/045-search-quality-v3.md) |
 | 046 | Escalabilidad y rendimiento de indexación | ✅ | [roadmap](docs/development/046-indexing-performance-v3.md) |
 | 047 | Almacenamiento: `compact()` verificado, contrato de ciclo de vida completo | ✅ | [informe](docs/development/047-storage-and-data-lifecycle-report.md) |
-| 048 | Windows y matriz de entornos | ⬜ | [roadmap](docs/development/048-portability-and-environment-matrix.md) |
+| 048 | Matriz de soporte: rango acotado, CI alineado, clasificadores | ✅ | [informe](docs/development/048-support-matrix-report.md) |
 | 049 | Distribución e instalación Windows | ⬜ | [roadmap](docs/development/049-distribution-and-installation-v2.md) |
 | 050 | Puerta de producto Universal Search 3.x | ⬜ | [roadmap](docs/development/050-product-v3-gate.md) |
 
@@ -357,6 +357,11 @@ threshold to meet a number taken under conditions nobody declared.
 
 Development prompts live in `docs/development/`, with a per-phase report for
 each completed phase, and `CHANGELOG.md` summarises the releases.
+**Supported platforms and versions: [`docs/SUPPORT.md`](docs/SUPPORT.md)** --
+what is tested, what is merely probed, and what is neither. Windows 10 and 11 on
+x86-64, Python 3.12 to 3.14, and Linux as a non-gating probe of the
+platform-independent core. macOS is not tested and not claimed.
+
 Documentation hub with the roadmap status:
 [`docs/README.md`](docs/README.md). Architecture: `docs/ARCHITECTURE.md`.
 Ranking: `docs/RANKING.md`. Privacy: `docs/PRIVACY.md`. Extending:

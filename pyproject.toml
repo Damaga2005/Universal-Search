@@ -7,10 +7,49 @@ name = "universal-search"
 dynamic = ["version"]
 description = "Local-first universal search for Windows"
 readme = "README.md"
-requires-python = ">=3.12"
+# Phase 048. This said ">=3.12", which is an open promise: it claims 3.15, 3.16
+# and everything after, on no evidence. The CI proved one version (3.12) while
+# the development machine runs 3.14 -- so the code was being written and run on
+# a version nobody tested.
+#
+# The upper bound is the honest half of the fix, and the CI matrix is the other
+# half: both together make "what we promise" and "what we prove" the same set.
+# The cost is that this file needs touching when 3.15 ships, which is the
+# correct price for refusing to promise what has not been measured.
+#
+# The upper bound is not hypothetical. Measured on 3.14.6: `sqlite3.version` no
+# longer exists -- the attribute was removed -- so an untested newer interpreter
+# is a genuinely different environment and not merely a number.
+requires-python = ">=3.12,<3.15"
 license = {text = "MIT"}
 authors = [{name = "Damaga2005"}]
 dependencies = ["pypdf>=6.0", "watchdog>=4.0"]
+
+# Phase 048: there were none. A package that ships a Windows-only application and
+# declares no classifiers gets its platform guessed by whoever installs it, and
+# pip will happily install a Windows GUI on Linux and let it fail at import.
+#
+# What is declared is what the CI proves, and nothing else. There is
+# deliberately no `Operating System :: POSIX`: the Ubuntu job exists, but it is a
+# non-gating probe of the platform-independent core, and a classifier is read as
+# a support claim rather than as a description of a test job.
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: Win32 (MS Windows)",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: Spanish",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: Microsoft :: Windows :: Windows 10",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Desktop Environment :: File Managers",
+    "Topic :: Text Processing :: Indexing",
+]
 
 [project.scripts]
 universal-search = "universal_search.cli:main"

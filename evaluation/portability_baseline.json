@@ -1,0 +1,96 @@
+{
+  "phase": "048",
+  "clock": "2026-10-04T08:52:00.942451+00:00",
+  "verdicts": [
+    {
+      "gate": "W1 requires-python sin cota superior",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "requires-python = '>=3.12,<3.15'; acotado a 3.15, que es lo que el CI demuestra"
+    },
+    {
+      "gate": "W2 versiones declaradas que el CI no prueba",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "el rango declara 3.12, 3.13, 3.14 y el CI prueba 3.12, 3.13, 3.14; coinciden"
+    },
+    {
+      "gate": "W3 versiones probadas que no se declaran",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "el CI prueba 3.12, 3.13, 3.14, todas dentro del rango"
+    },
+    {
+      "gate": "W4 clasificadores de plataforma ausentes",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "15 clasificadores declarados, 3 de los 3 de plataforma"
+    },
+    {
+      "gate": "W5 clasificadores que prometen plataformas no soportadas",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "ningun clasificador promete Linux ni macOS; el job de Ubuntu es una sonda no bloqueante y un clasificador se lee como promesa de soporte"
+    },
+    {
+      "gate": "W6 el interprete actual esta fuera del rango declarado",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "este gate corre en Python 3.14 y el rango declarado es >=3.12,<3.15; dentro"
+    },
+    {
+      "gate": "W7 el CI no declara una matriz de Python",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "el job que puerta declara matrix python: ['3.12', '3.13', '3.14']"
+    },
+    {
+      "gate": "W8 la sonda de Linux no es no bloqueante",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "el job core-portability lleva continue-on-error: true, asi que un rojo ahi no bloquea una version"
+    },
+    {
+      "gate": "W9 la documentacion no separa soporte de sonda",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "docs/SUPPORT.md separa soporte de sonda y lista lo que no se declara soportado"
+    }
+  ],
+  "declared": {
+    "requires_python": ">=3.12,<3.15",
+    "ci_versions": [
+      "3.12",
+      "3.13",
+      "3.14"
+    ],
+    "classifiers": [
+      "Development Status :: 4 - Beta",
+      "Environment :: Console",
+      "Environment :: Win32 (MS Windows)",
+      "Intended Audience :: End Users/Desktop",
+      "License :: OSI Approved :: MIT License",
+      "Natural Language :: Spanish",
+      "Operating System :: Microsoft :: Windows",
+      "Operating System :: Microsoft :: Windows :: Windows 10",
+      "Operating System :: Microsoft :: Windows :: Windows 11",
+      "Programming Language :: Python :: 3",
+      "Programming Language :: Python :: 3.12",
+      "Programming Language :: Python :: 3.13",
+      "Programming Language :: Python :: 3.14",
+      "Topic :: Desktop Environment :: File Managers",
+      "Topic :: Text Processing :: Indexing"
+    ],
+    "runtime": "3.14"
+  },
+  "decision": "requires-python bounded at <3.15; CI matrix 3.12/3.13/3.14; classifiers declared; docs/SUPPORT.md written; CLI output forced to UTF-8. The CI matrix has never been executed."
+}

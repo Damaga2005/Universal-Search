@@ -60,6 +60,18 @@ def test_cli_prints_results_the_console_encoding_cannot_represent(
     )
     main()
 
+    # Phase 048 changed this contract, and the change is deliberate.
+    #
+    # This used to assert that the CLI left the stream's encoding alone and only
+    # set `errors="replace"`, so an unrepresentable arrow came out as `?` in an
+    # ascii stream. `main()` now declares `encoding="utf-8"` explicitly, so the
+    # bytes are UTF-8 and the arrow survives -- which is the whole point: a
+    # legacy console still degrades gracefully, because `errors="replace"` is
+    # kept, but a redirected stream is now readable by anything that assumes
+    # UTF-8.
+    #
+    # Measured on a Spanish Windows install: before the change, redirecting
+    # `search` to a file produced bytes that fail to decode as UTF-8 at byte 19.
     stream = io.TextIOWrapper(io.BytesIO(), encoding="ascii", errors="strict")
     monkeypatch.setattr(sys, "stdout", stream)
     monkeypatch.setattr(
@@ -68,9 +80,15 @@ def test_cli_prints_results_the_console_encoding_cannot_represent(
     main()
     stream.flush()
 
-    printed = stream.buffer.getvalue().decode("ascii")
+    raw = stream.buffer.getvalue()
+    # It must not raise: a console that cannot represent a character degrades,
+    # it does not traceback.
+    printed = raw.decode("utf-8")
     assert "flecha.md" in printed
-    assert "?" in printed
+    assert "\u2192" in printed, (
+        "the arrow is representable in UTF-8, so the CLI must emit it rather "
+        f"than replace it: {printed!r}"
+    )
 
 
 def test_cli_context_lifecycle(tmp_path: Path, monkeypatch, capsys) -> None:

@@ -27,9 +27,34 @@ from universal_search.recovery import CASES as RECOVERY_CASES
 
 
 def main() -> None:
-    # Windows consoles default to a legacy code page; never crash while printing results.
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(errors="replace")
+    # Phase 048. Every file this project reads or writes is UTF-8, declared
+    # explicitly: the config, the metrics, the events, the control-center state,
+    # the logs. The one exception was this function's own output, which took
+    # whatever code page the machine happened to have.
+    #
+    # Measured on a Spanish Windows install (`locale.getlocale()` is
+    # `('es_ES', 'cp1252')`): redirecting `search` to a file produced bytes that
+    # **are not valid UTF-8** -- they fail to decode at byte 19. The characters
+    # themselves survive, because `ó` and `ñ` exist in cp1252, so nothing looks
+    # broken on screen and the damage only appears when anything downstream
+    # assumes UTF-8, which is what an editor, `jq` or another program does.
+    #
+    # `errors="replace"` was already here to stop the CLI dying while printing,
+    # and it is kept: it is what makes forcing UTF-8 safe on an old console,
+    # where the bytes may render as `?` rather than crash the process.
+    #
+    # The tradeoff, declared rather than hidden: on a legacy cp1252 console the
+    # accented output will not render correctly until `chcp 65001`. That is the
+    # same switch the project's own UTF-8 files already require of the
+    # environment, and a wrong-looking character beats a stream no tool can read.
+    for _stream in (sys.stdout, sys.stderr):
+        if hasattr(_stream, "reconfigure"):
+            try:
+                _stream.reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):
+                # A stream replaced by a caller, or a closed one. The CLI still
+                # has to run; the old behaviour was to print and hope.
+                pass
     parser = argparse.ArgumentParser(prog="universal-search")
     parser.add_argument(
         "--version",

@@ -7,6 +7,68 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 048 - The support matrix, and an encoding defect twenty-five phases of incantations were hiding
+Phase 048 asks that the CI/runtime mismatch be made explicit and resolved rather
+than treated in silence as support. It was worse than a documentation gap.
+
+- **The mismatch, measured in all three directions.** `requires-python` said
+  `>=3.12` -- an open promise covering 3.15, 3.16 and everything after -- the CI
+  proved exactly one version (3.12), and the development machine ran **CPython
+  3.14.6**. The project was being written and run on a version nobody tested, and
+  the package advertised versions nobody had measured.
+- **Both halves closed at once, because fixing one leaves the problem.** The
+  gating CI job now runs a 3.12/3.13/3.14 matrix, and `requires-python` is bounded
+  at `<3.15`, so what the project promises and what it proves are the same set.
+  Bounding costs a `pyproject.toml` edit when 3.15 ships, which is the right
+  price for refusing to promise what has not been measured.
+- **15 classifiers, where there had been none.** A package that ships a
+  Windows-only application and declares nothing lets `pip` guess its platform.
+  There is deliberately **no `POSIX` classifier**: the Ubuntu job exists but is a
+  non-gating probe, and a classifier reads as a support claim.
+- **A real encoding defect, found by measuring instead of assuming.** Every file
+  this project writes is UTF-8 declared explicitly -- config, metrics, events,
+  control-center state, logs. The CLI's own output was the single exception and
+  inherited the machine's code page. On this Spanish Windows install
+  (`locale.getlocale()` is `('es_ES', 'cp1252')`), redirecting `search` to a file
+  produced **bytes that are not valid UTF-8**, failing to decode at byte 19. The
+  characters survived -- `ó` and `ñ` exist in cp1252 -- so **nothing looked broken
+  on screen** and the damage only appeared downstream. The CLI now declares
+  `encoding="utf-8"`, and `errors="replace"` is kept because it is what stops the
+  CLI dying while printing.
+- **Twenty-five phases of `$env:PYTHONIOENCODING="utf-8"` retired.** Every command
+  in this project's documentation and every shell in its history was prefixed with
+  it, and nobody had checked whether it did anything. It was not preventing
+  anything: it was hiding the defect. The declared tradeoff is that a legacy
+  cp1252 console needs `chcp 65001` for accented output, which is the same
+  requirement the project's own UTF-8 files already impose -- a wrong-looking
+  character beats a stream no tool can read.
+- **A contract change in an existing test, deliberately.** `test_cli.py` asserted
+  that the CLI left the stream's encoding alone and emitted `?` for an
+  unrepresentable arrow. Phase 048 changes that contract on purpose, so the test
+  was rewritten to assert the new one -- the arrow survives, as UTF-8 -- with the
+  reason written next to it. A test rewritten to pass is only legitimate when the
+  contract changed on purpose and the reason is recorded; this one says so.
+- **`docs/SUPPORT.md`**, stating what is supported, what is probed, and what is
+  neither, with the measured value beside every claim. Including the two things it
+  cannot answer: `windows-latest` is a Windows Server image rather than the
+  Windows a user runs, and exactly one DPI/Tk combination has ever been observed
+  (96 DPI, Tk 8.6, 2560x1440).
+- **New gate, `python -m evaluation.portability_gate`: 9 invariants, all passing.**
+  W6 -- "the interpreter running this gate is inside the declared range" -- is the
+  check that would have caught the original problem. W2 and W3 make the promise
+  and the proof the same set; W5 forbids a classifier that promises a platform the
+  matrix refuses; W8 and W9 keep "probe" and "support" distinct in both the CI and
+  the docs.
+- **An error in the gate itself, on its first run.** W2 failed against a correct
+  configuration: it read `<3.15` as a closed interval and counted 3.15 as
+  declared. The instrument was wrong, not the project, and a test now pins that
+  `<` is exclusive and `<=` is not.
+- **Declared and not done: the CI matrix has never been executed.** The change was
+  made without CI access, and the comment in `ci.yml` says so. What is measured is
+  the full suite on 3.14.6. Until a green run exists, 3.12 and 3.13 are declared
+  and configured, not proven. Also unmeasured: ARM64, macOS (no job, no claim),
+  and any real installation -- which is phase 049's work.
+
 ### Phase 047b - one load check for every gate that measures latency
 Four gates were unable to close, and one of them was closing *wrongly*.
 `suggest_gate` reported NO SHIP at 12.6 ms against an 8.0 ms threshold on a

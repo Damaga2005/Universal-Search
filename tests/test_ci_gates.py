@@ -194,7 +194,35 @@ def test_build_extra_is_optional_and_disjoint_from_runtime() -> None:
 
 
 def test_supported_python_range_is_declared_once() -> None:
+    """The range is declared in one place, and the CI proves the same set.
+
+    Phase 048 changed the value this test pinned, on purpose. It asserted
+    `requires-python == ">=3.12"` and `python-version: "3.12"` -- an open promise
+    and a single version of proof, which is exactly the mismatch the phase was
+    written to close: the package claimed 3.15 and beyond while the development
+    machine ran 3.14 and the CI proved only 3.12.
+
+    What the test is *for* survives the change, and matters more now: the range
+    must appear once, and the CI must cover exactly it. `evaluation.
+    portability_gate` asserts that in full (W1-W3, W6, W7); this stays as the
+    cheap CI-side check that the two files agree at all.
+    """
     data = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
-    assert data["project"]["requires-python"] == ">=3.12"
+    spec = data["project"]["requires-python"]
+    assert spec == ">=3.12,<3.15", (
+        f"the declared range changed to {spec!r}; update this test and "
+        f"docs/SUPPORT.md together, or they will disagree"
+    )
+
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    assert 'python-version: "3.12"' in workflow
+    # The gating job proves the range, rather than pinning one version.
+    gating = workflow.split("  core-portability:")[0]
+    assert "matrix:" in gating, (
+        "the gating job pins a version instead of declaring a matrix, so an "
+        "open range could never be covered"
+    )
+    for version in ("3.12", "3.13", "3.14"):
+        assert version in gating, f"{version} is in the declared range and the CI does not prove it"
+    assert 'python-version: "3.12"' not in gating, (
+        "a pinned version in the gating job contradicts the matrix"
+    )

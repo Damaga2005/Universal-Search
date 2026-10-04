@@ -28,12 +28,30 @@ jobs:
     name: tests, lint and migrations (Windows)
     runs-on: windows-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
 
+      # Phase 048. This was pinned to 3.12 while `requires-python` promised
+      # ">=3.12" and the development machine ran 3.14: the promise and the proof
+      # were different sets. `requires-python` is now bounded at <3.15, and this
+      # matrix covers exactly the range it declares.
+      #
+      # The full suite runs on every version; the per-phase suites below run on
+      # the lowest and the highest, because the middle one adds little and CI
+      # minutes are a real cost. The gate is in the minimum-version job so that
+      # a version nobody gates is never the one that ships.
+      #
+      # NOT EXECUTED BY THE AUTHOR: this matrix has never been run -- the change
+      # was made without CI access. What is measured, and what the 048 report
+      # says, is the full suite on 3.14.6. Treat 3.12 and 3.13 as declared and
+      # configured, not as proven, until a green run says otherwise.
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
 
       - name: Install
         run: |
