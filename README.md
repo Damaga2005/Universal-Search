@@ -68,7 +68,7 @@ phase 023 adds a separate indexing control center with typed source actions,
 health/storage/derived-data state and explicit safety confirmations. The
 phase 024 formalised the provider contract (streaming `iter_files`, bounded errors, cancellation, capability/interface negotiation), made the provider key the canonical source discriminator with a `(source, path)` uniqueness migration, and added mounted-path NAS/removable providers plus mixed-provider indexing with per-provider failure isolation. Phase 025 added a versioned extraction contract with bounded PDF/Office resources and visible truncation diagnostics. Phase 026 measured a fixed lexical baseline and shipped a dependency-free, versioned n-gram fallback only where the evidence gate justified it; phase 027 added DPI awareness, `open`/`reveal` commands and reversible per-user Explorer integration. Phase 028 added bounded redacted JSON events, a seven-area `diagnose self-test`, a support bundle that declares what it does not contain, and four named recovery cases that never touch source files. Phase 029 made the CI gates a verified contract and the packaged smoke a real gate; that smoke found and fixed a semantic-layer defect (a zero idf on a one-document index, and a precision gate that rejected morphological variants), re-measured with no metric regression. Phase 030 closed the line with an executable gate: `python -m evaluation.gate` runs local invariants, including a behavioural proof that no repair can touch a user's files. Phases 031–040 then added the features the gate could not yet check, and phase 040 extended it to twenty-three: one invariant per promise the programme made, from removable optional layers to WCAG AA contrast and the strings catalogue. Phases 041–049 of the 3.x programme are implemented, each with a report in `docs/development/`; **050, the 3.x product gate, is the one still open**.
 
-Current test count: 1467 tests collected.
+Current test count: 1472 tests collected.
 
 ## Known limitations
 
@@ -92,6 +92,12 @@ Read this before expecting more than the program does.
   3.14 (phase 048) and `requires-python` is bounded to `<3.15` so the
   promise matches the proof, but the workflow has only ever executed 3.12
   in anger. Treat 3.13 and 3.14 as configured, not proven.
+- **Nineteen gates, and until phase 050 the build ran four of them.** Fifteen
+  evidence gates existed as code and had never been executed by CI, including
+  `distribution_gate`, which had carried eleven invariants since phase 037 and
+  was the only one that ran a real artefact. All nineteen now run, in three jobs
+  split by measured cost, and `tests/test_ci_gates.py` derives the gate list from
+  the tree so a twentieth cannot be added without being wired up.
 - **Windows only.** The core is platform-independent and the Ubuntu job is a
   non-gating probe, but the GUI, the registry, the global hotkey and the
   installer are Windows by design. `hotkey.py` is the one declared exception

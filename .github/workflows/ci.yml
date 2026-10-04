@@ -93,28 +93,27 @@ jobs:
       # Phase 040: the gate grew to 23 invariants. The suite that tests the
       # gate has to be gated too, or the invariants added last are the first
       # to rot unnoticed.
-      - name: Quality gate suite (23 invariants, phase 040)
-        run: python -m pytest tests/test_v2_gate.py tests/test_perf_gate.py tests/test_accessibility.py -q
-
       # Phase 030: the v2 gate is a command, and CI runs it like any other
       # gate. It re-reads the tree it is shipped with, so a stale count or an
       # undeclared table fails the build instead of the next release.
       - name: Universal Search v2 quality gate
         run: python -m evaluation.gate
 
-      # Phase 049. `distribution_gate` has existed since phase 037 with eleven
-      # invariants about portable mode and the single-file executable, and this
-      # line is the first time it was ever run by the build. It is the only gate
-      # that executes a real artefact, which is exactly why its absence from CI
-      # mattered: a gate nothing runs is a document with a `main()`.
-      - name: Distribution gate (portable layout, single-file artefact)
-        run: python -m evaluation.distribution_gate
-
-      # Phase 049: the support matrix is a claim about the environment, and a
-      # claim that nothing checks rots. This asserts that the interpreter
-      # running the suite is inside the range `requires-python` declares.
-      - name: Portability gate (declared support matches what CI proves)
-        run: python -m evaluation.portability_gate
+      # Phase 050. The remaining gates run in their own jobs below. The split is
+      # by cost, measured on a machine at ~90% CPU (evaluation/ci_gate_costs.json):
+      # a GitHub runner is several times quicker, and the point of the split is
+      # that adding a slow gate does not push the suite out of its timeout.
+      - name: Quality gate suite and the cheap feature gates
+        run: |
+          python -m pytest tests/test_v2_gate.py tests/test_perf_gate.py tests/test_accessibility.py -q
+          python -m evaluation.quality_gate
+          python -m evaluation.learning_gate
+          python -m evaluation.settings_gate
+          python -m evaluation.accessibility_gate
+          python -m evaluation.organize_gate
+          python -m evaluation.batch_gate
+          python -m evaluation.archive_gate
+          python -m evaluation.mail_gate
 
   core-portability:
     name: platform-independent core (probe, non-gating)
@@ -139,10 +138,73 @@ jobs:
             --ignore=tests/test_hotkey.py \
             --ignore=tests/test_release.py
 
+  gates:
+    name: evidence gates (latency and distribution)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: python -m pip install -e . pytest
+
+      # Phase 050. Five of the nineteen gates had never been run by the build.
+      # They measure latency, so they carry a load veto -- which is right here
+      # and wrong on a runner. `--require-conclusive` keeps the measurement and
+      # changes only the verdict: on this machine there is no neighbour to
+      # blame an INCONCLUYENTE on, so it is a failure rather than a deferral.
+      #
+      # Without that switch these five would have been wired in as steps that
+      # exit 2 and pass -- fifteen gates that cannot fail, which is what the
+      # audit that prompted this called out in the first place.
+      - name: Latency gates, requiring a number
+        run: |
+          python -m evaluation.perf_gate --require-conclusive
+          python -m evaluation.interaction_gate --require-conclusive
+          python -m evaluation.ux_gate --require-conclusive
+          python -m evaluation.fuzzy_gate --require-conclusive
+          python -m evaluation.suggest_gate --require-conclusive
+
+      # Phase 049: `distribution_gate` had existed since phase 037 with eleven
+      # invariants, the only ones that execute a real artefact, and nothing ran
+      # it. Phase 049's own gate, and the phase-048 support matrix, which is a
+      # claim about the environment that rots if nothing checks it.
+      - name: Distribution and portability gates
+        run: |
+          python -m evaluation.distribution_gate
+          python -m evaluation.portability_gate
+          python -m evaluation.install_gate
+
+  heavy-gates:
+    name: evidence gates (scale and storage)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: python -m pip install -e . pytest
+
+      # Phase 050. The two expensive gates, in their own job so that the rest of
+      # the evidence is not held hostage to them. Measured at 333 s and 120 s on
+      # a machine at 90% CPU; a runner is several times quicker, and 30 minutes
+      # leaves an order of magnitude of headroom rather than a tight fit.
+      - name: Scale gate (indexing curve 1k/4k)
+        run: python -m evaluation.scale_gate
+
+      - name: Storage gate (footprint by category, lifecycle contract)
+        run: python -m evaluation.storage_gate
+
   package:
     name: Windows build and smoke test
     runs-on: windows-latest
-    needs: quality
+    needs: [quality, gates, heavy-gates]
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4

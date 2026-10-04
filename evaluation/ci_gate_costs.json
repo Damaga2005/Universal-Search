@@ -1,0 +1,120 @@
+{
+  "gates": [
+    {
+      "gate": "evaluation.gate",
+      "seconds": 26.6,
+      "exit": 0,
+      "verdict": ""
+    },
+    {
+      "gate": "evaluation.quality_gate",
+      "seconds": 49.7,
+      "exit": 0,
+      "verdict": "SHIP"
+    },
+    {
+      "gate": "evaluation.scale_gate",
+      "seconds": 333.3,
+      "exit": 0,
+      "verdict": "SHIP"
+    },
+    {
+      "gate": "evaluation.storage_gate",
+      "seconds": 119.9,
+      "exit": 0,
+      "verdict": "SHIP"
+    },
+    {
+      "gate": "evaluation.install_gate",
+      "seconds": 2.0,
+      "exit": 0,
+      "verdict": "SHIP"
+    },
+    {
+      "gate": "evaluation.portability_gate",
+      "seconds": 1.1,
+      "exit": 0,
+      "verdict": "SHIP"
+    },
+    {
+      "gate": "evaluation.distribution_gate",
+      "seconds": 12.6,
+      "exit": 0,
+      "verdict": "SHIP"
+    },
+    {
+      "gate": "evaluation.accessibility_gate",
+      "seconds": 6.5,
+      "exit": 0,
+      "verdict": "SHIP"
+    },
+    {
+      "gate": "evaluation.learning_gate",
+      "seconds": 19.2,
+      "exit": 0,
+      "verdict": "SHIP"
+    },
+    {
+      "gate": "evaluation.settings_gate",
+      "seconds": 1.6,
+      "exit": 0,
+      "verdict": "SHIP"
+    },
+    {
+      "gate": "evaluation.organize_gate",
+      "seconds": 5.3,
+      "exit": 0,
+      "verdict": "SHIP"
+    },
+    {
+      "gate": "evaluation.batch_gate",
+      "seconds": 2.0,
+      "exit": 0,
+      "verdict": "SHIP"
+    },
+    {
+      "gate": "evaluation.archive_gate",
+      "seconds": 6.2,
+      "exit": 0,
+      "verdict": "SHIP"
+    },
+    {
+      "gate": "evaluation.mail_gate",
+      "seconds": 5.0,
+      "exit": 0,
+      "verdict": "SHIP"
+    },
+    {
+      "gate": "evaluation.fuzzy_gate",
+      "seconds": 18.0,
+      "exit": 2,
+      "verdict": "INCONCLUYENTE (the machine was not at rest)"
+    },
+    {
+      "gate": "evaluation.suggest_gate",
+      "seconds": 14.1,
+      "exit": 2,
+      "verdict": "INCONCLUYENTE (the machine was not at rest)"
+    },
+    {
+      "gate": "evaluation.interaction_gate",
+      "seconds": 20.2,
+      "exit": 2,
+      "verdict": "INCONCLUYENTE (the machine was not at rest)"
+    },
+    {
+      "gate": "evaluation.ux_gate",
+      "seconds": 14.0,
+      "exit": 2,
+      "verdict": "INCONCLUYENTE (the machine was not at rest)"
+    },
+    {
+      "gate": "evaluation.perf_gate",
+      "seconds": 12.8,
+      "exit": 2,
+      "verdict": "INCONCLUYENTE"
+    }
+  ],
+  "total_seconds": 670.1,
+  "note": "best-of-one on a machine at ~90% CPU with a game running; ordering only, not a budget"
+}

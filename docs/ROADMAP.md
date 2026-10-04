@@ -326,4 +326,13 @@ the new build over the old one, so `_internal` accumulated every build ever made
 it is now replaced, verified by planting two files the build does not ship and
 checking the tree after a repair is byte-for-byte a fresh install's.
 
-Current test count: 1467 tests collected.
+The same audit's second half was the build itself: fifteen of the nineteen gates
+had never been run by CI, so `evaluation/*_gate.py` files could be written and
+declared finished without ever executing. All nineteen now run in three jobs split
+by measured cost, and `test_ci_gates.py` derives the required list from the tree.
+Because five of them exit 2 -- INCONCLUYENTE -- when the machine is busy, and
+that is correct locally and wrong on a runner with no neighbour, they accept
+`--require-conclusive`, which keeps the measurement and changes only the verdict
+to NO SHIP.
+
+Current test count: 1472 tests collected.

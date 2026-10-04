@@ -449,6 +449,44 @@ def load_verdict(load: dict[str, float], reference: float | None,
     return LoadVerdict(True, f"calibración {ratio:.2f}× de la referencia{os_note}")
 
 
+def require_conclusive() -> bool:
+    """Was ``--require-conclusive`` passed on the command line?
+
+    Phase 050. Removed from ``sys.argv`` on first call, so a gate that checks
+    it in two places -- before and after measuring -- does not have to thread a
+    boolean through, and ``argparse`` in ``main`` does not see an argument it
+    does not declare.
+    """
+    if "--require-conclusive" in sys.argv[1:]:
+        sys.argv = [
+            argument for argument in sys.argv
+            if argument != "--require-conclusive"
+        ]
+        return True
+    return False
+
+
+def veto_exit(require_a_number: bool = False) -> int:
+    """Exit code for a run the machine made unmeasurable.
+
+    ``2`` (INCONCLUYENTE) on a shared machine: something was measured, nothing
+    was concluded, nothing was compared against a threshold, and no threshold
+    was moved to make it pass.
+
+    ``1`` (NO SHIP) under ``--require-conclusive``: there is no neighbour to
+    explain it, so an unmeasured gate is a failed gate rather than a deferred
+    one.
+    """
+    if require_a_number:
+        print(
+            "VEREDICTO: NO SHIP (--require-conclusive: the machine was not at "
+            "rest, and here there is no neighbour to explain it)"
+        )
+        return 1
+    print("VEREDICTO: INCONCLUYENTE (the machine was not at rest)")
+    return 2
+
+
 def load_gate(reference: float | None = None) -> LoadVerdict:
     """Run the load check this module owns, for other gates to reuse.
 

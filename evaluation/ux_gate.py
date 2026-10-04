@@ -46,6 +46,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
 from evaluation.accessibility_gate import Verdict  # noqa: E402
+from evaluation import perf_gate  # noqa: E402
 from evaluation.perf_gate import load_verdict, measure_load, os_cpu_load  # noqa: E402
 from universal_search.gui import app as gui_app  # noqa: E402
 from universal_search.gui import strings, theme as theme_module  # noqa: E402
@@ -311,6 +312,8 @@ def _measure_window(window) -> tuple[dict[str, float], dict[str, str]]:
     # The load check runs first and on purpose: phase 038 learned that a
     # latency number taken while the machine is busy describes other software.
     load = measure_load()
+    # Phase 050. See perf_gate.require_conclusive: a shared machine gets
+    # INCONCLUYENTE, a CI runner gets a failure.
     verdict_load = load_verdict(load, reference=None, os_load=os_cpu_load())
     page = [_synthetic(i, f"documento-{i}.md", "una coincidencia de ejemplo")
             for i in range(RENDER_ROWS)]
@@ -338,6 +341,10 @@ def _measure_window(window) -> tuple[dict[str, float], dict[str, str]]:
 
 
 def main() -> int:
+    # Phase 050. Read once, here, and not in `_measure`: the helper
+    # removes the argument on the first call, so a second call in
+    # another function would silently return False.
+    strict = perf_gate.require_conclusive()
     # The gate prints the interface's own strings, some of which contain
     # characters the cp1252 console cannot encode. Piping the output -- how CI
     # and the test suite run it -- is what turns that into a crash halfway
@@ -415,8 +422,7 @@ def main() -> int:
         print("VEREDICTO: SHIP")
         return 0
     if len(failed) == 1 and timing in failed and not load_ok:
-        print("VEREDICTO: INCONCLUYENTE (la maquina no estaba en reposo)")
-        return 2
+        return perf_gate.veto_exit(strict)
     print(f"VEREDICTO: NO SHIP ({len(failed)} puertas)")
     return 1
 

@@ -105,6 +105,7 @@ def main() -> int:
             previous = json.loads(baseline_path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             previous = {}
+    strict = perf_gate.require_conclusive()
     load_check = perf_gate.load_gate(previous.get("calibration_best_s"))
     if not load_check.conclusive:
         print("=" * 100)
@@ -115,8 +116,7 @@ def main() -> int:
         print("No se ha medido nada. Una cifra de latencia sobre una maquina")
         print("ocupada describe el trabajo de otro programa, asi que el")
         print("umbral no se toca y la corrida no cuenta.")
-        print("VEREDICTO: INCONCLUYENTE (la maquina no estaba en reposo)")
-        return 2
+        return perf_gate.veto_exit(strict)
     corpus_module.assert_labels_are_consistent()
     workspace = Path(tempfile.mkdtemp(prefix="universal-search-032-"))
     tree = workspace / "tree"
@@ -241,8 +241,7 @@ def main() -> int:
     if not after.conclusive:
         print("-" * 100)
         print(f"INCONCLUYENTE despues de medir: {after.detail}")
-        print("VEREDICTO: INCONCLUYENTE (la maquina no estaba en reposo)")
-        return 2
+        return perf_gate.veto_exit(strict)
     if load_check.conclusive and load_check.detail != after.detail:
         print(f"carga antes de medir:  {load_check.detail}")
         print(f"carga despues de medir: {after.detail}")

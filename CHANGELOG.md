@@ -7,6 +7,56 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 050 (part 2) - every gate is wired into the build, and the load veto learned to say no
+
+An audit of everything still declared open found that **fifteen of the
+nineteen evidence gates had never been run by the build**. They existed, they had
+`main()`, they had baselines on disk, and no workflow step invoked them.
+`distribution_gate` had carried eleven invariants since phase 037 and was the only
+one that executes a real artefact. Nobody noticed, because a gate that nothing
+runs cannot fail, and nothing was asserting that it ran.
+
+Wiring them in was not a copy-paste job, because five of them measure latency and
+**decline to conclude by exiting 2** when the machine is busy. On a developer's
+machine that is right: somebody else is running something and the number would
+describe their program. On a CI runner it is wrong: there is no neighbour to
+blame, so an unmeasured gate is a failed gate, not a deferred one.
+
+So the veto gained `--require-conclusive`. It changes only the verdict: the load
+is still measured before anything is timed and the reason is still printed. What
+changes is the exit code, from 2 (INCONCLUYENTE, the build carries on) to 1 (NO
+SHIP, the build stops). Measured on this machine, which is not at rest: all five
+gates returned 2 without the flag and 1 with it.
+
+Connecting the gates while leaving exit 2 as a pass would have produced fifteen
+gates that cannot fail, which is the thing this change exists to stop.
+
+The workflow now has three evidence jobs, split by measured cost
+(`evaluation/ci_gate_costs.json`, taken on a machine at ~90% CPU: `scale_gate`
+333 s, `storage_gate` 120 s, everything else under 50 s, 11.2 minutes for all
+nineteen). `package` waits for all three, because an artefact should not be built
+while the evidence for it is still running.
+
+**Five new invariants in `tests/test_ci_gates.py`, each verified by breaking the
+workflow on purpose.** Two of the five could not fail when first written, and
+both defects are in this entry rather than quietly fixed:
+
+- the gate list was a string to match against, and an empty capture made the loop
+  skip every line, so the assertion never ran;
+- the flag check used `in`, and a misspelled flag is a *truncation* of the real
+  one -- which is a substring of it, so `--require-conclusiv` passed as a valid
+  spelling of `--require-conclusive`.
+
+The gate list is now derived from `evaluation/*_gate.py` rather than written out,
+because a hand-maintained list is a list that goes stale -- which is how fifteen
+gates ended up in no list at all. The six deliberate breaks are all detected.
+
+One existing assertion changed meaning rather than substance: `package`'s
+dependency was asserted as the literal string `needs: quality`, which is a format.
+It broke when `package` began also waiting for the two new jobs, and the failure
+message said nothing about whether the release still waits for anything. It now
+reads the dependency as a set.
+
 ### Phase 049 - the installation lifecycle, run for real with the real executables
 Phase 049 asks that a new Windows user can install, launch, configure, upgrade,
 repair and uninstall without developer tooling, and that no signed or verified
