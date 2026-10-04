@@ -117,24 +117,69 @@ def read_local_content(
     return extract(path, limits=limits, cancel=cancel)
 
 
+#: Phase 049. No real directory tree is 500 deep. Windows' own path limit is
+#: far higher, so this is about cycles that the reparse-point checks cannot see,
+#: not about legitimate depth -- and exceeding it is reported, not swallowed.
+MAX_SCAN_DEPTH = 500
+
+
 def scan_local(
     root: Path, rules: IgnoreRules | None = None
 ) -> Iterable[FileEntry | ScanError]:
     """Walk ``root`` yielding filesystem metadata only — content is never read.
 
-    Symlinked directories are never descended into, which prevents cycles.
-    Inaccessible files and directories are reported as :class:`ScanError`
-    instead of aborting the scan.
+    Symlinked directories are never descended into. Inaccessible files and
+    directories are reported as :class:`ScanError` instead of aborting the scan.
+
+    **Cycle defence, added in phase 049.** Neither of the checks above stops a
+    **Windows junction**: a junction is not a symlink, so ``is_symlink()`` is
+    False, and ``follow_symlinks=False`` compares the reparse point rather than
+    the target. A junction pointing at an ancestor is walked again, and again.
+    The walk is a generator, so it does not exhaust memory -- it just yields
+    more documents per pass, and the indexer writes a row for each.
+
+    So two bounds are declared here, and both are reported rather than applied
+    silently:
+
+    * :data:`MAX_SCAN_DEPTH` -- counted from the scanned root, not from the
+      volume root, so it means the same thing wherever the user keeps their
+      files. No real directory tree is 500 deep, and one that
+      is gets a :class:`ScanError` naming the path instead of a partial index
+      with no explanation;
+    * a ``visited`` set of ``(st_dev, st_ino)`` identities, so a second route to
+      the same directory is walked once. On Windows that is the volume serial
+      plus the file index, which is what the platform offers in place of a
+      device/inode pair.
     """
     rules = rules or IgnoreRules.defaults()
     root_path = Path(root)
     try:
-        stack = [root_path.resolve()]
+        stack: list[tuple[Path, int]] = [(root_path.resolve(), 0)]
     except OSError as exc:
         yield ScanError(root_path, f"{type(exc).__name__}: {exc}")
         return
+    visited: set[tuple[int, int]] = set()
     while stack:
-        directory = stack.pop()
+        directory, depth = stack.pop()
+        if depth > MAX_SCAN_DEPTH:
+            yield ScanError(
+                directory,
+                f"depth {depth} below the scanned root exceeds the "
+                f"{MAX_SCAN_DEPTH}-level bound (MAX_SCAN_DEPTH); raise it if "
+                f"this tree is legitimate",
+            )
+            continue
+        try:
+            directory_stat = directory.stat()
+        except OSError as exc:
+            yield ScanError(Path(directory), f"{type(exc).__name__}: {exc}")
+            continue
+        identity = (directory_stat.st_dev, directory_stat.st_ino)
+        if identity in visited:
+            # Reached by a second route -- a junction, or a mount point loop.
+            # Skipping it is correct and is what makes the bound a bound.
+            continue
+        visited.add(identity)
         try:
             with os.scandir(directory) as scanner:
                 entries = sorted(scanner, key=lambda entry: entry.name.lower())
@@ -148,7 +193,7 @@ def scan_local(
                     if rules.ignores_directory(entry.name):
                         yield IgnoredPath(entry_path, True)
                     else:
-                        stack.append(entry_path)
+                        stack.append((entry_path, depth + 1))
                     continue
                 if entry.is_symlink() or not entry.is_file():
                     continue

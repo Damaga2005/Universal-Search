@@ -375,11 +375,22 @@ def collect_provider_files(
     *,
     max_errors: int = MAX_PROVIDER_ERRORS,
 ) -> ProviderResult:
-    """Drain ``provider.iter_files`` into a bounded, inspectable result.
+    """Drain ``provider.iter_files`` into an inspectable result.
 
-    Errors are capped at ``max_errors`` so a share full of unreadable
-    entries cannot grow the report without bound; ignored paths are not
-    part of the contract and are dropped here.
+    Errors are capped at ``max_errors`` so a share full of unreadable entries
+    cannot grow the report without bound; ignored paths are not part of the
+    contract and are dropped here.
+
+    The *files* are deliberately not capped, and the docstring used to say
+    they were: "bounded, inspectable result", with only ``errors`` bounded.
+    The test was named ``test_collect_provider_files_materializes_bounded_
+    result`` and asserted nothing about a bound, so the word survived two
+    reviews. Capping files would silently truncate an index over a large
+    directory, which is a worse failure than using memory, so the honest fix is
+    to stop calling it bounded rather than to add a cap nobody asked for.
+
+    What *is* bounded downstream is memory: the indexer holds one document at a
+    time, and the streaming provider contract is what keeps this safe.
     """
     files: list[ProviderFile] = []
     errors: list[ProviderError] = []

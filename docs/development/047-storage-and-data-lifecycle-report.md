@@ -38,9 +38,20 @@ en los últimos minutos.
 En filas la proporción es aún más brutal: **4.293 canónicas frente a 293.252
 derivadas**.
 
-Y el coste por documento de la capa semántica es **superlineal**: 200 términos
-de contenido por documento. Con 400 documentos lo derivado es el 5 % del
-índice; con 1000 es el 95 %.
+Y el coste por documento de la capa semántica es **superlineal**. Con 400
+documentos lo derivado es el 5 % del índice; con 1000 es el 95 %.
+
+**CORRECCIÓN de la fase 050.** Este párrafo decía «200 términos de contenido
+por documento», y ese número es `MAX_CONTENT_WORDS` — la lista de palabras de
+la *puerta de precisión*. Los 55,9 MB de la tabla `document_semantic` son los
+**vectores de n-gramas**, que llevan su propio tope: `MAX_NGRAMS_PER_DOC = 200`
+en `semantic/ngram.py`. Son dos constantes distintas con el mismo valor, y este
+informe nombró la que no gobierna el coste que estaba midiendo.
+
+Nada cambia en la tabla de arriba ni en la conclusión: la capa semántica sigue
+siendo ~70 % del índice y su coste sigue siendo superlineal. Lo que cambia es
+que ahora se sabe **qué constante** habría que mover para actuarla, que es
+precisamente lo que este informe decía que no sabía.
 
 ## Dos defectos reales, ambos medidos antes y después
 
@@ -235,8 +246,8 @@ Y dos de las sondas iniciales afirmaron cosas falsas antes de refinarse:
   carga** que tiene `perf_gate`~~. **Cerrado en la 047b**: las tres puertas usan
   `perf_gate.load_gate()`, y una máquina ocupada produce INCONCLUYENTE en vez de
   un veredicto sobre otra cosa.
-- **El coste superlineal de la capa semántica** —200 términos por documento,
-  55,9 MB para 1000 documentos— **no se ha optimizado**. Es el mayor coste
+- **El coste superlineal de la capa semántica** —55,9 MB para 1000 documentos,
+  gobernado por `MAX_NGRAMS_PER_DOC`— **no se ha optimizado**. Es el mayor coste
   medido del proyecto y es deliberado: medir el vectorizado y decidir si
   200 términos por documento es el número correcto requiere saber para qué se
   usan, y eso no lo decide esta fase.

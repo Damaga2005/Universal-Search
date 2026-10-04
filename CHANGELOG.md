@@ -210,8 +210,13 @@ commands.
   tables hold zero rows after indexing 1000 documents. Canonical index 3,801,088
   bytes (4.8%), semantic 55,799,808 (70.6%), fuzzy 4,395,008 (5.6%), graph
   15,130,624 (19.2%). By rows: 4,293 canonical against 293,252 derived. The
-  semantic layer stores 200 content words per document, so its cost is
-  superlinear in corpus size: derived is 5% of the index at 400 documents and
+  semantic layer is superlinear in corpus size: derived is 5% of the
+  index at 400 documents and 95% at 1000. **Corrected in phase 050:**
+  this said it "stores 200 content words per document", and that number
+  is `MAX_CONTENT_WORDS`, the precision gate's word list. The 55.9 MB
+  belongs to `MAX_NGRAMS_PER_DOC`, the n-gram vector -- two constants
+  with the same value, and the wrong one was named. The measurement is
+  unchanged; what changes is that the bound to move is now identified.
   95% at 1000.
 - **The lifecycle contract is now complete for all 15 datasets.** `DataItem` had
   8 fields and the contract asks for seven items, so owner, schema/version,
@@ -249,7 +254,7 @@ commands.
   `compact()` broke search on "0 results" for a term the corpus does not
   contain -- the same direct MATCH returned 0 *before* compacting.
 - Declared and not done: the superlinear semantic cost (55.9 MB per 1000
-  documents) is not optimised, because deciding whether 200 content words per
+  documents) is not optimised, because deciding whether 200 n-grams per
   document is the right number is a product question rather than a storage one.
 
 ### Phase 046 - Indexing measured at scale, three correctness defects, no optimisation

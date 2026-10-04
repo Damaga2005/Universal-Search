@@ -96,6 +96,28 @@ Get-Process -Name "UniversalSearch" -ErrorAction SilentlyContinue |
 
 # --- copy application files ----------------------------------------------------
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+
+# Phase 049. `Copy-Item -Recurse -Force` merges the new build over the old one
+# and leaves everything it does not mention: a module the new build removed, a
+# renamed DLL, an old `pythonXY.dll` after an interpreter change. The install
+# directory becomes the union of every build ever made.
+#
+# That was already known -- it is why the Inno Setup script needed
+# `[InstallDelete]` and did not have it -- and it was declared as an open item
+# in the phase report for the script of record, which is this one. `_internal\`
+# is PyInstaller's own tree and wholly owned by the build, so it is replaced
+# rather than merged.
+#
+# Nothing outside `_internal\` is deleted. A file a user dropped into the
+# install directory is not this installer's to remove; the uninstaller reports
+# anything not in its manifest rather than touching it.
+$internalDir = Join-Path $InstallDir "_internal"
+if (Test-Path -LiteralPath $internalDir) {
+    $previousCount = @(Get-ChildItem -LiteralPath $internalDir -Recurse -File `
+        -ErrorAction SilentlyContinue).Count
+    Write-Host "Replacing _internal ($previousCount files from the previous build)"
+    Remove-Item -LiteralPath $internalDir -Recurse -Force
+}
 Copy-Item -Path (Join-Path $SourceDir "*") -Destination $InstallDir -Recurse -Force
 
 # --- version (read from the just-installed CLI when it is runnable) -----------

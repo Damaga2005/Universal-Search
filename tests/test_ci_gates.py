@@ -136,7 +136,17 @@ def test_package_job_builds_and_smokes_the_real_executables(jobs: dict[str, str]
     assert "PyInstaller packaging/universal-search.spec" in body
     assert "universal-search.exe" in body
     assert "UniversalSearch.exe" in body
-    assert "artifacts.sha256" in body
+    # Phase 049 replaced `artifacts.sha256` with `SHA256SUMS.txt` and left this
+    # assertion behind. It then kept passing -- against the comment in ci.yml
+    # that explains why the assertion was meaningless. A test that passes on
+    # its own explanation of itself is not a test.
+    assert "SHA256SUMS.txt" in body, (
+        "the workflow must write the hash manifest a user can verify"
+    )
+    assert "verify-hashes.ps1" in body, (
+        "and it must verify it with the script a user would run, not just "
+        "produce a file nobody reads"
+    )
     assert "needs: quality" in body
 
 

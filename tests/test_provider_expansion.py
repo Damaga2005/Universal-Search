@@ -408,7 +408,7 @@ def test_cancel_token_flags_cancellation() -> None:
     assert token.cancelled is True
 
 
-def test_collect_provider_files_materializes_bounded_result(tmp_path: Path) -> None:
+def test_collect_provider_files_materializes_the_whole_stream(tmp_path: Path) -> None:
     items = [make_file(tmp_path / f"f{number}.md") for number in range(5)]
     provider = FakeProvider(items)
 

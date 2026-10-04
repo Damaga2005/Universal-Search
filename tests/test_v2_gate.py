@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -74,12 +75,41 @@ def test_the_gate_covers_the_whole_v2x_programme():
 
 
 def test_every_phase_of_the_programme_is_in_range():
-    """Phase 040 widened PHASES from 30 to 40. A gate that documents 001-030
-    and calls itself closed is guarding a programme that ended nine phases ago.
+    """The range must cover every phase the repository has a report for.
+
+    Phase 040 widened PHASES from 30 to 40. Phase 049 found it still at 40 while
+    phases 041-049 were complete: the one gate the CI actually runs was not
+    checking that nine of them had reports, that their CHANGELOG entries
+    existed, or that their roadmap rows were ticked. It found four README
+    contradictions that had survived precisely because nobody was looking.
+
+    The bound is derived from the reports on disk rather than hard-coded, so
+    adding a phase's report without widening the range fails here first.
     """
     assert gate.PHASES.start == 1
-    assert gate.PHASES.stop == 41, gate.PHASES
-    assert max(gate.PHASES) == 40
+
+    # A report is a document with a verdict in it; a plan is a document that
+    # says what to do. `050-product-v3-gate.md` is a plan and phase 050 has not
+    # happened, so counting it would demand a report for work nobody has done.
+    # The gate separately requires every phase in range to have a CHANGELOG
+    # entry and a ticked roadmap row, so a phase cannot be quietly skipped.
+    development = Path(__file__).resolve().parents[1] / "docs" / "development"
+    reports = {
+        int(path.name[:3])
+        for path in development.glob("*-report.md")
+        if re.match(r"^\d{3}-", path.name)
+    }
+    assert reports, "no phase reports found; the glob is wrong"
+    widest = max(reports)
+
+    assert max(gate.PHASES) >= widest, (
+        f"PHASES covers up to {max(gate.PHASES)} but a report exists for phase "
+        f"{widest}. The CI-run gate would not check that phase."
+    )
+    assert gate.PHASES.stop == widest + 1, (
+        f"PHASES.stop is {gate.PHASES.stop} and the widest documented phase is "
+        f"{widest}; keep the range exactly as wide as the documentation"
+    )
 
 
 # -- the ten invariants phase 040 added ---------------------------------------

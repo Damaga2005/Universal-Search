@@ -33,7 +33,13 @@ DOCS = ROOT / "docs"
 # placeholder. Phase 040 widened this from 30 because the programme was
 # finished and a gate that stops checking at the old boundary would quietly
 # stop guarding the nine phases it added.
-PHASES = range(1, 41)
+# Phase 049. This stopped at 40 while phases 041-049 were completed, which
+# meant the one gate the CI actually runs was not checking that nine of them
+# had reports, that their CHANGELOG entries existed, or that their roadmap rows
+# were ticked. Every one of those was checked, by hand, by whoever finished the
+# phase -- which is how three README contradictions survived long enough for this
+# audit to find them.
+PHASES = range(1, 50)
 
 # Packages that must stay platform-independent: no Win32, no registry, no
 # ctypes, no shell. The core runs, and is tested, on any OS (phase 016).

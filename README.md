@@ -66,9 +66,9 @@ phase 022 added a versioned, bounded local relationship graph with explainable
 signals, incremental maintenance and a small related-documents list in the GUI;
 phase 023 adds a separate indexing control center with typed source actions,
 health/storage/derived-data state and explicit safety confirmations. The
-phase 024 formalised the provider contract (streaming `iter_files`, bounded errors, cancellation, capability/interface negotiation), made the provider key the canonical source discriminator with a `(source, path)` uniqueness migration, and added mounted-path NAS/removable providers plus mixed-provider indexing with per-provider failure isolation. Phase 025 added a versioned extraction contract with bounded PDF/Office resources and visible truncation diagnostics. Phase 026 measured a fixed lexical baseline and shipped a dependency-free, versioned n-gram fallback only where the evidence gate justified it; phase 027 added DPI awareness, `open`/`reveal` commands and reversible per-user Explorer integration. Phase 028 added bounded redacted JSON events, a seven-area `diagnose self-test`, a support bundle that declares what it does not contain, and four named recovery cases that never touch source files. Phase 029 made the CI gates a verified contract and the packaged smoke a real gate; that smoke found and fixed a semantic-layer defect (a zero idf on a one-document index, and a precision gate that rejected morphological variants), re-measured with no metric regression. Phase 030 closed the line with an executable gate: `python -m evaluation.gate` runs local invariants, including a behavioural proof that no repair can touch a user's files. Phases 031–040 then added the features the gate could not yet check, and phase 040 extended it to twenty-three: one invariant per promise the programme made, from removable optional layers to WCAG AA contrast and the strings catalogue. Phases 041–050 are the next planned product programme and are not implemented yet.
+phase 024 formalised the provider contract (streaming `iter_files`, bounded errors, cancellation, capability/interface negotiation), made the provider key the canonical source discriminator with a `(source, path)` uniqueness migration, and added mounted-path NAS/removable providers plus mixed-provider indexing with per-provider failure isolation. Phase 025 added a versioned extraction contract with bounded PDF/Office resources and visible truncation diagnostics. Phase 026 measured a fixed lexical baseline and shipped a dependency-free, versioned n-gram fallback only where the evidence gate justified it; phase 027 added DPI awareness, `open`/`reveal` commands and reversible per-user Explorer integration. Phase 028 added bounded redacted JSON events, a seven-area `diagnose self-test`, a support bundle that declares what it does not contain, and four named recovery cases that never touch source files. Phase 029 made the CI gates a verified contract and the packaged smoke a real gate; that smoke found and fixed a semantic-layer defect (a zero idf on a one-document index, and a precision gate that rejected morphological variants), re-measured with no metric regression. Phase 030 closed the line with an executable gate: `python -m evaluation.gate` runs local invariants, including a behavioural proof that no repair can touch a user's files. Phases 031–040 then added the features the gate could not yet check, and phase 040 extended it to twenty-three: one invariant per promise the programme made, from removable optional layers to WCAG AA contrast and the strings catalogue. Phases 041–049 of the 3.x programme are implemented, each with a report in `docs/development/`; **050, the 3.x product gate, is the one still open**.
 
-Current test count: 1463 tests collected.
+Current test count: 1467 tests collected.
 
 ## Known limitations
 
@@ -88,13 +88,37 @@ Read this before expecting more than the program does.
   documents or your queries leaves the machine. The dependency budget is
   `pypdf` and `watchdog`; `python -m evaluation.gate` fails if a third one
   appears.
-- **CI gates Python 3.12 only.** The local development environment is 3.14;
-  the gating workflow has not been run on 3.13 or 3.14.
+- **The CI matrix has never been run.** It now declares 3.12, 3.13 and
+  3.14 (phase 048) and `requires-python` is bounded to `<3.15` so the
+  promise matches the proof, but the workflow has only ever executed 3.12
+  in anger. Treat 3.13 and 3.14 as configured, not proven.
 - **Windows only.** The core is platform-independent and the Ubuntu job is a
   non-gating probe, but the GUI, the registry, the global hotkey and the
   installer are Windows by design. `hotkey.py` is the one declared exception
   to the "no Win32 in the core" rule, because `RegisterHotKey` has no
   portable equivalent.
+- **95% of a built index is derived data** that only exists after a fallback
+  feature has been used, so the footprint jumps between two searches without
+  anything announcing it (`047-storage-and-data-lifecycle-report.md`).
+- **`scan_local` has no visited set**, so a Windows junction is the one resource
+  in this project without a bound (`046`, `047`).
+- **`install.ps1` copies over the top on repair** and does not remove files that
+  a new build no longer ships. The Inno Setup script does, but it has never been
+  compiled (`049-install-report.md`).
+- **`installer.iss` has never been compiled** -- ISCC.exe is not on the build
+  machine -- and `install.ps1` is the installer of record for that reason.
+- **The CI runs on Windows Server**, not on the Windows 10 or 11 a user has, so
+  no installation has ever been validated on a user's operating system
+  (`docs/SUPPORT.md`).
+- **Two measurements are unexplained and recorded as such**: a 16 KiB index-size
+  spread between two identical runs, and WAL run-to-run variance from 1.5 s to
+  5.6 s on identical input. Three theories were tested and refuted for the
+  first; neither has a mechanism, and neither has a workaround.
+- **Four tests are flaky** and were documented in phase 041 rather than hidden:
+  `test_worker_keeps_index_current_and_stops_cleanly`,
+  `test_start_stop_and_no_duplicate_process`,
+  `test_process_death_releases_the_tray_process_lock` and
+  `test_concurrent_starts_only_claim_the_generation_they_presented`.
 - **No digital signature.** The executables ship unsigned.
 - **No auto-updater.** Upgrades are manual by decision, not by omission.
 - **The index is local to one machine.** It is not synchronised anywhere.
@@ -144,9 +168,9 @@ Read this before expecting more than the program does.
 | 041 | Experiencia de producto: resultados con columnas, estados reales (041) | ✅ | [informe](docs/development/041-product-experience-report.md) |
 | 042 | Búsqueda como flujo: ordenar, agrupar, guardar, historial, explicaciones (042) | ✅ | [informe](docs/development/042-search-experience-report.md) |
 | 043 | Un sistema de ajustes tipado, validado y migrado (043) | ✅ | [informe](docs/development/043-settings-report.md) |
-| 044 | Aprendizaje local v2 | ✅ | [roadmap](docs/development/044-local-learning-v2.md) |
-| 045 | Calidad y relevancia de búsqueda | ✅ | [roadmap](docs/development/045-search-quality-v3.md) |
-| 046 | Escalabilidad y rendimiento de indexación | ✅ | [roadmap](docs/development/046-indexing-performance-v3.md) |
+| 044 | Aprendizaje local v2 | ✅ | [informe](docs/development/044-local-learning-report.md) |
+| 045 | Calidad y relevancia de búsqueda | ✅ | [informe](docs/development/045-search-quality-report.md) |
+| 046 | Escalabilidad y rendimiento de indexación | ✅ | [informe](docs/development/046-indexing-scale-report.md) |
 | 047 | Almacenamiento: `compact()` verificado, contrato de ciclo de vida completo | ✅ | [informe](docs/development/047-storage-and-data-lifecycle-report.md) |
 | 048 | Matriz de soporte: rango acotado, CI alineado, clasificadores | ✅ | [informe](docs/development/048-support-matrix-report.md) |
 | 049 | Instalación: ciclo real, `repair` y hashes verificables | ✅ | [informe](docs/development/049-install-report.md) |

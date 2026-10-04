@@ -305,4 +305,25 @@ three are unsigned, so the claim finally has evidence behind it. No updater
 exists, and a gate invariant fails if any piece of one appears, because
 authenticity and rollback cannot be guaranteed.
 
-Current test count: 1463 tests collected.
+A later audit of everything still declared open produced two more corrections.
+Phase 047 named `MAX_CONTENT_WORDS` as the bound behind the semantic layer's
+55.9 MB; it is `MAX_NGRAMS_PER_DOC`, the n-gram vector. Two constants with the
+same value, and the report named the one that does not govern the cost it was
+measuring -- the table and the conclusion are unchanged, but the number to act
+on is now known.
+
+And `evaluation.gate`, the only gate the CI runs, still had `PHASES = range(1,
+41)` while phases 041-049 were complete: it was not checking that nine of them
+had reports, CHANGELOG entries or ticked roadmap rows. It now derives its bound
+from the reports on disk, so a phase cannot be finished without the gate
+noticing -- which is what a gate is for.
+
+Two more that audit turned up and this closes: `scan_local` had no visited set,
+declared unbounded by phases 046 and 047 and now bounded by real device/inode
+identity, which is what stops a **Windows junction** -- not a symlink, so both
+existing checks missed it -- from being walked forever. And `install.ps1` merged
+the new build over the old one, so `_internal` accumulated every build ever made;
+it is now replaced, verified by planting two files the build does not ship and
+checking the tree after a repair is byte-for-byte a fresh install's.
+
+Current test count: 1467 tests collected.
