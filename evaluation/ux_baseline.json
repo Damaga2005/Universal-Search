@@ -62,12 +62,12 @@
       "measured": 0.0,
       "threshold": 0.0,
       "passed": true,
-      "detail": "50 filas en 119.6 ms (presupuesto 200 ms)"
+      "detail": "50 filas en 110.0 ms (presupuesto 200 ms)"
     }
   ],
   "window_checked": true,
   "window_reason": null,
-  "render_ms": 119.56,
+  "render_ms": 110.03,
   "render_budget_ms": 200.0,
   "load_ok": true
 }

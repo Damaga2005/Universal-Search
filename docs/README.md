@@ -55,7 +55,7 @@ El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
 | 046 | Escalabilidad de indexación: curva medida y tres defectos de corrección | ✅ Completada | — | [informe](development/046-indexing-scale-report.md) |
 | 047 | Almacenamiento: `compact()` verificado, contrato de ciclo de vida completo | ✅ Completada | — | [informe](development/047-storage-and-data-lifecycle-report.md) |
 | 048 | Matriz de soporte: rango de Python acotado, CI alineado, clasificadores declarados | ✅ Completada | — | [informe](development/048-support-matrix-report.md) |
-| 049 | Distribución e instalación Windows | ⬜ Planificada | — | [plan](development/049-distribution-and-installation-v2.md) |
+| 049 | Instalación: ciclo real completo, `repair` y hashes verificables | ✅ Completada | — | [informe](development/049-install-report.md) |
 | 050 | Puerta de producto Universal Search 3.x | ⬜ Planificada | — | [plan](development/050-product-v3-gate.md) |
 
 **Fases 031–047 cerradas. Fases 048–050 planificadas.** El gate

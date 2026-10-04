@@ -85,7 +85,7 @@
 - [x] Indexing Scalability & Performance (046)
 - [x] Storage & data lifecycle (047)
 - [x] Windows & Environment Matrix (048)
-- [ ] Windows Distribution & Installation (049)
+- [x] Windows Distribution & Installation (049)
 - [ ] Universal Search 3.x Product Gate (050)
 
 ---
@@ -265,5 +265,44 @@ phase 044 was never preventing anything -- it was hiding the defect.
 with the measured value beside every claim, including the two the project cannot
 answer: `windows-latest` is a Windows Server image rather than the Windows a user
 runs, and only one DPI/Tk combination has ever been observed.
+
+Phase 049 ran the whole installation lifecycle against the **real** PyInstaller
+executables for the first time -- install, launch, index, search, repair,
+uninstall, reinstall, uninstall with purge -- and every step previously tested
+had used fake `.exe` stubs, which is why the version probe silently recorded
+`"unknown"` and nothing downstream could be trusted. Measured: `--version`
+answers `universal-search 2.0.0`, the manifest records `2.0.0`, and a repair
+after deleting `libcrypto-3.dll` from `_internal/` **restored the file**. The
+user data directory survived install, repair, uninstall and reinstall, and was
+removed only under the explicit `-PurgeData`.
+
+The audit also found that `distribution_gate` had never run in CI -- eleven
+invariants, the only ones that execute a real artefact, present since phase 037
+and absent from the build. It runs now, alongside `portability_gate`. And the
+release artefact was itself the defect the 2.0.0 audit recorded: CI uploaded
+`dist/UniversalSearch/*.exe` **without `_internal/`**, publishing two
+executables that cannot start. The one-dir build is zipped now, its hashes are
+written with paths relative to the manifest, and `packaging/verify-hashes.ps1`
+checks a download -- rejecting absolute paths, which is what the old output
+used and why nobody could check it.
+
+`build.ps1` cleaned the two output directories but not the loose executables in
+`dist/` itself, so a one-file executable dated 10/01 sat next to today's real
+one: 15,149,214 bytes against 15,256,382, two files with the same name and
+different contents. Cleaning directories is not cleaning output.
+
+The Inno Setup script had four defects that made it uncompilable as written and
+is still not compiled -- ISCC.exe is not installed here and installing it needs
+network access and the user's agreement. Fixed: relative paths resolved against
+`packaging\` rather than the repository root, no removal of the previous
+build's files on upgrade, no `CloseApplications`, and no way to express the
+data-preservation choice. Every one is fixed by reading; none is fixed by having
+watched it compile, and the script says so in its own header.
+
+Signing is asserted unsigned in four Markdown files with nothing checking it. A
+gate invariant now reads the Authenticode directory of the built PE files: all
+three are unsigned, so the claim finally has evidence behind it. No updater
+exists, and a gate invariant fails if any piece of one appears, because
+authenticity and rollback cannot be guaranteed.
 
 Current test count: 1463 tests collected.

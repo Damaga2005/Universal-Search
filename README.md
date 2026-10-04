@@ -149,7 +149,7 @@ Read this before expecting more than the program does.
 | 046 | Escalabilidad y rendimiento de indexación | ✅ | [roadmap](docs/development/046-indexing-performance-v3.md) |
 | 047 | Almacenamiento: `compact()` verificado, contrato de ciclo de vida completo | ✅ | [informe](docs/development/047-storage-and-data-lifecycle-report.md) |
 | 048 | Matriz de soporte: rango acotado, CI alineado, clasificadores | ✅ | [informe](docs/development/048-support-matrix-report.md) |
-| 049 | Distribución e instalación Windows | ⬜ | [roadmap](docs/development/049-distribution-and-installation-v2.md) |
+| 049 | Instalación: ciclo real, `repair` y hashes verificables | ✅ | [informe](docs/development/049-install-report.md) |
 | 050 | Puerta de producto Universal Search 3.x | ⬜ | [roadmap](docs/development/050-product-v3-gate.md) |
 
 Detail by phase (prompts + reports): [`docs/README.md`](docs/README.md) ·
@@ -196,6 +196,10 @@ universal-search diagnose repair all --root C:\Users\me\Docs --yes
 # privacy: what is stored, and how to make it go away
 universal-search privacy show
 universal-search privacy forget C:\Users\me\Docs\informe.pdf
+
+# install, upgrade and repair without knowing anything about PowerShell
+universal-search install               # from a built dist/UniversalSearch
+universal-search install --repair      # reinstall over an existing installation
 
 # storage: why the index is the size it is, and how to shrink it
 universal-search storage show      # measured footprint, rows per

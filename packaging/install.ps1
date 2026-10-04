@@ -36,7 +36,17 @@ param(
     [switch]$NoExplorer,
 
     # Register the background indexer to start with Windows
-    [switch]$Autostart
+    [switch]$Autostart,
+
+    # Phase 049: reinstall over an existing installation and say so.
+    #
+    # Repair is not a new code path. A repair install is the same copy, the same
+    # shortcuts and the same manifest; what changes is that the user was told
+    # this is a repair, so a failed repair is distinguishable from a first
+    # install in the output and in what they should do next. `diagnose repair`
+    # repairs the *index*; this repairs the *installation*, and the phase lists
+    # both.
+    [switch]$Repair
 )
 
 $ErrorActionPreference = "Stop"
@@ -50,6 +60,12 @@ if (-not (Test-Path -LiteralPath (Join-Path $SourceDir "UniversalSearch.exe"))) 
 $SourceDir = (Resolve-Path -LiteralPath $SourceDir).Path
 $InstallDir = $InstallDir.TrimEnd("\")
 
+# A repair needs something to repair. Saying so is better than reporting a
+# successful repair of an installation that was never there.
+if ($Repair -and -not (Test-Path -LiteralPath $InstallDir)) {
+    throw "Nothing to repair: no installation at $InstallDir. Run this without -Repair to install."
+}
+
 # --- upgrade detection: stop a previous installation before overwriting ------
 $manifestPath = Join-Path $InstallDir "install-manifest.json"
 $previous = $null
@@ -59,7 +75,11 @@ if (Test-Path -LiteralPath $manifestPath) {
     } catch {
         $previous = $null
     }
-    Write-Host "Existing installation detected - upgrading in place..."
+    if ($Repair) {
+        Write-Host "Repairing the existing installation in place..."
+    } else {
+        Write-Host "Existing installation detected - upgrading in place..."
+    }
     if ($previous -and $previous.backgroundWorker) {
         # Stop the running worker with the OLD executable (best effort).
         $oldCli = Join-Path $InstallDir "universal-search.exe"
@@ -151,6 +171,9 @@ $manifest = [ordered]@{
     explorerIntegration = [bool]$explorerIntegration
     backgroundWorker = [bool]$backgroundWorker
     upgraded         = [bool]$previous
+    # Phase 049: recorded rather than only printed, because "what happened to
+    # this installation" should be readable from the installation itself.
+    repaired         = [bool]$Repair
 }
 $manifest | ConvertTo-Json -Depth 5 |
     Set-Content -LiteralPath $manifestPath -Encoding UTF8
@@ -159,7 +182,11 @@ Write-Host ""
 Write-Host "Universal Search $version installed in: $InstallDir"
 Write-Host "User data (index, config, logs): $dataDir"
 if ($previous) {
-    Write-Host "Upgrade complete - the previous installation and its user data were preserved."
+    if ($Repair) {
+        Write-Host "Repair complete - your index, settings and logs were preserved."
+    } else {
+        Write-Host "Upgrade complete - the previous installation and its user data were preserved."
+    }
 } else {
     Write-Host "Fresh installation. Launch it from the Start Menu or: $InstallDir\UniversalSearch.exe"
 }

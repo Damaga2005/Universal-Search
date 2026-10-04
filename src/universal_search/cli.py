@@ -337,6 +337,35 @@ def main() -> None:
     portable_off.add_argument("--base", type=Path, default=None)
 
     # -- privacy ----------------------------------------------------------------
+    # -- install (phase 049) ----------------------------------------------------
+    # The installer is a PowerShell script, and the phase's acceptance is that
+    # a new Windows user never has to learn that. `universal-search install`
+    # finds the script next to the executable and runs it, printing the
+    # commands a user would otherwise have to know.
+    install = sub.add_parser(
+        "install", help="install, upgrade or repair this copy on this machine"
+    )
+    install.add_argument(
+        "--base", type=Path, default=None,
+        help="folder to install from (default: the folder holding the build)",
+    )
+    install.add_argument(
+        "--target", type=Path, default=None,
+        help="install directory (default: %%LOCALAPPDATA%%\\Programs\\UniversalSearch)",
+    )
+    install.add_argument(
+        "--repair", action="store_true",
+        help="reinstall over an existing installation; user data is preserved",
+    )
+    install.add_argument(
+        "--autostart", action="store_true",
+        help="start the background indexer with Windows",
+    )
+    install.add_argument("--no-explorer", action="store_true",
+                         help="skip the per-user Explorer context-menu entry")
+    install.add_argument("--no-start-menu", action="store_true",
+                         help="skip the Start Menu shortcut")
+
     # -- storage (phase 047) ---------------------------------------------------
     # `privacy show` answers "what do you store"; this answers "why is it that
     # big and how do I make it smaller", which was unanswerable before: the
@@ -479,6 +508,10 @@ def main() -> None:
             print(f"elapsed={last['duration_s']}s db_writes={last['db_writes']}")
     elif args.command == "portable":
         code = _portable_command(args)
+        if code:
+            raise SystemExit(code)
+    elif args.command == "install":
+        code = _install_command(args)
         if code:
             raise SystemExit(code)
     elif args.command == "storage":
@@ -780,6 +813,109 @@ def _portable_command(args) -> int:
         for entry in sorted(current.home.iterdir()):
             marker = "/" if entry.is_dir() else ""
             print(f"  {entry.name}{marker}")
+    return 0
+
+
+def _install_command(args: argparse.Namespace) -> int:
+    """`install`, and the repair/upgrade the phase asks for.
+
+    Phase 049. The acceptance criterion is that a new Windows user never has to
+    learn that the installer is a PowerShell script. This finds it -- next to
+    the executable when frozen, in the repository when running from source --
+    and runs it, printing every command it invoked so the operation is legible
+    afterwards rather than a spinner.
+
+    It deliberately refuses, rather than guessing, when the script is missing:
+    reporting "install.ps1 not found" is more use than silently copying files
+    into a directory whose layout this project does not control.
+    """
+    import os
+    import shutil
+    import subprocess
+
+    if sys.platform != "win32":
+        print(
+            "This installer is Windows-only. It copies files, creates a Start "
+            "Menu shortcut and registers an Explorer verb, none of which exist "
+            "elsewhere. Linux and macOS are probed, not supported -- see "
+            "docs/SUPPORT.md.",
+            file=sys.stderr,
+        )
+        return 1
+
+    script = None
+    if getattr(sys, "frozen", False):
+        candidate = Path(sys.executable).resolve().parent / "install.ps1"
+        if candidate.exists():
+            script = candidate
+    if script is None:
+        # From source: packaging/install.ps1, found relative to this file.
+        candidate = (
+            Path(__file__).resolve().parents[2] / "packaging" / "install.ps1"
+        )
+        if candidate.exists():
+            script = candidate
+    if script is None:
+        print(
+            "install.ps1 was not found next to the executable or in the "
+            "repository. Nothing was installed.",
+            file=sys.stderr,
+        )
+        return 1
+
+    powershell = shutil.which("powershell") or shutil.which("pwsh")
+    if powershell is None:
+        print("PowerShell was not found, and the installer is written in it.",
+              file=sys.stderr)
+        return 1
+
+    source = args.base
+    if source is None:
+        source = script.parent / ".." / "dist" / "UniversalSearch"
+    source = source.resolve()
+    if not (source / "UniversalSearch.exe").exists():
+        print(
+            f"No built application at {source}. Build it first: "
+            f"packaging/build.ps1, or pass --base.",
+            file=sys.stderr,
+        )
+        return 1
+
+    target = args.target
+    if target is None:
+        target = Path(os.environ["LOCALAPPDATA"]) / "Programs" / "UniversalSearch"
+
+    command = [
+        powershell, "-NoProfile", "-ExecutionPolicy", "Bypass",
+        "-File", str(script),
+        "-SourceDir", str(source),
+        "-InstallDir", str(target),
+    ]
+    if args.repair:
+        command.append("-Repair")
+    if args.autostart:
+        command.append("-Autostart")
+    if args.no_explorer:
+        command.append("-NoExplorer")
+    if args.no_start_menu:
+        command.append("-NoStartMenu")
+
+    print("Running:")
+    print("  " + " ".join(command))
+    print("Your documents are never touched, and your index and settings are "
+          "preserved.")
+    print()
+    completed = subprocess.run(command, capture_output=True, timeout=900)
+    sys.stdout.write(completed.stdout.decode("utf-8", "replace"))
+    if completed.stderr:
+        sys.stderr.write(completed.stderr.decode("utf-8", "replace"))
+    if completed.returncode != 0:
+        print(f"The installer failed with exit code {completed.returncode}.",
+              file=sys.stderr)
+        return completed.returncode or 1
+    print(f"Installed to: {target}")
+    print("Your data directory (index, settings, logs) is separate and was "
+          "not touched.")
     return 0
 
 

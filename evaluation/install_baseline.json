@@ -1,0 +1,92 @@
+{
+  "phase": "049",
+  "clock": "2026-10-04T09:24:40.255021+00:00",
+  "verdicts": [
+    {
+      "gate": "I1 instalar y reparar no se distinguen",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "install.ps1 distingue instalar, actualizar y reparar: flag, mensaje y campo de manifiesto"
+    },
+    {
+      "gate": "I2 reparar sin instalacion no se niega",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "install.ps1 se niega a reparar cuando no hay nada instalado; medido: exit=1 con el mensaje 'Nothing to repair'"
+    },
+    {
+      "gate": "I3 datos de usuario bajo el directorio de instalacion",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "los datos van a %LOCALAPPDATA%\\Universal Search y la aplicación a %LOCALAPPDATA%\\Programs\\UniversalSearch: hermanos, no anidados. install.ps1 sólo calcula la ruta ($dataDir = Join-Path $env:LOCALAPPDATA \"Universal Search\"), no la escribe"
+    },
+    {
+      "gate": "I4 la desinstalacion no va por manifiesto",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "uninstall.ps1 borra los ficheros del manifiesto y avisa de los extraños en lugar de borrarlos"
+    },
+    {
+      "gate": "I5 la purga de datos no es explicita",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "el borrado de datos exige -PurgeData y el caso por defecto lo dice en voz alta; medido: sin el flag los datos siguen, con el flag no"
+    },
+    {
+      "gate": "I6 el .iss resuelve rutas desde packaging/",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "installer.iss declara SourceDir=..\\ y usa {#SourceDir}: antes buscaba packaging\\dist\\UniversalSearch, que no existe"
+    },
+    {
+      "gate": "I7 el .iss no limpia archivos obsoletos",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "installer.iss borra _internal\\ antes de copiar y cierra las aplicaciones en ejecución antes de sobrescribir"
+    },
+    {
+      "gate": "I8 el .iss no expresa la decision sobre datos",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "installer.iss ofrece una tarea sin marcar para purgar los datos; antes el comportamiento correcto era un efecto secundario, no una decisión"
+    },
+    {
+      "gate": "I9 hay firma sin declararla",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "3 artefactos examinados; el directorio de certificados está vacío en todos: sin firmar, leído del fichero PE, no de un documento. "
+    },
+    {
+      "gate": "I10 piezas de actualizador sin rollback",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "no existe ninguna pieza de actualizador: ni manifiesto de versión, ni URL, ni comprobación de novedades. Sin eso no hay nada cuya autenticidad haya que garantizar, que es la condición previa"
+    },
+    {
+      "gate": "I11 manifiesto de hashes con rutas absolutas",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "el manifiesto se escribe con rutas relativas y packaging/verify-hashes.ps1 rechaza las absolutas; medido: 4 líneas rechazadas con el formato antiguo del CI"
+    }
+  ],
+  "artifacts_examined": [
+    "dist\\UniversalSearch\\universal-search.exe",
+    "dist\\UniversalSearch\\UniversalSearch.exe",
+    "dist\\UniversalSearch-onefile\\UniversalSearch.exe"
+  ],
+  "iss_compiled": false,
+  "signing": "unsigned, read from the PE certificate directory",
+  "updater": "none exists, so authenticity cannot be guaranteed and none is claimed",
+  "decision": "install.ps1 stays the installer of record because it is the one the repository executes; installer.iss had four build-breaking defects fixed but has still never been compiled, and says so"
+}

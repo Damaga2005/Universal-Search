@@ -45,7 +45,7 @@
       "measured": 0.0,
       "threshold": 0.0,
       "passed": true,
-      "detail": "una clave de otra build sobrevive a guardar (pid 6352 en el nombre del temporal)"
+      "detail": "una clave de otra build sobrevive a guardar (pid 15564 en el nombre del temporal)"
     },
     {
       "gate": "C7 ficheros temporales sin limpiar",

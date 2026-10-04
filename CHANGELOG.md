@@ -7,6 +7,72 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 049 - the installation lifecycle, run for real with the real executables
+Phase 049 asks that a new Windows user can install, launch, configure, upgrade,
+repair and uninstall without developer tooling, and that no signed or verified
+status be claimed without evidence.
+
+- **The whole lifecycle ran for the first time against the real PyInstaller
+  executables.** `install.ps1` and `uninstall.ps1` had always been tested against
+  fake `.exe` stubs (`b"MZ-fake-gui"`), so the version probe failed silently and
+  the manifest recorded `"unknown"`. Measured now: `--version` answers
+  `universal-search 2.0.0`, the manifest records `2.0.0`, and a repair after
+  deleting `libcrypto-3.dll` from `_internal/` **restored the file**. User data
+  survived install, repair, uninstall and reinstall, and was removed only under
+  the explicit `-PurgeData`. Repairing a machine with nothing installed is
+  refused with exit 1 rather than reporting a successful repair of nothing.
+- **`distribution_gate` had never run in CI.** Eleven invariants since phase 037,
+  the only gate that executes a real artefact, and `ci.yml` had exactly one
+  `evaluation.*` line. A gate nothing runs is a document with a `main()`. It runs
+  now, alongside `portability_gate`.
+- **The published artefact was the defect the 2.0.0 audit recorded.** CI uploaded
+  `dist/UniversalSearch/*.exe` **without `_internal/`** -- two executables that
+  cannot start, the exact PYI-8 failure. The one-dir build is zipped now.
+- **The hash file nobody could check.** It listed the runner's absolute paths, so
+  `sha256sum -c` on a user's machine reported every artefact missing, and nothing
+  ever read it back; the only test asserted that the string "artifacts.sha256"
+  appears in the workflow. Now `SHA256SUMS.txt` uses paths relative to itself and
+  `packaging/verify-hashes.ps1` checks a download, rejecting absolute paths.
+  Measured: a correct download passes with exit 0, a tampered binary fails with
+  exit 1, and the old absolute-path format is refused on all four lines.
+- **`build.ps1` cleaned directories, not output.** A one-file build writes a
+  loose `.exe` into `--distpath`, and the script removed the two output
+  directories but never the loose files. Measured: an executable dated 10/01 sat
+  beside today's real one -- 15,149,214 bytes against 15,256,382 -- two files
+  with the same name and different contents, one from a build nobody meant to
+  publish.
+- **`installer.iss` had four defects that made it uncompilable as written, and
+  is still not compiled.** ISCC.exe is not installed here and installing it needs
+  network access and the user's agreement. Fixed, by reading: relative paths
+  resolved against `packaging\` instead of the repository root (the `SetupIconFile`
+  line beside them *did* resolve, which is why it survived review); no
+  `[InstallDelete]`, so an upgrade accumulated every build's files; no
+  `CloseApplications`, so an upgrade could overwrite a running GUI; and no way to
+  express the data-preservation choice at all. `Spanish.isl` is also not in stock
+  Inno Setup 6, which the script's header now says. Its header also says, first,
+  that it has still never been compiled.
+- **Signing: unsigned, and now demonstrated rather than asserted.** The claim
+  lived in four Markdown files with nothing checking it. A gate invariant reads
+  the Authenticode directory of the built PE files: all three are unsigned. If
+  anything is ever signed, the gate goes red.
+- **No updater exists, and none will until authenticity and rollback can be
+  guaranteed.** A gate invariant fails if any piece appears -- no version
+  manifest, no URL, no update check -- because there is nothing whose
+  authenticity could be guaranteed, which is the condition the phase sets.
+- **`repair` is a first-class operation.** `install.ps1 -Repair` is the same copy
+  and the same manifest; what changes is that it says it is a repair, records
+  `repaired: true`, and refuses when there is nothing installed. And
+  `universal-search install` runs it, because the acceptance criterion says the
+  user never has to learn that the installer is a PowerShell script -- it prints
+  the exact command it runs.
+- Declared and not done: `windows-latest` is Windows Server, not the Windows a
+  user runs, so no installation has ever been validated on Windows 10 or 11;
+  `install.ps1` still copies over the top rather than removing what a repair no
+  longer needs (the .iss fixes this, the script of record does not); the Explorer
+  context-menu integration is never exercised, because the tests pass
+  `-NoExplorer` to keep the developer's registry clean; and there is no graphical
+  uninstaller.
+
 ### Phase 048 - The support matrix, and an encoding defect twenty-five phases of incantations were hiding
 Phase 048 asks that the CI/runtime mismatch be made explicit and resolved rather
 than treated in silence as support. It was worse than a documentation gap.

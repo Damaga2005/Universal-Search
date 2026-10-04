@@ -54,6 +54,18 @@ Write-Host "python: $Py"
 $OneFileDist = Join-Path $RepoRoot "dist\UniversalSearch-onefile"
 foreach ($stale in @((Join-Path $RepoRoot "dist\UniversalSearch"), $OneFileDist)) {
     if (Test-Path $stale) { Remove-Item $stale -Recurse -Force }
+
+# Phase 049. The two directories above were cleaned; the loose
+# executables in `dist` itself were not. A one-file build writes
+# straight into `--distpath` with no folder around it, so anything
+# left there by an earlier build survives every subsequent one.
+# Measured on this repository: a `UniversalSearch.exe` dated 10/01
+# sat next to today's real one-file -- 15,149,214 bytes against
+# 15,256,382. Two executables with the same name and different
+# contents, one of them from a build nobody meant to publish.
+# Cleaning the directories is not cleaning the output.
+Get-ChildItem -Path (Join-Path $RepoRoot "dist") -Filter "*.exe" -File |
+    Remove-Item -Force
 }
 
 Write-Host "`n== one-dir build (the installed copy) =="

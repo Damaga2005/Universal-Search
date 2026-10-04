@@ -102,6 +102,20 @@ jobs:
       - name: Universal Search v2 quality gate
         run: python -m evaluation.gate
 
+      # Phase 049. `distribution_gate` has existed since phase 037 with eleven
+      # invariants about portable mode and the single-file executable, and this
+      # line is the first time it was ever run by the build. It is the only gate
+      # that executes a real artefact, which is exactly why its absence from CI
+      # mattered: a gate nothing runs is a document with a `main()`.
+      - name: Distribution gate (portable layout, single-file artefact)
+        run: python -m evaluation.distribution_gate
+
+      # Phase 049: the support matrix is a claim about the environment, and a
+      # claim that nothing checks rots. This asserts that the interpreter
+      # running the suite is inside the range `requires-python` declares.
+      - name: Portability gate (declared support matches what CI proves)
+        run: python -m evaluation.portability_gate
+
   core-portability:
     name: platform-independent core (probe, non-gating)
     runs-on: ubuntu-latest
@@ -211,13 +225,55 @@ jobs:
             throw "portable status did not report the portable data directory"
           }
 
-      - name: Record artifact hashes
+      # Phase 049. This step existed and produced `artifacts.sha256` with
+      # *absolute* paths from the runner -- `D:\a\universal-search\...` --
+      # so `sha256sum -c` on a user's machine reported every artefact missing.
+      # Nothing in the repository ever read the file back; the only test
+      # asserted that the string "artifacts.sha256" appears in this workflow.
+      #
+      # Now: the one-dir build is zipped (uploading only `*.exe` without
+      # `_internal/` published two executables that cannot start -- the exact
+      # PYI-8 defect the release audit recorded for 2.0.0), the manifest lists
+      # paths *relative to itself*, and the packaged files are verified by the
+      # same script a user would run.
+      - name: Package the one-dir build and record verifiable hashes
         shell: pwsh
         run: |
-          Get-FileHash dist\UniversalSearch\*.exe, dist\UniversalSearch-onefile\*.exe -Algorithm SHA256 |
-            ForEach-Object { "$($_.Hash)  $($_.Path)" } |
-            Out-File -Encoding ascii artifacts.sha256
-          Get-Content artifacts.sha256
+          Compress-Archive -Path "dist\UniversalSearch\*" `
+            -DestinationPath "dist\UniversalSearch-{#}.zip" -Force -ErrorAction Stop
+          $manifest = @()
+          Get-ChildItem -Path "dist\UniversalSearch\*.exe", `
+                         "dist\UniversalSearch-onefile\*.exe", `
+                         "dist\UniversalSearch-*.zip" |
+            ForEach-Object {
+              # Relative to `dist`, because a path from this runner is useless
+              # on the machine the manifest exists to be checked on.
+              $relative = Resolve-Path -Relative -Path $_.FullName
+              $manifest += ("{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash,
+                                          ($relative -replace '^\.\\', '' -replace '\\', '/'))
+            }
+          # The zip's own bytes change on every build, so it is hashed here but
+          # its digest is not reproducible; what is verified is the archive
+          # against the release, by re-hashing after upload.
+          $manifest | Out-File -Encoding ascii "dist\SHA256SUMS.txt"
+          Get-Content "dist\SHA256SUMS.txt"
+
+      - name: Verify the hashes with the script a user would run
+        shell: pwsh
+        run: |
+          # Extract the zip we are about to publish and check the executables
+          # inside it, so the manifest is verified against the published
+          # layout rather than against the build tree.
+          $check = Join-Path $env:RUNNER_TEMP "verify"
+          Remove-Item -Recurse -Force $check -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $check | Out-Null
+          Expand-Archive -Path "dist\UniversalSearch-*.zip" -DestinationPath $check -Force
+          $lines = Get-Content "dist\SHA256SUMS.txt" |
+            Where-Object { $_ -match "UniversalSearch/.*\.exe$" } |
+            ForEach-Object { $_ -replace 'UniversalSearch/', '' }
+          $lines | Out-File -Encoding ascii (Join-Path $check "SHA256SUMS.txt")
+          & packaging\verify-hashes.ps1 -Path $check
+          if ($LASTEXITCODE -ne 0) { throw "published layout failed hash verification" }
 
       # The support bundle is content-free by construction (phase 028), so it
       # is safe to attach to a build: a failure report that a maintainer can
@@ -234,8 +290,8 @@ jobs:
         with:
           name: universal-search-windows
           path: |
-            dist/UniversalSearch/*.exe
+            dist/UniversalSearch-*.zip
             dist/UniversalSearch-onefile/*.exe
-            artifacts.sha256
+            dist/SHA256SUMS.txt
             artifacts-support.json
           retention-days: 30
