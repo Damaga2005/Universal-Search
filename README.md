@@ -144,9 +144,9 @@ Read this before expecting more than the program does.
 | 041 | Experiencia de producto: resultados con columnas, estados reales (041) | ✅ | [informe](docs/development/041-product-experience-report.md) |
 | 042 | Búsqueda como flujo: ordenar, agrupar, guardar, historial, explicaciones (042) | ✅ | [informe](docs/development/042-search-experience-report.md) |
 | 043 | Un sistema de ajustes tipado, validado y migrado (043) | ✅ | [informe](docs/development/043-settings-report.md) |
-| 044 | Aprendizaje local v2 | ⬜ | [roadmap](docs/development/044-local-learning-v2.md) |
-| 045 | Calidad y relevancia de búsqueda | ⬜ | [roadmap](docs/development/045-search-quality-v3.md) |
-| 046 | Escalabilidad y rendimiento de indexación | ⬜ | [roadmap](docs/development/046-indexing-performance-v3.md) |
+| 044 | Aprendizaje local v2 | ✅ | [roadmap](docs/development/044-local-learning-v2.md) |
+| 045 | Calidad y relevancia de búsqueda | ✅ | [roadmap](docs/development/045-search-quality-v3.md) |
+| 046 | Escalabilidad y rendimiento de indexación | ✅ | [roadmap](docs/development/046-indexing-performance-v3.md) |
 | 047 | Almacenamiento: `compact()` verificado, contrato de ciclo de vida completo | ✅ | [informe](docs/development/047-storage-and-data-lifecycle-report.md) |
 | 048 | Windows y matriz de entornos | ⬜ | [roadmap](docs/development/048-portability-and-environment-matrix.md) |
 | 049 | Distribución e instalación Windows | ⬜ | [roadmap](docs/development/049-distribution-and-installation-v2.md) |
@@ -309,14 +309,51 @@ python -m evaluation --flip recency diagrama   # headroom of one ranking weight
 python -m evaluation.perf_gate           # performance gate: 0 pass 1 fail 2 inconclusive (038)
 ```
 
-`perf_gate` is the one that knows when to keep quiet. It times a pure-arithmetic
-calibration workload before measuring anything, samples the machine's CPU load,
-runs the suite **twice** and treats the spread between the two passes as a gate
-of its own. If the machine is busy it exits **2** having measured nothing,
-because a latency number taken while someone else's program is running
-measures that program. When it does compare, it checks against a committed
-baseline recorded on a named machine, and it will not rewrite that baseline
-from a loaded one.
+### The evidence gates
+
+Sixteen phases ship one gate each. Every gate prints its invariants with the
+measured value beside the threshold, and writes a record under `evaluation/`.
+
+| puerta | fase | invariantes | veto de carga |
+|---|---:|---:|---|
+| `python -m evaluation.accessibility_gate` | 039 | 6 | — |
+| `python -m evaluation.archive_gate` | 034 | 9 | — |
+| `python -m evaluation.batch_gate` | 035 | 9 | — |
+| `python -m evaluation.distribution_gate` | 037 | 11 | — |
+| `python -m evaluation.fuzzy_gate` | 031 | 6 | sí |
+| `python -m evaluation.interaction_gate` | 042 | 11 | sí |
+| `python -m evaluation.learning_gate` | 044 | 11 | — |
+| `python -m evaluation.mail_gate` | 033 | 7 | — |
+| `python -m evaluation.organize_gate` | 036 | 9 | — |
+| `python -m evaluation.perf_gate` | 038 | 9 | sí |
+| `python -m evaluation.quality_gate` | 045 | 13 | — |
+| `python -m evaluation.scale_gate` | 046 | 8 | — |
+| `python -m evaluation.settings_gate` | 043 | 13 | — |
+| `python -m evaluation.storage_gate` | 047 | 9 | — |
+| `python -m evaluation.suggest_gate` | 032 | 6 | sí |
+| `python -m evaluation.ux_gate` | 041 | 9 | sí |
+
+Three exit codes, and the middle one is the point:
+
+| code | meaning |
+|---|---|
+| 0 | **SHIP** — every invariant inside its threshold |
+| 1 | **NO SHIP** — at least one invariant outside its threshold |
+| 2 | **INCONCLUYENTE** — nothing was measured, and nothing was concluded |
+
+**INCONCLUYENTE is a real answer, not a failure to run.** The four gates marked
+above measure latency, and a latency number taken while another program is using
+the machine measures that program. So they time a pure-arithmetic calibration
+and read the OS's CPU figure *before* measuring and *again afterwards*; if the
+machine was busy at either end, they exit 2 having published nothing and having
+moved no threshold. Phase 047 added that second reading after a bursty neighbour
+slipped past a single check.
+
+The consequence worth knowing before you run them: **on a busy machine four
+gates will report INCONCLUYENTE and that is the correct result.** Close whatever
+else is running and run them again. Nothing here will pass by raising a
+threshold to meet a number taken under conditions nobody declared.
+
 
 Development prompts live in `docs/development/`, with a per-phase report for
 each completed phase, and `CHANGELOG.md` summarises the releases.

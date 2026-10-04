@@ -90,7 +90,7 @@
 
 ---
 
-Phases 001–040 are implemented and documented; phases 041–050 are planned (per-phase documentation in
+Phases 001–040 are implemented and documented; phases 041–047 are implemented (per-phase documentation in
 `docs/development/`). The quality gate is an executable instrument, not a
 promise: `python -m evaluation.gate` runs **23 local invariants** — the thirteen
 from phase 030 (dependency budget, no network or model imports, a

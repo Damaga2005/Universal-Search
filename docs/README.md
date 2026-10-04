@@ -58,7 +58,7 @@ El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
 | 049 | Distribución e instalación Windows | ⬜ Planificada | — | [plan](development/049-distribution-and-installation-v2.md) |
 | 050 | Puerta de producto Universal Search 3.x | ⬜ Planificada | — | [plan](development/050-product-v3-gate.md) |
 
-**Fases 031–043 cerradas. Fases 044–050 planificadas.** El gate
+**Fases 031–047 cerradas. Fases 048–050 planificadas.** El gate
 ejecutable tiene **23 invariantes** (`python -m evaluation.gate`); la puerta de
 rendimiento sabe decir «inconcluyente» en vez de publicar una cifra tomada con
 el equipo ocupado; la puerta de accesibilidad comprueba teclado, nombres,
