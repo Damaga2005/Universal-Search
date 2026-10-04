@@ -7,6 +7,50 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 047b - one load check for every gate that measures latency
+Four gates were unable to close, and one of them was closing *wrongly*.
+`suggest_gate` reported NO SHIP at 12.6 ms against an 8.0 ms threshold on a
+machine running a game at 88% CPU -- and 14.7 ms with these changes stashed
+away, which is what established the machine as the cause rather than the code.
+`fuzzy_gate` passed at 4.4 ms on a machine at 76%, which is the same mistake in
+the opposite direction: a verdict that happened to land well for no reason.
+
+- **`perf_gate.load_gate()` is now the single implementation.** Phase 045b gave
+  `perf_gate` a two-signal load check -- a pure-arithmetic calibration for
+  "was this process slowed", plus the OS figure for "was the machine busy" --
+  and the weaker signal vetoes. `interaction_gate` had it. `fuzzy_gate` had a
+  private `_cpu_load()` that only decorated a detail string and could not
+  change the verdict. `suggest_gate` had nothing. All three now import the check
+  instead of writing one: a load check written twice diverges, and the
+  divergence is invisible until the two disagree on a verdict for the same
+  machine.
+- **Two readings, not one.** The first version of this fix sampled the load once
+  at the start and still reported NO SHIP while the machine was at 76%: the
+  neighbour's load arrives in bursts, and a single sample catches the gap
+  between them. The check is repeated after the measurement, and a busy machine
+  at either end withholds the verdict.
+- **Both readings are recorded** in the baseline, along with the calibration, so
+  the next run has its own reference instead of only the OS signal. That is why
+  `LoadVerdict` now carries `calibration_best_s`: `suggest_gate` and
+  `fuzzy_gate` indexed it as if it were the dict `measure_load()` returns, and
+  two shapes under one name is two bugs waiting.
+- **12 new tests in `tests/test_load_veto.py`**, with the load signals injected,
+  because testing this for real would mean the test only runs when the machine
+  is quiet -- which is exactly when the veto is not needed. Busy before, busy
+  during, quiet throughout, and a check that the thresholds are not redefined
+  anywhere else.
+- **A debt retracted, because it was never real.** The 045 report declared that
+  `runner.measure()` still used `datetime.now()` and that "its recency figures
+  are not reproducible between years". False, and written without checking:
+  `evaluation/runner.py` imports `time` and measures with
+  `time.perf_counter()`. There is no `datetime.now()` anywhere in `src/` or
+  `evaluation/` -- the only occurrence of that string is a *comment* in
+  `quality_gate.py`. The correction is recorded in place rather than the line
+  deleted, because this is the fourth time in three phases that a claim about
+  the code was made without running it.
+- The three remaining INCONCLUYENTE verdicts are the machine's, not the code's.
+  No threshold was moved to make them disappear.
+
 ### Phase 047 - Storage and data lifecycle, and the operation that returned nothing
 Phase 047 asks whether a user can understand and control the storage footprint
 without touching the database. The measured answer was no, and not for want of

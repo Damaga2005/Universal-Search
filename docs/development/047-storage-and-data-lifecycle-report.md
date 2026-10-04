@@ -231,8 +231,10 @@ Y dos de las sondas iniciales afirmaron cosas falsas antes de refinarse:
   mismo trabajo idéntico dio 1,5 s y 5,6 s.
 - **Qué mueve los 16 KiB del tamaño del índice** (fase 046) sigue sin
   explicarse.
-- **`fuzzy_gate.py` y `suggest_gate.py` siguen sin la metodología de veto de
-  carga** que tiene `perf_gate`; declarado en la 044, la 045 y la 046.
+- ~~**`fuzzy_gate.py` y `suggest_gate.py` siguen sin la metodología de veto de
+  carga** que tiene `perf_gate`~~. **Cerrado en la 047b**: las tres puertas usan
+  `perf_gate.load_gate()`, y una máquina ocupada produce INCONCLUYENTE en vez de
+  un veredicto sobre otra cosa.
 - **El coste superlineal de la capa semántica** —200 términos por documento,
   55,9 MB para 1000 documentos— **no se ha optimizado**. Es el mayor coste
   medido del proyecto y es deliberado: medir el vectorizado y decidir si
@@ -242,6 +244,14 @@ Y dos de las sondas iniciales afirmaron cosas falsas antes de refinarse:
 - **No hay política de retención automática** para logs ni métricas más allá de
   la rotación por tamaño que ya existía; se declara su ciclo de vida, no se
   cambia su comportamiento.
+
+## Cierre posterior: 047b
+
+Las tres puertas de latencia que quedaban sin cerrar lo estaban por la máquina,
+y una de ellas —`suggest_gate`— cerraba **mal**. Un veto de carga añadido a
+`suggest_gate` y `fuzzy_gate` con la ayuda de 12 pruebas inyectando las señales.
+El detalle, con las mediciones y los tres defectos del propio instrumento, está
+en el `CHANGELOG` de la 047b y en `tests/test_load_veto.py`.
 
 ## Verificación
 

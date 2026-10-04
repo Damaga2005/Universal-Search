@@ -229,4 +229,14 @@ no inventory item claimed), and a `storage show` that reports exactly what can b
 measured and refuses to estimate bytes per table, because this build has no
 `dbstat`, no `sqlite_dbpage` and no `sqlite_stat1/4`.
 
-Current test count: 1434 tests collected.
+Phase 047b closed the load-veto debt that phases 044, 045 and 046 each declared:
+`suggest_gate` was reporting NO SHIP at 12.6 ms against an 8.0 ms threshold on a
+machine running a game at 88% CPU, and `fuzzy_gate` was passing at 4.4 ms on one
+at 76% -- two verdicts, same day, same reason, neither about this product. Both
+gates now use `perf_gate.load_gate()`, the single implementation, and read the
+load twice so a neighbour that wakes up mid-run also withholds the verdict. The
+phase also retracted a debt it had inherited: the claim that `runner.measure()`
+used `datetime.now()` was false, written without checking, and `runner.py`
+measures with `time.perf_counter()`.
+
+Current test count: 1446 tests collected.

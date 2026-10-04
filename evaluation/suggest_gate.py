@@ -84,6 +84,39 @@ def main() -> int:
     # that reports a failure).
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(errors="replace")
+    # -- phase 047: the load check, owned by perf_gate ----------------------
+    # This gate measures latency. Measured on a machine running a game at 88%
+    # CPU it reported NO SHIP at 12.6 ms against an 8.0 ms threshold, and 14.7
+    # ms with these changes stashed away -- so the number was measuring the
+    # competition for the CPU. A latency gate that cannot tell a busy machine
+    # from a slow product answers a question nobody asked.
+    #
+    # Two readings, not one. The first version checked the load once, at the
+    # start, and still reported NO SHIP while the machine was at 76%: the load
+    # arrives in bursts, so a single sample catches the gap between them. The
+    # check is repeated after the measurement, and a busy machine at *either*
+    # end withholds the verdict.
+    from evaluation import perf_gate
+
+    baseline_path = ROOT / "evaluation" / "suggest_baseline.json"
+    previous = {}
+    if baseline_path.exists():
+        try:
+            previous = json.loads(baseline_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            previous = {}
+    load_check = perf_gate.load_gate(previous.get("calibration_best_s"))
+    if not load_check.conclusive:
+        print("=" * 100)
+        print("PUERTA DE EVIDENCIA - 032 (sugerencias)")
+        print("=" * 100)
+        print(f"INCONCLUYENTE: {load_check.detail}")
+        print("-" * 100)
+        print("No se ha medido nada. Una cifra de latencia sobre una maquina")
+        print("ocupada describe el trabajo de otro programa, asi que el")
+        print("umbral no se toca y la corrida no cuenta.")
+        print("VEREDICTO: INCONCLUYENTE (la maquina no estaba en reposo)")
+        return 2
     corpus_module.assert_labels_are_consistent()
     workspace = Path(tempfile.mkdtemp(prefix="universal-search-032-"))
     tree = workspace / "tree"
@@ -184,6 +217,8 @@ def main() -> int:
     print(f"  maximo de sugerencias: {MAX_SUGGESTIONS}")
     payload = {
         "phase": "032",
+        "load_before": load_check.detail,
+        "calibration_best_s": load_check.calibration_best_s,
         "verdicts": [
             {"gate": v.gate, "measured": v.measured, "threshold": v.threshold,
              "passed": v.passed, "detail": v.detail}
@@ -191,9 +226,27 @@ def main() -> int:
         ],
         "queries": details,
     }
+    # The machine may have become busy *during* the measurement, which is the
+    # common case with a bursty neighbour: the first reading of this fix caught
+    # the machine idle, and the measurement ran on a CPU another program had
+    # claimed by the time it finished. A verdict computed before checking again
+    # would publish a latency figure measured under conditions nobody declared.
+    after = perf_gate.load_gate()
+    payload["load_after"] = after.detail
+
     out = ROOT / "evaluation" / "suggest_baseline.json"
     out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     print(f"\nregistro escrito en {out.relative_to(ROOT)}")
+
+    if not after.conclusive:
+        print("-" * 100)
+        print(f"INCONCLUYENTE despues de medir: {after.detail}")
+        print("VEREDICTO: INCONCLUYENTE (la maquina no estaba en reposo)")
+        return 2
+    if load_check.conclusive and load_check.detail != after.detail:
+        print(f"carga antes de medir:  {load_check.detail}")
+        print(f"carga despues de medir: {after.detail}")
+
     failed = [v for v in verdicts if not v.passed]
     print("VEREDICTO:", "SHIP" if not failed else f"NO SHIP ({len(failed)} puertas)")
     return 0 if not failed else 1

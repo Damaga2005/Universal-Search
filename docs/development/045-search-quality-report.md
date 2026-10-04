@@ -228,10 +228,24 @@ Cinco, y **cuatro los causó esta fase al tocar lo que ya existía**:
   morfología, y los cubre una capa que **ya existe** y ya funciona: el
   diagnóstico los clasifica `semantic fallback` con las capas encendidas.
 - **No migra `fuzzy_gate.py` ni `suggest_gate.py`** al veto de carga. Sigue
-  siendo deuda, como se declaró en la 044.
-- **No toca `runner.measure()`** para que use el reloj inyectado. La puerta
-  usa el suyo; el arnés genérico sigue con `datetime.now()`, y por eso sus
-  números de recencia no son reproducibles entre años.
+  siendo deuda, como se declaró en la 044. **Corregido en la 047**: las tres
+  puertas usan ahora `perf_gate.load_gate()`, y una máquina ocupada produce
+  INCONCLUYENTE en vez de un veredicto sobre otra cosa.
+- **No toca `runner.measure()`** para que use el reloj inyectado.
+
+  **CORRECCIÓN de la fase 047.** Esta línea afirmaba que «el arnés genérico
+  sigue con `datetime.now()`, y por eso sus números de recencia no son
+  reproducibles». **Es falso, y estaba escrito sin comprobarlo.**
+  `evaluation/runner.py` importa `time` y mide con `time.perf_counter()`; no hay
+  ninguna llamada a `datetime.now()` en `runner.py` ni en el resto de `src/` o
+  `evaluation/` — la única aparición de esa cadena está en un **comentario** de
+  `quality_gate.py`. La deuda que esta línea anunciaba no existe.
+
+  Se deja registrada la corrección en vez de borrar la línea en silencio: es el
+  cuarto caso del patrón de las fases 045–047 — una afirmación sobre el código
+  hecha sin ejecutar el código, y por tanto equivocada con una facilidad
+  notable. La forma correcta de saber qué reloj usa una función es llamarla o
+  leerla, no deducirlo del nombre de otra.
 
 ## Limitaciones
 

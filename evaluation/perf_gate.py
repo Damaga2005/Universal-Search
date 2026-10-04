@@ -397,6 +397,11 @@ def _percentile(values: list[float], fraction: float) -> float:
 class LoadVerdict:
     conclusive: bool
     detail: str
+    # The calibration this verdict was based on, so a caller can record it as
+    # next run's reference without measuring a second time. Phase 047 added
+    # this after `suggest_gate` and `fuzzy_gate` indexed the dataclass as if it
+    # were the dict `measure_load()` returns -- two different shapes, one name.
+    calibration_best_s: float | None = None
 
 
 def load_verdict(load: dict[str, float], reference: float | None,
@@ -442,6 +447,31 @@ def load_verdict(load: dict[str, float], reference: float | None,
             "equipo no está en reposo y una cifra de latencia no concluiría nada",
         )
     return LoadVerdict(True, f"calibración {ratio:.2f}× de la referencia{os_note}")
+
+
+def load_gate(reference: float | None = None) -> LoadVerdict:
+    """Run the load check this module owns, for other gates to reuse.
+
+    Phase 047. `suggest_gate` was reporting NO SHIP on a machine running a game
+    at 88% CPU, because it had no way to know. `fuzzy_gate` had a private
+    `_cpu_load()` that only decorated a detail string. Neither could tell a busy
+    machine from a slow product, so both answered a question nobody asked.
+
+    This is not a second implementation on purpose. A load check written twice
+    diverges, and the divergence only shows up when the two disagree on a verdict.
+    The calibration, the two signals and both thresholds stay here, where
+    phase 045b put them and where the commit message can point.
+
+    `reference` is the gate's own previously recorded `calibration_best_s`.
+    Without one, only the OS figure can veto -- which is enough to catch another
+    program, and not enough to catch this machine simply being slower than the
+    one the baseline came from. Gates that record the calibration get both.
+    """
+    load = measure_load()
+    verdict = load_verdict(load, reference, os_cpu_load())
+    return LoadVerdict(
+        verdict.conclusive, verdict.detail, load["calibration_best_s"]
+    )
 
 
 @dataclass(frozen=True, slots=True)
