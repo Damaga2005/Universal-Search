@@ -1,0 +1,82 @@
+{
+  "phase": "047",
+  "clock": "2026-10-04T00:00:22.784774+00:00",
+  "verdicts": [
+    {
+      "gate": "L1 tablas sin dataset declarado",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "0 tablas sin dataset declarado; el esquema tiene 9 categorias declaradas"
+    },
+    {
+      "gate": "L2 datasets sin contrato completo",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "15 datasets declarados, 0 sin los siete elementos del contrato (proposito, responsable, esquema, reconstruccion, retencion, borrado, migracion)"
+    },
+    {
+      "gate": "L3 categorias sin tabla declarada",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "9 categorias con tablas declaradas, 0 sin entrada en el informe; 1 con cero filas (legitimo: uso sin clics)"
+    },
+    {
+      "gate": "L4 recuentos que no cuadran con SQLite",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "297,594 filas en 9 categorias, 0 recuentos que no cuadran con un SELECT COUNT(*) por tabla; canonicas 4,293 frente a derivadas 293,301"
+    },
+    {
+      "gate": "L5 paginas que no cuadran con SQLite",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "18,233 paginas de 4,096 B, 0 libres = 0 B recuperables; el informe coincide"
+    },
+    {
+      "gate": "L6 bytes por tabla afirmados sin poder medirlos",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "el informe NO afirma bytes por tabla y explica por que: dbstat, sqlite_dbpage y sqlite_stat1/4 no existen en esta build (medido; compile_options solo lista ENABLE_FTS3/4/5 y ENABLE_RTREE)"
+    },
+    {
+      "gate": "L7 bytes derivados por debajo de lo prometido",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "lo derivado ocupaba 66.8 MiB; el informe anunciaba 66.8 MiB recuperables (cota inferior, paginas ya liberadas) y compact() devolvio 66.8 MiB"
+    },
+    {
+      "gate": "L8 documentos perdidos al compactar",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "1,000 documentos antes y despues; 20 tablas verificadas una a una antes de intercambiar el fichero"
+    },
+    {
+      "gate": "L9 resultados perdidos al compactar",
+      "measured": 0.0,
+      "threshold": 0.0,
+      "passed": true,
+      "detail": "el termino 'demux' devolvia 1000 coincidencias y devuelve 1000; SearchEngine devuelve 5 resultados; filas de contenido antes 1,000 despues 1,000"
+    }
+  ],
+  "footprint": {
+    "documents": 1000,
+    "index_bytes_with_derived": 74682368,
+    "index_bytes_after_purge": 74682368,
+    "index_bytes_after_compact": 4657152,
+    "reclaimable_before_compact": 70025216,
+    "derived_bytes": 70025216,
+    "reclaimed_bytes": 70025216,
+    "rows_canonical": 4293,
+    "rows_derived": 293301,
+    "rows_derived_after_purge": 1000
+  },
+  "decision": "compact() added; lifecycle contract completed for 15 datasets; per-table bytes declared unavailable rather than estimated"
+}

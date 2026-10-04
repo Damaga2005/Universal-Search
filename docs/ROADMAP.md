@@ -83,7 +83,7 @@
 - [x] Local learning v2 (044)
 - [x] Search Quality & Relevance (045)
 - [x] Indexing Scalability & Performance (046)
-- [ ] Storage & data lifecycle (047)
+- [x] Storage & data lifecycle (047)
 - [ ] Windows & Environment Matrix (048)
 - [ ] Windows Distribution & Installation (049)
 - [ ] Universal Search 3.x Product Gate (050)
@@ -216,4 +216,17 @@ of `ok` at the same time. Phase 046 also retracted a mechanism phase 045 had
 asserted without measuring: the traversal is sorted, and what actually moves the
 16 KiB index-size spread is still unknown.
 
-Current test count: 1421 tests collected.
+Phase 047 found that 95% of the index is derived data that only exists after
+the user reaches for a feature: nothing derived is built at index time, so the
+index is small after indexing and 71 MB after the first fallback search -- a
+4,293-row canonical index beside 293,252 derived rows. It also found that the
+project's own "compact" operation returned **zero of 74,956,800 bytes** while
+reporting 18,038 pages reclaimed, because in WAL mode a VACUUM writes into the
+WAL and the main file is only truncated at a later checkpoint. What ships is a
+verified two-phase `compact()`, a complete seven-item lifecycle contract for all
+15 datasets (including the five FTS5 shadow tables and `schema_migrations`, which
+no inventory item claimed), and a `storage show` that reports exactly what can be
+measured and refuses to estimate bytes per table, because this build has no
+`dbstat`, no `sqlite_dbpage` and no `sqlite_stat1/4`.
+
+Current test count: 1434 tests collected.

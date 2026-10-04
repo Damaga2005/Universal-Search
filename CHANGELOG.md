@@ -7,6 +7,79 @@ PyInstaller resource and the installer (enforced by `test_release.py`).
 
 ## [Unreleased]
 
+### Phase 047 - Storage and data lifecycle, and the operation that returned nothing
+Phase 047 asks whether a user can understand and control the storage footprint
+without touching the database. The measured answer was no, and not for want of
+commands.
+
+- **`maintenance(vacuum=True)` reclaimed 0 of 74,956,800 bytes while reporting
+  that it had reclaimed 18,038 pages.** In WAL mode a VACUUM writes the rewrite
+  into the WAL and the main file is only truncated at a later checkpoint; the
+  method checkpointed before vacuuming and never after. On 4000 inserted-then-
+  deleted rows: checkpoint-then-VACUUM returned 29,744 bytes (1.7%), VACUUM-
+  then-checkpoint returned 1,595,600 (89%). Four mechanisms were measured on
+  copies of the real database -- raw VACUUM plus checkpoint, VACUUM with
+  `mmap_size=0`, VACUUM in DELETE journal mode, and `VACUUM INTO` -- and all
+  four returned the bytes.
+- **`SearchDatabase.compact()`** now does the swap in two phases: `VACUUM INTO`
+  a candidate, verify it with `PRAGMA integrity_check` and a row count of all 20
+  tables, then checkpoint, drop the sidecars and replace. A failed verification
+  raises the new `DatabaseCompactionError` and the user's index is untouched --
+  which is the reason the swap is two-phase. Measured on 1000 documents:
+  71.2 MiB with the derived layers built, 4.4 MiB after purging and compacting.
+  `maintenance(vacuum=True)` delegates to it, because an operation whose whole
+  purpose is returning storage may not quietly return nothing.
+- **The deletion paths the inventory already promised returned no storage at
+  all.** `intelligence clear`, `SemanticIndex.remove_all()`,
+  `FuzzyIndex.remove_all()` and the graph's `clear()` free pages; the bytes stay.
+  66.7 MiB of free pages sat in a 71.2 MiB file with nothing reporting it.
+- **95% of the index is derived, and it only exists after you use it.** Nothing
+  derived is built at index time -- measured, the semantic, fuzzy and graph
+  tables hold zero rows after indexing 1000 documents. Canonical index 3,801,088
+  bytes (4.8%), semantic 55,799,808 (70.6%), fuzzy 4,395,008 (5.6%), graph
+  15,130,624 (19.2%). By rows: 4,293 canonical against 293,252 derived. The
+  semantic layer stores 200 content words per document, so its cost is
+  superlinear in corpus size: derived is 5% of the index at 400 documents and
+  95% at 1000.
+- **The lifecycle contract is now complete for all 15 datasets.** `DataItem` had
+  8 fields and the contract asks for seven items, so owner, schema/version,
+  rebuild path and migration behaviour had nowhere to live -- which is why a
+  derived dataset with no rebuild path was indistinguishable from a canonical
+  one that cannot be rebuilt at all.
+- **Two datasets that nobody declared.** The inventory described 13 categories
+  while the schema has 21 tables. The five FTS5 shadow tables hold the actual
+  inverted index and were invisible to anything reading `sqlite_master` by
+  declared name; `schema_migrations` is the record every migration-behaviour
+  claim rests on. Both are now declared, and `sqlite_sequence` is excluded by
+  name so the gap is a decision rather than an oversight.
+- **Bytes per table are impossible in this build and are not estimated.**
+  Measured: `dbstat`, `sqlite_dbpage`, `sqlite_stat1` and `sqlite_stat4` all
+  raise `no such table`, and `compile_options` lists only ENABLE_FTS3/4/5 and
+  ENABLE_RTREE. The report returns `per_table_bytes: None` with the reason. What
+  it does return -- file bytes, pages, free pages, rows per category -- is exact,
+  and the gate checks it against a `SELECT COUNT(*)` per table rather than
+  trusting its own code.
+- **New `universal-search storage show` and `storage compact`**, answering the
+  question `privacy show` could not: why is my index 80 MB when my documents are
+  4 MB. The report's reclaimable figure is labelled a *floor* (`freelist_count *
+  page_size`), because a VACUUM also defragments pages SQLite never freed -- the
+  gate measured a 20.0 KiB floor returning 84.0 KiB.
+- **New gate, `python -m evaluation.storage_gate`: 9 invariants, all passing.**
+- **Three defects in the measuring instrument, all the same shape.** The gate
+  defined `use_every_layer`, documented it at length, and never called it -- so
+  it measured an empty index and still reported SHIP on all nine invariants. L7
+  demanded the returned bytes match the announced ones within 2% and failed at
+  76%, because the announcement is a floor and not a quote; the invariant is now
+  one-directional. And the `storage` command's dispatch was inserted inside
+  `_privacy_command`, unreachable, because the chain is keyed on `args.command`.
+- Two probes asserted false things before being refined: one claimed
+  `maintenance()` vacuums when its default is `vacuum=False`, and one concluded
+  `compact()` broke search on "0 results" for a term the corpus does not
+  contain -- the same direct MATCH returned 0 *before* compacting.
+- Declared and not done: the superlinear semantic cost (55.9 MB per 1000
+  documents) is not optimised, because deciding whether 200 content words per
+  document is the right number is a product question rather than a storage one.
+
 ### Phase 046 - Indexing measured at scale, three correctness defects, no optimisation
 Phase 046's rule is that optimisation requires a *measured* bottleneck. The
 honest outcome was that **no optimisation ships**: the bottleneck is FTS5's

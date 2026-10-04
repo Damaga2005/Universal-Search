@@ -312,6 +312,34 @@ def main() -> None:
     portable_off.add_argument("--base", type=Path, default=None)
 
     # -- privacy ----------------------------------------------------------------
+    # -- storage (phase 047) ---------------------------------------------------
+    # `privacy show` answers "what do you store"; this answers "why is it that
+    # big and how do I make it smaller", which was unanswerable before: the
+    # inventory reported whole-file bytes and nothing about which part of the
+    # index was the index.
+    storage = sub.add_parser(
+        "storage", help="what uses disk, and how to hand it back"
+    )
+    storage_sub = storage.add_subparsers(dest="storage_command", required=True)
+    storage_show = storage_sub.add_parser(
+        "show", help="measured storage by category, plus reclaimable bytes"
+    )
+    storage_show.add_argument(
+        "--database", type=Path, default=default_database,
+        help="index database (default: the user data directory)",
+    )
+    storage_compact = storage_sub.add_parser(
+        "compact",
+        help=(
+            "rewrite the index into a compact copy and give back the bytes "
+            "(pauses indexing; never touches your documents)"
+        ),
+    )
+    storage_compact.add_argument(
+        "--database", type=Path, default=default_database,
+        help="index database (default: the user data directory)",
+    )
+
     privacy = sub.add_parser(
         "privacy", help="what is stored, where, and how to remove it"
     )
@@ -426,6 +454,10 @@ def main() -> None:
             print(f"elapsed={last['duration_s']}s db_writes={last['db_writes']}")
     elif args.command == "portable":
         code = _portable_command(args)
+        if code:
+            raise SystemExit(code)
+    elif args.command == "storage":
+        code = _storage_command(args)
         if code:
             raise SystemExit(code)
     elif args.command == "privacy":
@@ -724,6 +756,86 @@ def _portable_command(args) -> int:
             marker = "/" if entry.is_dir() else ""
             print(f"  {entry.name}{marker}")
     return 0
+
+
+def _storage_command(args: argparse.Namespace) -> int:
+    """`storage show` and `storage compact` (phase 047).
+
+    `privacy show` answers what is stored; this answers why it is that big
+    and how to hand the bytes back. The two answer different questions and
+    only one of them could be answered before.
+    """
+    database = _open_or_explain(args.database)
+    if args.storage_command == "show":
+        from universal_search.privacy import storage_report
+
+        report = storage_report(database)
+        print(f"index:            {report['index']}")
+        print(f"index bytes:      {_format_bytes(report['index_bytes'])} "
+              f"across {report['pages']:,} pages of {report['page_size']:,} B")
+        print("files:")
+        for name, size in (report["bytes"] or {}).items():
+            print(f"  {name:<14} {_format_bytes(size)}")
+        print("rows by category (exact; this build cannot attribute bytes "
+              "per table):")
+        for key, count in report["rows"].items():
+            marker = ""
+            if key not in ("documents", "content", "fts_shadow",
+                           "schema_migrations"):
+                marker = "  (derived)"
+            print(f"  {key:<20}{count:>12,}{marker}")
+        print(
+            f"  canonical {report['canonical_rows']:,} rows, derived "
+            f"{report['derived_rows']:,} rows"
+        )
+        reclaimable = report["reclaimable_bytes"]
+        if reclaimable:
+            print(
+                f"reclaimable now:  {_format_bytes(reclaimable)} "
+                f"({report['freelist_pages']:,} free pages) -- {report['reclaim_command']}"
+            )
+        else:
+            print("reclaimable now:  nothing; the file has no free pages")
+        if report["contract_incomplete"]:
+            print(
+                "INCOMPLETE: these datasets do not declare a full lifecycle: "
+                + ", ".join(report["contract_incomplete"])
+            )
+        if report["undeclared_tables"]:
+            print(
+                "UNDECLARED: these tables exist but no inventory item claims "
+                "them: " + ", ".join(report["undeclared_tables"])
+            )
+        return 0
+
+    if args.storage_command == "compact":
+        from universal_search.index.database import DatabaseCompactionError
+
+        print(
+            "Compacting: rewriting the index. Pause the indexer first if it is "
+            "running, and close the window. Your documents are never touched."
+        )
+        try:
+            result = database.compact()
+        except DatabaseCompactionError as exc:
+            print(f"Compaction refused, your index is untouched: {exc}",
+                  file=sys.stderr)
+            return 1
+        except sqlite3.OperationalError as exc:
+            print(
+                f"Could not compact the index ({exc}). Close the window and "
+                f"the indexer, then try again.",
+                file=sys.stderr,
+            )
+            return 1
+        print(
+            f"Compacted: {_format_bytes(result['bytes_before'])} -> "
+            f"{_format_bytes(result['bytes_after'])}, "
+            f"{_format_bytes(result['bytes_reclaimed'])} given back "
+            f"({result['rows_verified']} tables verified). "
+            f"The file itself was not touched."
+        )
+        return 0
 
 
 def _privacy_command(args) -> int:
