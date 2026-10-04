@@ -32,3 +32,8 @@ control-center.json
 .env
 *.pem
 *.key
+
+# Phase 049: the artefact hash manifest describes the binaries in
+# dist/, which are not committed. Publishing it would ship a checksum
+# for files nobody can obtain, so it is generated, not versioned.
+SHA256SUMS.txt

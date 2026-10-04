@@ -45,7 +45,6 @@ import re
 import sys
 import tomllib
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -323,7 +322,11 @@ def main() -> int:
 
     payload = {
         "phase": "048",
-        "clock": datetime.now(timezone.utc).isoformat(),
+        # Phase 049: no wall-clock stamp. A baseline that carries the time
+        # it was produced is a diff on every run, and a baseline that
+        # changes without a decision changing is noise -- which is the
+        # rule this repository has applied to every baseline for five
+        # phases. The measures are the record; when they happened is not.
         "verdicts": [
             {"gate": v.gate, "measured": v.measured, "threshold": v.threshold,
              "passed": v.passed, "detail": v.detail}

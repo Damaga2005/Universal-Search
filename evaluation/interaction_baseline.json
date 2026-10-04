@@ -75,13 +75,13 @@
       "gate": "V11 de pulsacion a resultado por encima del presupuesto",
       "measured": 0.0,
       "threshold": 0.0,
-      "passed": false,
-      "detail": "INCONCLUYENTE: CPU del sistema al 90% antes de medir (> 60%): hay otro programa usando la máquina, así que una cifra de latencia no concluiría nada; mejor de 3: 165 ms (presupuesto 600 ms)"
+      "passed": true,
+      "detail": "mejor de 3: 170 ms (presupuesto 600 ms)"
     }
   ],
   "window_checked": true,
   "window_reason": null,
-  "keystroke_ms": 164.61,
+  "keystroke_ms": 170.06,
   "keystroke_budget_ms": 600.0,
-  "load_ok": false
+  "load_ok": true
 }
