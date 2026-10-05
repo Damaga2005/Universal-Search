@@ -252,6 +252,52 @@ reproducible — the same corpus yields the same rows and the same search
 results, which is what the reliability suite checks — but not
 byte-reproducibly.
 
+## 9d. The WAL variance reproduces — and the WAL is empty, which rules out the WAL
+
+The third measurement, and the last one that can be investigated without a
+machine at rest. Phase 046 measured identical indexing work at 1.5 s and 5.6 s
+on consecutive runs — a factor of 3.7 — and recorded the cause as unexplained,
+suspecting the WAL. Phase 047 carried it forward. Nobody had re-measured it.
+
+Five runs, identical 120-document corpus, same machine, same session:
+
+```
+run 0: 1.89 s   db 430080 B   wal 0 B
+run 1: 0.90 s   db 430080 B   wal 0 B
+run 2: 1.14 s   db 430080 B   wal 0 B
+run 3: 1.43 s   db 430080 B   wal 0 B
+run 4: 0.85 s   db 430080 B   wal 0 B
+
+min 0.85 s   max 1.89 s   mean 1.24 s   median 1.14 s   max/min 2.24x
+database size: 430080 B on all five runs
+WAL size:     0 B on all five runs
+```
+
+Two findings, and the second is the one that matters.
+
+**The variance reproduces**, at 2.24x rather than the 3.7x of phase 046, on a
+host that section 9b has already shown to move by an order of magnitude
+depending on what else is running.
+
+**The WAL is empty at the end of every run.** Not small — zero bytes, five times
+out of five. The indexer checkpoints and closes cleanly, so there is no
+un-checkpointed WAL left behind for a slow run to have paid for. **That is
+evidence against the WAL hypothesis this debt was recorded under**, and it is
+the first time the attribution has been tested at all rather than assumed.
+
+**A probe conclusion that was wrong, kept in the record.** The script that
+produced this printed "the run with the largest WAL is the slowest — consistent
+with checkpoints". All five WAL sizes are 0 B, so `max(..., key=wal)` returned
+the first row by tie-breaking accident. The line asserted a correlation between
+two quantities, one of which did not vary, and it was written before anyone
+looked at the numbers. It is the exact shape of the defect this audit has spent
+a session removing elsewhere, and it appeared in the measuring instrument.
+
+So the variance is real, reproducible, and **not yet attributed**. What is left
+is the same question section 9b left: whether it is the machine. A median of
+1.14 s with a 0.85 s floor is a plausible figure for this workload on an idle
+host, and every figure above it was taken while another suite was resident.
+
 ## 10. Inherited versus new, 041–049
 
 | area | inherited | new in 041–049 |

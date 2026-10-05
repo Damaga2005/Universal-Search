@@ -369,4 +369,13 @@ corpus, same rows, same results, which is what the reliability suite
 checks) but not byte-reproducible — and "deterministic rebuild" is one of
 the items the 050 plan's reliability gate lists. Section 9c of the report.
 
+The WAL variance reproduces and is still unattributed: five runs of an
+identical 120-document corpus gave 0.85 s to 1.89 s, a factor of 2.24x
+(phase 046 measured 3.7x). The finding that matters is that **the WAL is
+0 bytes at the end of every run** — the indexer checkpoints and closes
+cleanly — which is evidence against the WAL hypothesis this debt was
+filed under, and the first time that attribution has been tested. What
+remains is the machine, as with the installer. Section 9d of the
+phase-050 report.
+
 Current test count: 1483 tests collected.
