@@ -399,7 +399,14 @@ def test_the_gate_restores_the_environment_it_simulates() -> None:
 
     with distribution_gate._as_a_copy_on_a_stick(local, folder):
         assert os.environ["LOCALAPPDATA"] == str(local)
-        assert Path.cwd() == folder.resolve()
+        # Resolved on both sides. `os.chdir` does not expand an 8.3 short name,
+        # so `Path.cwd()` returns whatever form it was given while
+        # `folder.resolve()` always returns the long one. This passed on a
+        # development machine whose TEMP is a long path and failed on the CI
+        # runner, whose TEMP is `RUNNER~1`, on the same code and the same
+        # commit. The invariant being checked is "the gate moved us", not "the
+        # two strings match", so compare identity.
+        assert Path.cwd().resolve() == folder.resolve()
         os.environ[distribution_gate.HOME_ENV] = str(workspace / "explicit")
 
     assert dict(os.environ) == before_environment
