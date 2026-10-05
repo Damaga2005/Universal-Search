@@ -337,4 +337,4 @@ that is correct locally and wrong on a runner with no neighbour, they accept
 `--require-conclusive`, which keeps the measurement and changes only the verdict
 to NO SHIP.
 
-Current test count: 1481 tests collected.
+Current test count: 1482 tests collected.

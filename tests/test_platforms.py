@@ -249,13 +249,53 @@ def parse_powershell(path: Path) -> list:
     return [line for line in result.stdout.splitlines() if line.strip()]
 
 
-def test_packaging_scripts_parse():
+#: Every PowerShell script in `packaging/` that ships or builds something.
+#: `make-start-menu.ps1` used to be the only shortcut script here, and nothing
+#: calls it: `install.ps1` calls `make-shortcut.ps1`. A parse test that covers
+#: the dead one and not the live one is green for the wrong reason, which is
+#: how the false "the installer already creates a Desktop shortcut" claim in
+#: `make-start-menu.ps1` went unpinned by anything.
+PACKAGING_SCRIPTS = (
+    "install.ps1",
+    "uninstall.ps1",
+    "build.ps1",
+    "make-shortcut.ps1",
+    "make-start-menu.ps1",
+    "explorer-search.ps1",
+    "verify-hashes.ps1",
+)
+
+
+def test_every_packaging_script_parses():
     root = Path(__file__).resolve().parents[1] / "packaging"
-    for name in ("make-start-menu.ps1", "explorer-search.ps1"):
+    for name in PACKAGING_SCRIPTS:
         script = root / name
-        assert script.exists(), name
+        assert script.exists(), (
+            f"{name} is listed as shipping and does not exist; if it was "
+            f"renamed or deleted, update PACKAGING_SCRIPTS deliberately"
+        )
         errors = parse_powershell(script)
         assert not errors, f"{name}: {errors}"
+
+
+# `make-start-menu.ps1` is a functional duplicate of `make-shortcut.ps1` -- both
+# write the same `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Universal
+# Search.lnk`, with different descriptions and different icons -- and nothing
+# calls it: `install.ps1:139` calls `make-shortcut.ps1`. Meanwhile
+# `platforms/windows.py:17` still names it as the script that installs the Start
+# Menu entry, which is the false claim the phase-050 audit found.
+#
+# There was an attempt to pin that with a test asserting no packaging script is
+# referenced by nothing. It could not fail: the search corpus includes the
+# scripts themselves, and a PowerShell script names itself often enough that
+# the filename is always present. Verified by removing every reference to
+# `build.ps1` from twelve files across `docs/`, `tests/`, `src/`,
+# `evaluation/` and `.github/` -- the test still passed. Removed rather than
+# shipped, because a test that cannot fail is worse than no test.
+#
+# What does hold the duplication visible is `PACKAGING_SCRIPTS` above: both
+# scripts are parsed, so neither can rot into something unparseable, and the
+# duplicate is named here rather than discovered later.
 
 
 def test_integration_scripts_are_per_user_and_reversible():
@@ -264,9 +304,17 @@ def test_integration_scripts_are_per_user_and_reversible():
     assert "HKCU:" in explorer  # never HKLM: no administrator rights
     assert "-Remove" in explorer
     assert "%1" in explorer  # the selected file
-    start_menu = (root / "make-start-menu.ps1").read_text(encoding="utf-8")
-    assert "Start Menu" in start_menu
-    assert "-Remove" in start_menu
+    # Read the *live* shortcut script. The assertions used to be made against
+    # `make-start-menu.ps1`, where `"Start Menu"` appears in the header comment
+    # and `" -Remove"` in the parameter list, so both were satisfied by the
+    # script's own prose rather than by anything it does.
+    shortcut = (root / "make-shortcut.ps1").read_text(encoding="utf-8")
+    default_path = shortcut[shortcut.index("StartMenuPath ="):]
+    default_path = default_path[:default_path.index("\n") + 1]
+    assert "Start Menu" in default_path, (
+        f"the shortcut default must be the per-user Start Menu: {default_path!r}"
+    )
+    assert "HKLM" not in shortcut, "never HKLM: no administrator rights"
 
 
 # -- single instance and hotkey reporting -------------------------------------

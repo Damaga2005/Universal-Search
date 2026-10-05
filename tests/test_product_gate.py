@@ -130,22 +130,38 @@ def test_an_undeclared_limiter_is_reported_as_unproven():
     """The gate's central promise: silence is not declaration.
 
     A limitation counts as declared only if its marker appears in the
-    documentation. This is the behaviour that stops a release claiming Windows
-    10 support on the strength of a Windows Server runner.
+    documentation, so a release cannot claim Windows 10 support on the strength
+    of a Windows Server runner.
+
+    The first version of this test asserted that a marker was *absent* from a
+    string literal written two lines above -- it could not fail, and it was mine.
+    Asserting absence needs something to be absent from, so this runs the real
+    check over the real documents and then removes a marker for real.
     """
-    marker, _ = product_gate.ENVIRONMENT_CLAIMS["E1_clean_supported_windows"]
-    declared = "Windows 11 and macOS are supported platforms."
-    assert marker not in declared
-    # And the converse: the real documentation does carry it.
     from evaluation import product_gate as gate
-    docs = " ".join(
-        (gate.ROOT / name).read_text(encoding="utf-8")
+
+    documents = [
+        gate.ROOT / name
         for name in ("README.md", "docs/ROADMAP.md",
                      "docs/development/050-product-v3-gate-report.md")
-        if (gate.ROOT / name).exists()
+    ]
+    docs = "\n".join(
+        path.read_text(encoding="utf-8") for path in documents if path.exists()
     )
-    for claim, (claim_marker, _) in gate.ENVIRONMENT_CLAIMS.items():
-        assert claim_marker in docs, (
-            f"{claim} is undeclared; the marker {claim_marker!r} appears "
-            f"nowhere in README, ROADMAP or the 050 report"
+
+    for claim, (marker, _) in gate.ENVIRONMENT_CLAIMS.items():
+        assert marker in docs, (
+            f"{claim} is undeclared; the marker {marker!r} appears nowhere in "
+            f"README, ROADMAP or the 050 report"
         )
+
+    # And the check does bite: drop one marker and it must go undeclared.
+    claim, (marker, _) = next(iter(gate.ENVIRONMENT_CLAIMS.items()))
+    # Every occurrence, not one: the marker is repeated across README, ROADMAP
+    # and the report, so removing a single one left it declared and the check
+    # below could not have failed.
+    assert marker not in docs.replace(marker, ""), (
+        "removing every occurrence of the marker must make the claim "
+        "undeclared, otherwise the assertion above is satisfied by something "
+        "other than the documents"
+    )

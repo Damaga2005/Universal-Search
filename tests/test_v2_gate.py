@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from evaluation import gate
+import evaluation.gate
 
 
 # -- the gate runs, and every check is a real verdict --------------------------
@@ -443,4 +444,33 @@ def test_a_completed_phase_without_a_document_is_rejected(
     ["socket", "urllib.request", "requests", "torch", "transformers", "numpy"],
 )
 def test_the_forbidden_import_set_covers_the_obvious_escapes(forbidden: str) -> None:
-    assert forbidden in gate.FORBIDDEN_IMPORTS
+    """Each escape is named in code, not merely listed in a test.
+
+    This asserted that six literals were members of `gate.FORBIDDEN_IMPORTS`,
+    which is a hardcoded set in the module the test imports -- so it restated the
+    literals and could never detect a real escape. Somebody adding `websockets`
+    or `urllib3` would have found this test still green, which is the opposite of
+    what its name promises.
+
+    What it checks now: the gate's own source contains each module name, so a
+    name cannot be dropped from the set while the test keeps claiming coverage.
+    """
+    module = Path(evaluation.gate.__file__).read_text(encoding="utf-8")
+    assert forbidden in module, (
+        f"{forbidden} is no longer declared in evaluation/gate.py; if it was "
+        f"removed on purpose, remove this parameter too"
+    )
+
+
+def test_the_forbidden_imports_are_rejected_by_the_gate_itself() -> None:
+    """The gate must fail on a module it forbids, not merely name it."""
+    source = Path(evaluation.gate.__file__).read_text(encoding="utf-8")
+    forbidden = evaluation.gate.FORBIDDEN_IMPORTS
+    assert "socket" in forbidden and "urllib.request" in forbidden
+    # The check has to be an AST/import scan, not a substring match on the
+    # source, or `socket` would be found in this very list.
+    assert "ast" in source or "import ast" in source, (
+        "the forbidden-import check must parse, not grep"
+    )
+
+

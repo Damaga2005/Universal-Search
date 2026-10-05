@@ -63,12 +63,29 @@ def test_the_type_scale_has_a_step_for_the_detail_pane():
 # -- result cells (pure) ------------------------------------------------------
 
 def test_result_cells_are_exactly_the_pane_columns():
-    cells = rows.result_cells("a.md", r"C:\x\y\a.md", "s", source="onedrive")
-    assert set(cells) == set(gui_app.RESULT_COLUMNS)
-    assert list(cells) == [
-        column for column in gui_app.RESULT_COLUMNS
-    ] or set(cells) == set(gui_app.RESULT_COLUMNS)
+    """Column *order* is the contract, so this compares ordered sequences.
 
+    This used to read:
+
+        assert set(cells) == set(gui_app.RESULT_COLUMNS)
+        assert list(cells) == [...] or set(cells) == set(gui_app.RESULT_COLUMNS)
+
+    The right disjunct of the second line was the first line verbatim, so the
+    `or` admitted anything the first assertion already admitted and the
+    ordering -- which decides which cell a click lands on -- was never compared.
+    A set comparison cannot catch a transposed pair of columns, which is
+    exactly what this test exists to catch.
+
+    An intermediate version added a meta-assertion about the equivalence of the
+    two comparisons. That was harder to read than the thing it was checking,
+    and wrong on its first run. The ordered comparison is the whole test.
+    """
+    cells = rows.result_cells("a.md", r"C:\x\y\a.md", "s", source="onedrive")
+    assert isinstance(gui_app.RESULT_COLUMNS, (list, tuple)), (
+        "the ordered comparison below is only meaningful for a sequence"
+    )
+    assert len(cells) == len(gui_app.RESULT_COLUMNS)
+    assert list(cells) == list(gui_app.RESULT_COLUMNS)
 
 def test_the_row_formatter_is_gone_rather_than_left_behind():
     """A formatter with no caller is a second place to change the next row."""
