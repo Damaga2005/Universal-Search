@@ -357,10 +357,21 @@ def _terminate(pid: int) -> None:
     platform's own tool is used there; elsewhere signals do the job. The
     application never kills the worker this way — this stands in for a
     crash or a user ending the process.
+
+    Two things this deliberately does *not* do:
+
+    * ``/T`` is dropped. It walks the descendant tree, so it can terminate
+      processes the test knows nothing about. The worker spawns nothing, so
+      the flag buys nothing here and only widens the blast radius.
+    * The exit status of ``taskkill`` is not trusted. Measured on this
+      platform: a pid that does not exist returns **128**, not 0, so a
+      successful return cannot be read as "the worker was killed". The wait
+      loop below is what actually establishes the outcome, and it re-checks
+      liveness rather than believing the kill.
     """
     if os.name == "nt":
         subprocess.run(
-            ["taskkill", "/PID", str(pid), "/T", "/F"],
+            ["taskkill", "/PID", str(pid), "/F"],
             capture_output=True,
             text=True,
         )
@@ -398,11 +409,25 @@ def test_a_killed_worker_leaves_a_stale_lock_that_a_new_one_recovers(
     (tree / "nota.md").write_text("contenido con bjt", encoding="utf-8")
     AppConfig(roots=[str(tree)]).save(paths)
 
+    # Spawn the worker the way `background.start` does: detached, in its own
+    # process group. A console-attached child shares pytest's console, so any
+    # control event aimed at the worker -- and `taskkill /T /F` below is aimed
+    # at exactly that -- can reach the test process instead. CI reported
+    # `KeyboardInterrupt` at the `time.sleep` in `_terminate`, which is the
+    # signature of pytest receiving a signal it never asked for. Production
+    # never creates that shared console, so reproducing it here would test a
+    # configuration the product does not ship.
+    creationflags = 0
+    if os.name == "nt":  # pragma: no branch - platform dependent
+        creationflags = 0x00000008 | 0x00000200  # DETACHED_PROCESS | NEW_PROCESS_GROUP
+
     child = subprocess.Popen(
         [sys.executable, "-m", "universal_search.cli", "indexer", "run"],
         env={**os.environ, "UNIVERSAL_SEARCH_HOME": str(paths.home)},
+        stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+        creationflags=creationflags,
     )
     try:
         deadline = time.monotonic() + 20
