@@ -29,12 +29,23 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-PYTHON = ROOT / ".venv" / "Scripts" / "python.exe"
+
+#: The interpreter running the tests, not a hardcoded `.venv` path.
+#:
+#: This was `ROOT / ".venv" / "Scripts" / "python.exe"`, which exists on the
+#: development machine and is gitignored, so it does not exist on a CI runner.
+#: All three subprocess tests failed there with `[WinError 2]`, having never
+#: run anywhere but the one machine that had a venv. What the tests measure is
+#: that the output encoding does not depend on the environment, so which
+#: interpreter spawns the subprocess is incidental -- `sys.executable` is the
+#: one that is guaranteed to exist and to be the version under test.
+PYTHON = Path(sys.executable)
 
 ACCENTED = {
     "configuración.md": "Retroalimentacion del amplificador\n",
