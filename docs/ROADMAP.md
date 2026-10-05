@@ -360,4 +360,13 @@ a proof, so the blocker stands as an **unmeasured release limitation**
 rather than a defect in the installer. See section 9b of the phase-050
 report.
 
+And the 16 KiB index-size spread, carried as unknown since phase 045,
+**does not reproduce**: three builds of an identical 60-document corpus
+gave 327680 B each, spread 0 B. What does vary is the content — 14.9 % of
+the bytes differ between two builds, across 44 of 79 pages, with a single
+ISO timestamp in the file. So the index is semantically reproducible (same
+corpus, same rows, same results, which is what the reliability suite
+checks) but not byte-reproducible — and "deterministic rebuild" is one of
+the items the 050 plan's reliability gate lists. Section 9c of the report.
+
 Current test count: 1483 tests collected.

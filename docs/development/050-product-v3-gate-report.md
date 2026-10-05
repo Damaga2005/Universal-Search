@@ -217,6 +217,41 @@ Three further corrections to earlier reasoning, since they changed conclusions:
   copy outside `packaging/`, where `$PSScriptRoot` could not find
   `make-shortcut.ps1`. Both produced confident nonsense before failing.
 
+## 9c. The 16 KiB spread does not reproduce — but the index is not byte-reproducible
+
+The other unexplained measurement. Phase 045 measured two indexes built from
+identical content differing by about 16 KiB, proposed traversal order, refuted
+it, and recorded the cause as unknown. Phase 046 re-measured and did not
+reproduce it. Nobody had checked since.
+
+Three builds of an identical 60-document corpus, same machine, same session:
+
+```
+327680 B  sha256 d57922786c98c090
+327680 B  sha256 86f2b0a0cff5de72
+327680 B  sha256 cc321a059cacd85f
+spread: 0 B (0.0 KiB, 0.000 %)   distinct hashes: 3 of 3
+```
+
+**The size is deterministic and the content is not.** That is sharper than
+"unknown", and it splits the debt in two:
+
+1. *The 16 KiB spread does not reproduce on this host.* Three builds, three
+   identical sizes, zero spread. It is not currently observable, and saying so
+   is better than carrying an unmeasurable anomaly forward a fourth time.
+2. *The index is not byte-reproducible.* Diffing two builds of the same
+   content: **48 098 of 323 584 bytes differ — 14.9 % — across 44 of 79 pages**,
+   in 4356 contiguous blocks. The file holds exactly one ISO timestamp
+   (`2026-10-05T10:42:04`); the rest is FTS5 page-level state whose layout
+   depends on insertion order and per-page counters.
+
+That is a new debt, and it lands on an audit area this phase claims as covered:
+**release reproducibility**. The plan's reliability gate lists "deterministic
+rebuild", and the index is not that. The rebuild is *semantically*
+reproducible — the same corpus yields the same rows and the same search
+results, which is what the reliability suite checks — but not
+byte-reproducibly.
+
 ## 10. Inherited versus new, 041–049
 
 | area | inherited | new in 041–049 |
