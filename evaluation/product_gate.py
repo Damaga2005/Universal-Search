@@ -345,8 +345,12 @@ def main() -> int:
             worst, worst_step = seconds, step["name"]
     measured["M01_slowest_installer_step_seconds"] = worst
     details["M01_slowest_installer_step_seconds"] = (
-        f"el paso mas lento es {worst_step!r} con {worst:.0f}s; "
-        f"el mismo install.ps1 sobre un directorio limpio tardo 18.8s medidos"
+        f"el paso mas lento es {worst_step!r} con {worst:.0f}s. Medido en la "
+        f"050: un install.ps1 instrumentado, en un estado que reproduce todo lo "
+        f"que el escenario hace antes, tardo 4.8 s y 6.7 s con cada fase por "
+        f"debajo de 3 s. El estado del directorio, el indice, storage compact y "
+        f"un fichero obsoleto quedan descartados; queda la maquina, que no ha "
+        f"estado en reposo. Bloqueante sin explicar"
         if worst > 120 else
         f"ningun paso pasa de 120s (maximo {worst:.1f}s en {worst_step!r})"
     )

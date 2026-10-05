@@ -168,6 +168,55 @@ to run, and sometimes returns a failure code, is not shippable — and an
 unexplained behaviour in the installer of record is precisely what a product
 gate exists to find.
 
+## 9b. What the instrumented rerun changed
+
+Phase 050 instrumented a **copy** of `install.ps1` with a timestamp before every
+stage, and ran that copy in a state reproducing everything the scenario does
+before the upgrade: the application launched, an index built, `storage compact`
+performed, and a stale file planted in `_internal`. Twice, independently:
+
+| stage | run A | run B |
+|---|---|---|
+| copy application files | 0.1 s | 0.1 s |
+| version (runs the just-installed CLI) | 3.0 s | 2.2 s |
+| Start Menu shortcut | 2.1 s | 1.4 s |
+| Explorer integration | 0.5 s | 0.4 s |
+| autostart, data dir, manifest | 0.0 s | 0.0 s |
+| **total** | **6.7 s** | **4.8 s** |
+
+So **the install directory's state, the index, `storage compact` and the stale
+file do not explain the 465–961 s.** The two candidates that fitted the source
+reading were already ruled out by measurement, and the one that fitted the
+observation is now ruled out too.
+
+What remains different between the probe and the slow runs is the machine, not
+the installer. During the three slow runs another project's pytest suite was
+resident and the CPU was near saturation — visible in the process list at the
+time, and the reason `evaluation/performance` refuses to conclude on this host.
+The fast runs happened minutes later with it gone. **That is a correlation with
+two fast and three slow runs, not a proof**: it is the strongest candidate
+remaining, and the only way to settle it is the machine at rest, which this host
+has not been.
+
+The blocker therefore stands, and what changed is where it points. It is no
+longer evidence of a defect in the installer; it is an **unmeasured release
+limitation** — an upgrade whose duration has never been measured on a machine
+that was not doing something else at the time.
+
+Three further corrections to earlier reasoning, since they changed conclusions:
+
+* It was suggested that `capture_output=True` was the cause, because
+  `subprocess` waits for EOF on pipes a detached worker holds open. Measured
+  wrong: the slow runs persisted after the harness was changed to redirect to
+  files.
+* The manifest's recursive enumeration (0.26 s) and `ConvertTo-Json` (0.14 s)
+  were ruled out by measuring them directly.
+* One probe of this investigation failed for two reasons worth recording: it
+  prepended a statement above the `param()` block, which PowerShell forbids, so
+  it exited in 0.7 s having installed nothing; and it wrote the instrumented
+  copy outside `packaging/`, where `$PSScriptRoot` could not find
+  `make-shortcut.ps1`. Both produced confident nonsense before failing.
+
 ## 10. Inherited versus new, 041–049
 
 | area | inherited | new in 041–049 |

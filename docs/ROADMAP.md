@@ -349,4 +349,15 @@ flagged as a dead file and turned out not to be: it reproduces
 2434 bytes), so it is a build tool nobody invoked. It now has a test,
 which both runs it and pins the committed icon to its generator.
 
+Phase 050's blocker was narrowed rather than closed. An instrumented copy
+of `install.ps1`, run in a state reproducing everything the scenario does
+before an upgrade, completes in **4.8 s and 6.7 s** with every stage under
+3 s — so the install directory, the index, `storage compact` and a stale
+file are all ruled out. The remaining candidate is the machine: the three
+slow runs happened while another project's test suite was resident, and
+the fast ones did not. Two fast and three slow runs is a correlation, not
+a proof, so the blocker stands as an **unmeasured release limitation**
+rather than a defect in the installer. See section 9b of the phase-050
+report.
+
 Current test count: 1483 tests collected.
