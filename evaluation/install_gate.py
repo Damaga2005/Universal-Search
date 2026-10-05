@@ -13,8 +13,9 @@ section adds two rules that shape this gate:
   * *do not implement an auto-updater unless authenticity and rollback can be
     guaranteed*.
 
-**I1-I5, the installer of record.** `install.ps1` is the script this repository
-actually executes -- in CI and in `tests/test_release.py`. These invariants read
+**I1-I5, the installer of record.** `install.ps1` is the script this
+repository actually executes -- by `evaluation/product_scenario.py` and
+by `tests/test_release.py`. These invariants read
 it and check the things that make it an installer rather than a copy loop:
 that repair exists and is distinct from install, that a repair with nothing to
 repair is refused, that user data is never written under the install directory,
@@ -35,6 +36,16 @@ claim has evidence behind it. I10 refuses any updater until authenticity and
 rollback can be guaranteed -- currently there is none, and that is the correct
 state. I11 checks that the hash manifest a user would verify is produced with
 paths relative to itself, which is what the previous CI output got wrong.
+
+This sentence used to read "-- in CI and in `tests/test_release.py`". The
+second half was true and the first was not: the workflow contains exactly one
+reference to `packaging/`, and it is `verify-hashes.ps1`. Nothing in CI executed
+`install.ps1`; what does is the phase-050 scenario, from the `package` job, which
+installs into a temporary directory and deletes it afterwards.
+
+The claim survived an audit because it reads as a fact about the installer
+rather than a claim about the build -- the same shape as the three other false
+claims this audit found, in four different files.
 
 What this gate cannot do, and prints: it does not compile Inno Setup, it does
 not install to the real `%LOCALAPPDATA%` or the real Start Menu, and it does not

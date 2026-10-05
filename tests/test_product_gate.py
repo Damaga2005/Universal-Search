@@ -10,13 +10,14 @@ from evaluation import product_gate
 
 
 def test_every_area_of_the_plan_has_an_evidence_owner():
-    """Fourteen areas in the plan; all fourteen must be mapped.
+    """Fifteen areas in the plan; all fifteen must be mapped.
 
     Derived from the plan's own wording rather than copied, because a list that
     is transcribed by hand is a list that goes stale -- which is how fifteen
     gates ended up in no list at all.
     """
     assert len(product_gate.EVIDENCE_OWNER) == 15
+    assert len(product_gate.GATE_INVARIANTS) == 4
     for area, owner in product_gate.EVIDENCE_OWNER.items():
         assert owner == "gate" or owner.endswith("_gate"), (
             f"{area} maps to {owner}, which is not a gate"

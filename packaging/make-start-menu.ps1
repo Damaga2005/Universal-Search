@@ -3,7 +3,10 @@
     Installs a Start Menu shortcut for Universal Search (phase 016).
 
 .DESCRIPTION
-    The installer already creates a Desktop shortcut. This script adds the
+    No installer in this repository creates a Desktop shortcut. The only
+# Desktop entry anywhere is `installer.iss`'s `desktopicon` task, which is
+# `unchecked` by default and lives in a script that has never been
+# compiled. This sentence used to claim the opposite. This script adds the
     Start Menu entry, which is what Windows Search and the taskbar use.
     It is idempotent: running it twice leaves one shortcut, not two.
 

@@ -271,7 +271,21 @@ the opposite direction: a verdict that happened to land well for no reason.
   `evaluation/runner.py` imports `time` and measures with
   `time.perf_counter()`. There is no `datetime.now()` anywhere in `src/` or
   `evaluation/` -- the only occurrence of that string is a *comment* in
-  `quality_gate.py`. The correction is recorded in place rather than the line
+  `quality_gate.py`.
+
+**CORRECTED after the phase-050 audit.** The sentence above is true only of the
+empty-parens spelling. `datetime.now(timezone.utc)` appears eleven times in
+`src/` -- `background.py`, `context.py`, `metrics.py` (three),
+`observability.py` (two), `index/search.py` (two), `index/ranking.py` and
+`gui/control_center.py` -- and twice more in `evaluation/`.
+
+The point the entry stands on is narrower and still true: no timing measurement
+anywhere is taken from `datetime.now()` when a monotonic clock is what is
+wanted, which is why `runner.measure()` uses `time.perf_counter()`. Asserting
+"the string appears nowhere" was the wrong *shape* of claim -- a `grep` for
+`datetime.now(` would have been wrong in exactly the same way, which is how this
+line survived four phases of review.
+ The correction is recorded in place rather than the line
   deleted, because this is the fourth time in three phases that a claim about
   the code was made without running it.
 - The three remaining INCONCLUYENTE verdicts are the machine's, not the code's.

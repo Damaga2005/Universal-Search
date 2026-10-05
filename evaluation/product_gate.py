@@ -18,7 +18,7 @@ matrix in the workflow. So every area below names the gate that owns its
 evidence, and this gate checks that the owner exists and its committed baseline
 says it passed.
 
-**An area with no evidence is not an area that passed.** Each of the fourteen
+**An area with no evidence is not an area that passed.** Each of the fifteen
 audit areas from the plan is mapped to the evidence that covers it. An area whose
 owner is missing, or whose baseline records a failure, is reported as
 unproven. The plan's acceptance is "every required area has evidence", so the
@@ -56,12 +56,46 @@ EVIDENCE_OWNER = {
     "storage lifecycle": "storage_gate",
     "Windows/environment support": "portability_gate",
     "distribution and installation": "distribution_gate",
-    "privacy and security": "install_gate",
-    "diagnostics and recovery": "install_gate",
-    "Windows integration": "install_gate",
+    # These three were mapped to `install_gate`, whose eleven invariants are
+    # all about install.ps1, installer.iss, Authenticode and hash manifests.
+    # None of them is about privacy, recovery or the Windows shell, so the gate
+    # was reporting evidence for areas it had never looked at. Their real
+    # owners are `evaluation.gate`'s own invariants, named below.
+    "privacy and security": "gate",
+    "diagnostics and recovery": "gate",
+    "Windows integration": "gate",
     "accessibility": "accessibility_gate",
     "documentation": "gate",
     "release reproducibility": "distribution_gate",
+}
+
+#: For the areas owned by `evaluation.gate`, the invariants that constitute
+#: their evidence. Naming them is what stops a renamed or deleted check from
+#: leaving an area silently "proved".
+GATE_INVARIANTS = {
+    "documentation": (
+        "check_documented_test_count",
+        "check_roadmap_has_no_open_phase",
+        "check_every_phase_is_documented",
+        "check_changelog_documents_every_phase",
+    ),
+    "privacy and security": (
+        "check_privacy_inventory_covers_every_table",
+        "check_repairs_never_touch_user_files",
+        "check_hostile_archives_are_bounded",
+        "check_saved_searches_hold_no_user_data",
+        "check_no_network_or_model_imports",
+    ),
+    "diagnostics and recovery": (
+        "check_repairs_never_touch_user_files",
+        "check_portable_never_falls_back_silently",
+        "check_portable_never_writes_to_the_user_directory",
+    ),
+    "Windows integration": (
+        "check_every_win32_touchpoint_is_declared",
+        "check_platform_seam_is_used_for_shell_work",
+        "check_core_is_platform_independent",
+    ),
 }
 
 #: What the plan asks for, and whether this machine can provide it. The first
@@ -131,7 +165,7 @@ def read_baseline(stem: str) -> dict | None:
 
     ``ux_gate`` owns ``ux_baseline.json``: the gate name drops its suffix. The
     first version looked for ``ux_gate_baseline.json``, found nothing, and
-    reported all fourteen audit areas as unproven -- a correct-sounding
+    reported all fifteen audit areas as unproven -- a correct-sounding
     conclusion reached for a reason that was simply wrong, which is the failure
     mode this gate is supposed to be immune to.
     """
@@ -214,24 +248,23 @@ def main() -> int:
         name = f"A{index:02d}_{area.replace(' ', '_').replace('/', '_')}_has_evidence"
         data = read_baseline(owner)
         if data is None and owner == "gate":
-            # `evaluation.gate` is the only gate that reports its invariants and
-            # keeps no baseline: the documentation checks it runs are "documented
-            # test count" and "roadmap is honest". Its evidence is the gate
-            # itself, so the check is that the module still runs both.
+            # `evaluation.gate` reports its invariants and keeps no baseline, so
+            # its evidence is the module itself -- and the invariants each area
+            # depends on, by name. The first version checked two documentation
+            # markers for *every* area routed here, which meant three areas were
+            # declared proved on the strength of a test-count check.
+            required = GATE_INVARIANTS[area]
             module = (ROOT / "evaluation" / "gate.py").read_text(
                 encoding="utf-8")
-            present = all(
-                marker in module
-                for marker in ("documented test count", "roadmap is honest")
-            )
-            measured[name] = 0 if present else 1
-            if not present:
+            absent = [fn for fn in required if f"def {fn}" not in module]
+            measured[name] = len(absent)
+            if absent:
                 unproven["areas"].append(area)
             details[name] = (
-                "evaluation.gate sigue ejecutando los dos invariantes de "
-                "documentacion (recuento de tests y honestidad del ROADMAP)"
-                if present else "evaluation.gate ha perdido sus invariantes "
-                              "de documentacion"
+                f"evaluation.gate sigue ejecutando {len(required)} invariante(s): "
+                f"{', '.join(required)}"
+                if not absent
+                else f"evaluation.gate ha perdido: {absent}"
             )
             continue
         if data is None:
