@@ -37,8 +37,8 @@ El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
 | 028 | Observabilidad y recuperación local | ✅ Completada | [028-observability-and-recovery.md](development/028-observability-and-recovery.md) | [informe](development/028-observability-and-recovery-report.md) |
 | 029 | Release engineering y CI (puertas verificadas) | ✅ Completada | [029-release-engineering-and-ci.md](development/029-release-engineering-and-ci.md) | [informe](development/029-release-engineering-and-ci-report.md) |
 | 030 | Puerta de calidad v2 (gate ejecutable) | ✅ Completada | [030-universal-search-v2-quality-gate.md](development/030-universal-search-v2-quality-gate.md) | [informe](development/030-v2-quality-gate-report.md) |
-| 031 | Búsqueda robusta: erratas y palabras parciales | ✅ Completada | [031-robust-search.md](development/031-robust-search.md) | [informe](development/031-robust-search-report.md) |
-| 032 | Sugerencias de consulta verificadas | ✅ Completada | [032-query-suggestions.md](development/032-query-suggestions.md) | [informe](development/032-query-suggestions-report.md) |
+| 031 | Búsqueda robusta: erratas y palabras parciales | ✅ Completada | [031-robust-search.md](development/031-robust-search-report.md) | [informe](development/031-robust-search-report.md) |
+| 032 | Sugerencias de consulta verificadas | ✅ Completada | [032-query-suggestions.md](development/032-query-suggestions-report.md) | [informe](development/032-query-suggestions-report.md) |
 | 033 | Correo como fuente (`.eml`, `.mbox`) | ✅ Completada | — | [informe](development/033-mail-source-report.md) |
 | 034 | Contenido dentro de `.zip` | ✅ Completada | — | [informe](development/034-archive-content-report.md) |
 | 035 | Operaciones por lotes sobre la selección | ✅ Completada | — | [informe](development/035-batch-operations-report.md) |
@@ -56,9 +56,9 @@ El roadmap por versiones (v0.1–v0.8+) vive en [ROADMAP.md](ROADMAP.md).
 | 047 | Almacenamiento: `compact()` verificado, contrato de ciclo de vida completo | ✅ Completada | — | [informe](development/047-storage-and-data-lifecycle-report.md) |
 | 048 | Matriz de soporte: rango de Python acotado, CI alineado, clasificadores declarados | ✅ Completada | — | [informe](development/048-support-matrix-report.md) |
 | 049 | Instalación: ciclo real completo, `repair` y hashes verificables | ✅ Completada | — | [informe](development/049-install-report.md) |
-| 050 | Puerta de producto Universal Search 3.x | ⬜ Planificada | — | [plan](development/050-product-v3-gate.md) |
+| 050 | Puerta de producto Universal Search 3.x | ✅ **HOLD** | [`product_gate`](../../evaluation/product_gate.py) | [informe](development/050-product-v3-gate-report.md) |
 
-**Fases 031–047 cerradas. Fases 048–050 planificadas.** El gate
+**Fases 031–050 cerradas.** La 050 (puerta de producto 3.x) devuelve **HOLD**: ningún invariante de producto falló, pero una medición del instalador queda sin explicar. El gate
 ejecutable tiene **23 invariantes** (`python -m evaluation.gate`); la puerta de
 rendimiento sabe decir «inconcluyente» en vez de publicar una cifra tomada con
 el equipo ocupado; la puerta de accesibilidad comprueba teclado, nombres,
@@ -88,7 +88,7 @@ nombrados, puertas de CI verificadas por test y un gate v2 ejecutable de 13
 invariantes (`python -m evaluation.gate`); detalles y límites en el
 [informe de la fase 030](development/030-v2-quality-gate-report.md).
 
-Current test count: 1479 tests collected.
+Current test count: 1481 tests collected.
 
 ## Cómo ejecutar
 

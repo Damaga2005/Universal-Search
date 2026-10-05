@@ -99,7 +99,7 @@ adding a slow gate does not push the suite out of its timeout:
 
 | job | gates | why |
 |---|---|---|
-| `quality` | `gate`, `quality`, `learning`, `settings`, `accessibility`, `organize`, `batch`, `archive`, `mail` | all under 50 s; they belong with the 1473 tests |
+| `quality` | `gate`, `quality`, `learning`, `settings`, `accessibility`, `organize`, `batch`, `archive`, `mail` | all under 50 s; they belong with the 1481 tests |
 | `gates` | `perf`, `interaction`, `ux`, `fuzzy`, `suggest` (with `--require-conclusive`), `distribution`, `portability`, `install` | the latency gates, which must be able to fail |
 | `heavy-gates` | `scale`, `storage` | 333 s and 120 s; minutes of work that should not hold the rest hostage |
 

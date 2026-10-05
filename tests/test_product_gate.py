@@ -63,6 +63,42 @@ def test_baseline_failures_sees_both_baseline_shapes():
     assert product_gate.baseline_failures({}) == []
 
 
+def test_a_missing_scenario_cannot_produce_a_ship():
+    """The regression this test exists for.
+
+    With no `product_scenario.json`, the gate omitted its three scenario
+    invariants and then printed `VEREDICTO: PUBLICABLE (SHIP)` with exit 0. CI
+    ran it in the `gates` job, so the build announced a release-ready verdict for
+    the gate whose committed verdict is HOLD.
+
+    Omitting an invariant that cannot be measured is correct. Concluding from
+    the omission is not, and the omission was invisible in the exit code, which
+    is the only part a build reads.
+
+    The check is on the source because running the gate requires moving the
+    artefact; what matters is that the branch exists and returns a non-zero
+    code that is not the SHIP code.
+    """
+    import inspect
+    from evaluation import product_gate
+
+    source = inspect.getsource(product_gate.main)
+    assert "scenario_invariants:" in source
+    assert "VEREDICTO: INCONCLUYENTE" in source, (
+        "a missing scenario must produce INCONCLUYENTE"
+    )
+    # The INCONCLUYENTE branch must come *before* the SHIP return, or the gate
+    # would still fall through to PUBLICABLE.
+    inconclusive = source.index("VEREDICTO: INCONCLUYENTE")
+    ship = source.index("VEREDICTO: PUBLICABLE")
+    assert inconclusive < ship, (
+        "the INCONCLUYENTE branch must be reached before the SHIP return"
+    )
+    assert product_gate.PRODUCT_GATE_SHIP_CODE == 0
+    assert product_gate.PRODUCT_GATE_HOLD_CODE == 1
+    assert product_gate.PRODUCT_GATE_INCONCLUSIVE_CODE == 2
+
+
 def test_the_scenario_thresholds_are_reachable():
     """A count with a threshold of zero can only ever fail.
 

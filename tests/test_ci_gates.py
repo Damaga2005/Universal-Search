@@ -343,6 +343,29 @@ def test_no_gate_is_run_with_a_flag_that_does_not_exist(workflow: str) -> None:
 
 
 
+def test_the_product_gate_runs_where_its_artefact_exists(jobs: dict[str, str]) -> None:
+    """The product gate needs the built executable, so it belongs in `package`.
+
+    Wired into the `gates` evidence job, where no artefact exists, it found no
+    `product_scenario.json`, reported on nothing, and then said SHIP. Running it
+    after the build is what makes its verdict mean anything, and the ordering is
+    the part that can regress silently: move the step up one job and it is
+    green again.
+    """
+    package = jobs["package"]
+    build = package.index("Build the executables")
+    scenario = package.index("python evaluation/product_scenario.py")
+    gate = package.index("python -m evaluation.product_gate")
+    assert build < scenario < gate, (
+        "the scenario must run after the build and before the gate that reads "
+        "its record"
+    )
+    assert "python -m evaluation.product_gate" not in jobs["gates"], (
+        "the product gate must not run in a job with no artefact: with no "
+        "scenario record it has nothing to conclude from"
+    )
+
+
 def test_the_latency_gates_are_wired_to_demand_a_number(workflow: str) -> None:
     """The five latency gates measure time, so they must not be allowed to shrug.
 

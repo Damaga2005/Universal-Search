@@ -14,7 +14,7 @@ behaviour is unexplained. Section 8 classifies each.
 
 | | |
 |---|---|
-| Product version | `` |
+| Product version | 2.0.0 (`src/universal_search/__init__.py`) |
 | Commit | `cce2bfb` (cce2bfb26d56b67c8a006a3d462564ef54679bff) |
 | Interpreter | CPython 3.14.6, `.venv` |
 | OS | Windows 11, developer machine |
@@ -33,7 +33,7 @@ it.
 python -m evaluation.product_gate      # the gate
 python evaluation/product_scenario.py  # the eighteen-step scenario
 python -m evaluation.gate              # the 23-invariant quality gate
-python -m pytest tests -q             # 1472 tests
+python -m pytest tests -q             # 1481 tests
 ```
 
 ## 3. The eighteen-step scenario

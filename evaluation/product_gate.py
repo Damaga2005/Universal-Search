@@ -118,6 +118,14 @@ THRESHOLDS = {
 }
 
 
+#: Exit codes, named. These are the project's established convention, the same
+#: three `perf_gate.veto_exit` returns: a gate that concluded, a gate that found
+#: a reason to stop, and a gate that measured nothing.
+PRODUCT_GATE_SHIP_CODE = 0
+PRODUCT_GATE_HOLD_CODE = 1
+PRODUCT_GATE_INCONCLUSIVE_CODE = 2
+
+
 def read_baseline(stem: str) -> dict | None:
     """Read ``<stem>_baseline.json``, or None.
 
@@ -385,6 +393,27 @@ def main() -> int:
             print(f"  paso {number:>2}  {name:<28}{seconds:>7.0f}s")
     print()
 
+    if scenario_invariants:
+        # Phase 050 correction. With no scenario record this gate printed SHIP
+        # and exited 0, which meant CI announced a release-ready verdict for the
+        # gate whose committed verdict is HOLD. Omitting an invariant it cannot
+        # measure is right; concluding from the omission is not.
+        #
+        # The project already has the right word for this and the right exit
+        # code: `perf_gate.veto_exit` returns 2 for a machine that made a
+        # measurement meaningless. Here it is the missing artefact rather than a
+        # busy machine, but the shape is identical -- something was measured,
+        # the headline was not, and nothing was compared against a threshold.
+        print("CLASIFICACION")
+        print(f"  SIN MEDIR           : {len(scenario_invariants)} invariante(s) "
+              f"del escenario: {sorted(scenario_invariants)}")
+        print(f"  LIMITACION DE SALIDA: {len(ENVIRONMENT_CLAIMS)} afirmaciones que "
+              f"este equipo no puede cumplir")
+        print()
+        print("VEREDICTO: INCONCLUYENTE (falta product_scenario.json; esta puerta "
+              "no puede afirmar que se puede publicar)")
+        return PRODUCT_GATE_INCONCLUSIVE_CODE
+
     if blockers:
         print("CLASIFICACION")
         print(f"  BLOQUEANTE          : {len(blockers)} invariante(s) sin probar")
@@ -397,10 +426,10 @@ def main() -> int:
               "matriz de plataformas")
         print()
         print("VEREDICTO: RETENIDO (HOLD)")
-        return 1
+        return PRODUCT_GATE_HOLD_CODE
 
     print("VEREDICTO: PUBLICABLE (SHIP)")
-    return 0
+    return PRODUCT_GATE_SHIP_CODE
 
 
 if __name__ == "__main__":

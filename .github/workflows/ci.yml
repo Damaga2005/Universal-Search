@@ -178,24 +178,6 @@ jobs:
           python -m evaluation.portability_gate
           python -m evaluation.install_gate
 
-      # Phase 050. The product gate reads `product_scenario.json`, which is a run
-      # artefact and deliberately not committed, so on CI it reports the
-      # eighteen-step scenario as unrun rather than as a pass -- which is the
-      # correct state for a fresh checkout, not a false failure to fix.
-      #
-      # It returns HOLD on this machine for a reason of its own: the installer
-      # timing in M01. On a runner with no `product_scenario.json` that
-      # invariant cannot be measured and is reported as unmeasured, so the step
-      # is allowed to be inconclusive here rather than being wired to fail on a
-      # number this environment does not produce.
-      # so it omits its three scenario invariants and says so -- a gate with no
-      # data reports no data, and failing here would break every build for a
-      # reason that is not a product defect. The fix belonged in the gate, which
-      # is why this step needs no tolerance, and `test_no_gating_job_may_
-      # continue_on_error` forbids it in this job anyway.
-      - name: Product gate (phase 050)
-        run: python -m evaluation.product_gate
-
   heavy-gates:
     name: evidence gates (scale and storage)
     runs-on: windows-latest
@@ -364,6 +346,24 @@ jobs:
         run: |
           $bundle = Join-Path $env:RUNNER_TEMP "smoke\support.json"
           if (Test-Path $bundle) { Copy-Item $bundle artifacts-support.json }
+
+      # Phase 050. The product gate runs here, not in the evidence jobs, because
+      # it needs the built executable: its headline invariant is the
+      # eighteen-step scenario, and `product_scenario.json` is a run artefact
+      # that is deliberately not committed.
+      #
+      # It was wired into `gates`, where no artefact exists. With no record it
+      # omitted three invariants and then printed `PUBLICABLE (SHIP)` with exit
+      # 0, so the build announced a release-ready verdict for the gate whose
+      # committed verdict is HOLD. Fixed twice over: the gate now returns
+      # INCONCLUYENTE (2) rather than SHIP when the record is missing, and it
+      # runs where the record can be produced. Either change alone would leave
+      # the other failure in place.
+      - name: Eighteen-step product scenario
+        run: python evaluation/product_scenario.py
+
+      - name: Product gate (phase 050)
+        run: python -m evaluation.product_gate
 
       - uses: actions/upload-artifact@v4
         if: always()
