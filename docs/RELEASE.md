@@ -201,7 +201,7 @@ Va antes del `PyInstaller` en la lista, y también en CI.
       el CLI y la ventana, que debe abrir y cerrarse.
 8 bis. [ ] `universal-search diagnose self-test` y `diagnose export` sobre el
       ejecutable empaquetado.
-9. [ ] `powershell -File packaging/make-start-menu.ps1` y
+9. [ ] `powershell -File packaging/make-shortcut.ps1` y
       `explorer-search.ps1` (opcionales, por usuario).
 10. [ ] Instalar en limpio con `install.ps1`; comprobar acceso directo,
        menú Inicio, verbo Explorer, indexar una carpeta, buscar, cerrar,

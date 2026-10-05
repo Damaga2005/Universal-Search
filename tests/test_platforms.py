@@ -260,7 +260,6 @@ PACKAGING_SCRIPTS = (
     "uninstall.ps1",
     "build.ps1",
     "make-shortcut.ps1",
-    "make-start-menu.ps1",
     "explorer-search.ps1",
     "verify-hashes.ps1",
 )
@@ -278,24 +277,23 @@ def test_every_packaging_script_parses():
         assert not errors, f"{name}: {errors}"
 
 
-# `make-start-menu.ps1` is a functional duplicate of `make-shortcut.ps1` -- both
-# write the same `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Universal
-# Search.lnk`, with different descriptions and different icons -- and nothing
-# calls it: `install.ps1:139` calls `make-shortcut.ps1`. Meanwhile
-# `platforms/windows.py:17` still names it as the script that installs the Start
-# Menu entry, which is the false claim the phase-050 audit found.
+# `make-start-menu.ps1` was deleted in phase 050. It was a functional
+# duplicate of `make-shortcut.ps1` -- both wrote the same Start Menu
+# `.lnk`, with different descriptions and different icons, so whichever
+# ran last won -- and nothing called it: `install.ps1:139` calls
+# `make-shortcut.ps1`. Meanwhile `platforms/windows.py` named it as the
+# script that installs the Start Menu entry, which is the false claim
+# the phase-050 audit found.
 #
-# There was an attempt to pin that with a test asserting no packaging script is
-# referenced by nothing. It could not fail: the search corpus includes the
-# scripts themselves, and a PowerShell script names itself often enough that
-# the filename is always present. Verified by removing every reference to
-# `build.ps1` from twelve files across `docs/`, `tests/`, `src/`,
-# `evaluation/` and `.github/` -- the test still passed. Removed rather than
-# shipped, because a test that cannot fail is worse than no test.
-#
-# What does hold the duplication visible is `PACKAGING_SCRIPTS` above: both
-# scripts are parsed, so neither can rot into something unparseable, and the
-# duplicate is named here rather than discovered later.
+# An attempt to pin the duplication with a test asserting that no
+# packaging script is referenced by nothing could not fail: the search
+# corpus included the scripts themselves, and a PowerShell script names
+# itself often enough that the filename is always present. Verified by
+# removing every reference to `build.ps1` from twelve files across
+# `docs/`, `tests/`, `src/`, `evaluation/` and `.github/` -- the test
+# still passed. Removed rather than shipped, and the duplication removed
+# for the honest reason: one script wrote the same shortcut twice and
+# only one of them ran.
 
 
 def test_integration_scripts_are_per_user_and_reversible():

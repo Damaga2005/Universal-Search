@@ -14,7 +14,7 @@ Documented limitations, stated plainly:
   use it for exactly one case today: the global hotkey could not be
   registered because another application owns it.
 * **Start Menu and Explorer integration are installed by the packaging
-  scripts** (``packaging/make-start-menu.ps1``,
+  scripts** (``packaging/make-shortcut.ps1``,
   ``packaging/explorer-search.ps1``), not at runtime: writing registry
   keys or shortcuts behind the user's back is not something an app should
   do on every launch.

@@ -337,4 +337,16 @@ that is correct locally and wrong on a runner with no neighbour, they accept
 `--require-conclusive`, which keeps the measurement and changes only the verdict
 to NO SHIP.
 
-Current test count: 1482 tests collected.
+Two pieces of packaging surface were settled in phase 050 rather than
+left declared. `make-start-menu.ps1` was deleted: it was a functional
+duplicate of `make-shortcut.ps1` -- both wrote the same Start Menu
+`.lnk`, with different descriptions and different icons, so whichever ran
+last won -- and nothing called it, while `platforms/windows.py` named it
+as the script that installs the Start Menu entry. `make_icon.py` was
+flagged as a dead file and turned out not to be: it reproduces
+`universal_search.ico` byte for byte
+(`915d98af038bd3496ea9d60472619c38a2b30a365614488f33ff1a45981fb463`,
+2434 bytes), so it is a build tool nobody invoked. It now has a test,
+which both runs it and pins the committed icon to its generator.
+
+Current test count: 1483 tests collected.
