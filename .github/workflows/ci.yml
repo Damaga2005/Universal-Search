@@ -326,14 +326,26 @@ jobs:
           # Extract the zip we are about to publish and check the executables
           # inside it, so the manifest is verified against the published
           # layout rather than against the build tree.
+          #
+          # The manifest is written relative to `dist`, so a one-dir entry reads
+          # `UniversalSearch/universal-search.exe` -- no `dist/` prefix. This step
+          # previously stripped only `UniversalSearch/`, leaving the paths as
+          # `dist/universal-search.exe` while the extracted tree has no `dist`
+          # directory. The verification therefore reported
+          # `2 artefactos, 0 correctos, 2 ausentes` and the `package` job failed
+          # on a hash check that was never comparing like with like. Both
+          # prefixes are stripped here so the paths are relative to the
+          # directory the zip was extracted into, which is what a user gets.
           $check = Join-Path $env:RUNNER_TEMP "verify"
           Remove-Item -Recurse -Force $check -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path $check | Out-Null
           Expand-Archive -Path "dist\UniversalSearch-*.zip" -DestinationPath $check -Force
           $lines = Get-Content "dist\SHA256SUMS.txt" |
             Where-Object { $_ -match "UniversalSearch/.*\.exe$" } |
-            ForEach-Object { $_ -replace 'UniversalSearch/', '' }
+            ForEach-Object { $_ -replace '\s\S*dist/UniversalSearch/', ' ' } |
+            ForEach-Object { $_ -replace '\s\S*UniversalSearch/', ' ' }
           $lines | Out-File -Encoding ascii (Join-Path $check "SHA256SUMS.txt")
+          Get-Content (Join-Path $check "SHA256SUMS.txt")
           & packaging\verify-hashes.ps1 -Path $check
           if ($LASTEXITCODE -ne 0) { throw "published layout failed hash verification" }
 
