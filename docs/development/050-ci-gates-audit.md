@@ -163,6 +163,11 @@ dependency as a set.
 
 ## What this does not close
 
+> **Superseded in part by `050-ci-first-runs.md`.** The matrix *has* now run:
+> run 37333334969 executed all nineteen gates, the five latency gates concluded
+> for the first time, and both evidence jobs passed. The claims below were true
+> when this file was written and are kept as the record of what was known then.
+
 - **The matrix has still never run.** This change is a workflow edit; no CI was
   executed to verify it. Every statement above about the workflow's behaviour is a
   statement about the file, and the six deliberate breaks are the only execution
@@ -174,6 +179,8 @@ dependency as a set.
 - **The five latency gates have never concluded.** They exit 2 here, and on a
   runner they will either conclude for the first time or fail the build. Both
   outcomes are new information; neither has been observed.
+  → **Observed:** they concluded, and the `gates` job passed. See
+  `050-ci-first-runs.md`.
 - **`scale_gate` at 333 s is a best-of-one** on a loaded machine. The split is
   sound either way - 30 minutes of headroom - but the number is not a budget.
 
